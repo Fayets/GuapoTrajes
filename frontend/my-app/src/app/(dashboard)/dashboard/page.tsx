@@ -38,6 +38,13 @@ export default function Dashboard() {
       color: "bg-info bg-opacity-10 text-info",
     },
     {
+      title: "Sucursales",
+      description: "Carga de sucursales",
+      icon: "bi-building",
+      href: "/sucursales",
+      color: "bg-info bg-opacity-10 text-info",
+    },
+    {
       title: "Stock",
       description: "Control de inventario",
       icon: "bi-cart",
