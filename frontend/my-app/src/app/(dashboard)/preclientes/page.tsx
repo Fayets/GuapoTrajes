@@ -1,40 +1,28 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import PreclientesPage from "../preclientes/page"
+import ClientesPage from "../clientes/page"
 
-type Cliente = {
+type Precliente = {
   id: string
   nombre: string
   apellido: string
-  dni: string
-  direccion: string
-  celular: string
-  notas: string
-}
-
-type Precliente = {
-  nombre: string
-  apellido: string
   celular: string
 }
 
-
-export default function ClientesPage({ preclienteSeleccionado }: { preclienteSeleccionado?: Precliente })
- {
-  const [clientes, setClientes] = useState<Cliente[]>([])
+export default function PreclientesPage() {
+  const [preclientes, setPreclientes] = useState<Precliente[]>([])
   const [busqueda, setBusqueda] = useState("")
-  const [clienteActual, setClienteActual] = useState<Cliente | null>(null)
+  const [clienteActual, setClienteActual] = useState<Precliente | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [preclienteSeleccionado, setPreclienteSeleccionado] = useState<Precliente | null>(null);
+
 
   const [formData, setFormData] = useState({
     nombre: "",
     apellido: "",
-    dni: "",
-    direccion: "",
     celular: "",
-    notas: "",
   })
 
   const [token, setToken] = useState<string | null>(null)
@@ -46,35 +34,17 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
     }
   }, [])
 
-  const convertirPreclienteACliente = (precliente: Precliente) => {
-        setClienteActual(null); // Queremos registrar un nuevo cliente
-        setFormData({
-          nombre: precliente.nombre,
-          apellido: precliente.apellido,
-          dni: "",
-          direccion: "",
-          celular: precliente.celular,
-          notas: "",
-        });
-        setShowModal(true); // Abre el modal para completar el resto
-      };
-      
-  useEffect(() => {
-    if (preclienteSeleccionado) {
-      convertirPreclienteACliente(preclienteSeleccionado);
-    }
-  }, [preclienteSeleccionado]);
-
   useEffect(() => {
     if (token) {
       console.log("Token disponible, obteniendo clientes...");
       fetchClientes();
+      
     }
   }, [token])
 
   const fetchClientes = async () => {
     try {
-      const res = await fetch("http://localhost:8000/clientes/all", {
+      const res = await fetch("http://localhost:8000/preclientes/all", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -89,14 +59,14 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
       console.log("Datos recibidos del servidor:", data);
       
       // Asegurarse de que cada cliente tenga un ID único
-      const clientesConId = data.map((cliente: Cliente, index: number) => {
+      const clientesConId = data.map((cliente: Precliente, index: number) => {
         // Si el cliente no tiene un ID, asignarle uno temporal basado en el índice
         if (!cliente.id) {
           return { ...cliente, id: `temp-id-${index}` };
         }
         return cliente;
       });
-      setClientes(clientesConId)
+      setPreclientes(clientesConId)
     } catch (err) {
       console.error("Error al obtener clientes", err)
     }
@@ -112,28 +82,22 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
     setFormData({
       nombre: "",
       apellido: "",
-      dni: "",
-      direccion: "",
       celular: "",
-      notas: "",
     })
     setShowModal(true)
   }
 
-  const editarCliente = (cliente: Cliente) => {
+  const editarCliente = (cliente: Precliente) => {
     setClienteActual(cliente)
     setFormData({
       nombre: cliente.nombre,
       apellido: cliente.apellido,
-      dni: cliente.dni,
-      direccion: cliente.direccion,
       celular: cliente.celular,
-      notas: cliente.notas,
     })
     setShowModal(true)
   }
 
-  const confirmarEliminar = (cliente: Cliente) => {
+  const confirmarEliminar = (cliente: Precliente) => {
     setClienteActual(cliente)
     setShowDeleteModal(true)
   }
@@ -141,13 +105,13 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
   const eliminarCliente = async () => {
     if (!clienteActual) return
     try {
-      await fetch(`http://localhost:8000/clientes/delete/${clienteActual.id}`, {
+      await fetch(`http://localhost:8000/preclientes/delete/${clienteActual.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
-      setClientes(clientes.filter((c) => c.id !== clienteActual.id))
+      setPreclientes(preclientes.filter((c) => c.id !== clienteActual.id))
       setShowDeleteModal(false)
       setClienteActual(null)
     } catch (err) {
@@ -158,12 +122,12 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
   const guardarCliente = async () => {
     const metodo = clienteActual ? "PUT" : "POST"
     const url = clienteActual
-      ? `http://localhost:8000/clientes/update/${clienteActual.id}`
-      : `http://localhost:8000/clientes/register`
+      ? `http://localhost:8000/preclientes/update/${clienteActual.id}`
+      : `http://localhost:8000/preclientes/register`
 
     // Validar datos antes de enviar
-    if (!formData.nombre || !formData.apellido || !formData.dni) {
-      alert("Por favor complete los campos obligatorios: Nombre, Apellido y DNI");
+    if (!formData.nombre || !formData.apellido || !formData.celular) {
+      alert("Por favor complete los campos obligatorios: Nombre, Apellido y Celular");
       return;
     }
 
@@ -171,13 +135,8 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
     const datosFormateados = {
       nombre: formData.nombre.trim(),
       apellido: formData.apellido.trim(),
-      dni: formData.dni.trim(),
-      direccion: formData.direccion.trim(),
       celular: formData.celular.trim(),
-      notas: formData.notas.trim(),
     }
-
-    
 
     try {
       console.log("Enviando datos:", datosFormateados);
@@ -201,9 +160,9 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
       const nuevoCliente = await res.json();
 
       if (clienteActual) {
-        setClientes(clientes.map((c) => (c.id === clienteActual.id ? nuevoCliente : c)))
+        setPreclientes(preclientes.map((c) => (c.id === clienteActual.id ? nuevoCliente : c)))
       } else {
-        setClientes([...clientes, nuevoCliente])
+        setPreclientes([...preclientes, nuevoCliente])
       }
 
       setShowModal(false)
@@ -215,7 +174,9 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
     }
   }
 
-  const clientesFiltrados = clientes.filter((cliente) =>
+  
+
+  const clientesFiltrados = preclientes.filter((cliente) =>
     `${cliente.nombre} ${cliente.apellido}`.toLowerCase().includes(busqueda.toLowerCase())
   )
 
@@ -223,7 +184,7 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h1 className="fw-bold">Clientes</h1>
+          <h1 className="fw-bold">Preclientes</h1>
           <p className="text-muted">Gestión de clientes de Guapo Trajes</p>
         </div>
         <button className="btn btn-primary" onClick={nuevoCliente}>
@@ -254,10 +215,7 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
               <tr>
                 <th>Nombre</th>
                 <th>Apellido</th>
-                <th>DNI</th>
-                <th>Dirección</th>
                 <th>Celular</th>
-                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -267,11 +225,16 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
                   <tr key={cliente.id || `cliente-${index}`}>
                     <td className="fw-medium">{cliente.nombre}</td>
                     <td>{cliente.apellido}</td>
-                    <td>{cliente.dni}</td>
-                    <td>{cliente.direccion}</td>
                     <td>{cliente.celular}</td>
                     <td>
                       <div className="btn-group">
+                        <button
+                          className="btn btn-sm btn-outline-seconary"
+                          onClick={() => setPreclienteSeleccionado(cliente)}
+                          title="Convertir"
+                        >
+                          <i className="bi bi-pencil"></i>
+                        </button>
                         <button
                           className="btn btn-sm btn-outline-secondary"
                           onClick={() => editarCliente(cliente)}
@@ -301,6 +264,8 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
           </table>
         </div>
       </div>
+      <br />
+      <ClientesPage preclienteSeleccionado={preclienteSeleccionado || undefined} />
 
       {/* Modal para crear/editar cliente */}
       <div
@@ -344,32 +309,6 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
                     onChange={handleChange}
                   />
                 </div>
-                <div className="mb-3">
-                  <label htmlFor="dni" className="form-label">
-                    DNI
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="dni"
-                    name="dni"
-                    value={formData.dni}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="direccion" className="form-label">
-                    Dirección
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="direccion"
-                    name="direccion"
-                    value={formData.direccion}
-                    onChange={handleChange}
-                  />
-                </div>
                 <div>
                   <label htmlFor="celular" className="form-label">
                     Celular
@@ -382,20 +321,6 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
                     value={formData.celular}
                     onChange={handleChange}
                   />
-                  <div className="mb-3">
-                  <label htmlFor="notas" className="form-label">
-                    Notas
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="notas"
-                    name="notas"
-                    value={formData.notas}
-                    onChange={handleChange}
-                  />
-                </div>
-                  
                 </div>
               </form>
             </div>

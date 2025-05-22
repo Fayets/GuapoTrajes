@@ -117,6 +117,21 @@ class ClientUpdateResponse(BaseModel):
     success: bool
     data: ClientResponse
 
+#Preclientes
+class PreclientCreate(BaseModel):
+    nombre: str
+    apellido: str
+    celular: str
+
+class PreclientResponse(PreclientCreate):
+    id: int
+
+class PreclientUpdateResponse(BaseModel):
+    message: str
+    success: bool
+    data: PreclientResponse
+
+
 #Lavanderia
 class LavanderiaCreate(BaseModel):
     nombre: str
@@ -151,6 +166,5 @@ class RegresoProductoModistaResponse(BaseModel):
     fecha_ingreso: Optional[date] = None
     fecha_salida: Optional[date] = None
     estado: Optional[str] = None
-
 
 

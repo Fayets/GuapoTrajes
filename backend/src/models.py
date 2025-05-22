@@ -71,6 +71,13 @@ class Cliente(db.Entity):
     notas = Optional(str)
     _table_ = "Cliente"
 
+class Precliente(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    nombre = Required(str)
+    apellido = Required(str)
+    celular = Required(str)
+    table = "Precliente"
+
 class Modista(db.Entity):
     id = PrimaryKey(int, auto=True)
     nombre = Required(str)

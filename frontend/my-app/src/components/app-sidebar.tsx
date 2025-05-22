@@ -49,6 +49,11 @@ export function AppSidebar() {
       href: "/clientes",
     },
     {
+      title: "Preclientes",
+      icon: Users,
+      href: "/preclientes",
+    },
+    {
       title: "Presupuestos",
       icon: FileText,
       href: "/presupuestos",

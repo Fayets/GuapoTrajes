@@ -4,13 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.db import db
 from pony.orm import *
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from src.controllers.auth_controller import router as auth_router
 from src.controllers.sucursal_controller import router as sucursal_router
 from src.controllers.productos_controller import router as productos_router
 from src.controllers.cliente_controller import router as cliente_router
 from src.controllers.lavanderia_controller import router as lavanderia_router
 from src.controllers.modista_controller import router as modista_router
+from src.controllers.precliente_controller import router as precliente_router
 
 app = FastAPI()
 
@@ -44,6 +44,9 @@ app.include_router(lavanderia_router, prefix="/lavanderia", tags=["lavanderia"])
 
 # Modistas
 app.include_router(modista_router, prefix="/modistas", tags=["modistas"])
+
+#Preclientes
+app.include_router(precliente_router, prefix="/preclientes", tags=["preclientes"])
 
 # Personalizar el esquema de seguridad en OpenAPI para usar Bearer tokens
 def custom_openapi():

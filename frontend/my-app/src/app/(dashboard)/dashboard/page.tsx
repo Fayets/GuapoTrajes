@@ -10,6 +10,13 @@ export default function Dashboard() {
       color: "bg-primary bg-opacity-10 text-primary",
     },
     {
+      title: "Preclientes",
+      description: "Gestión de preclientes",
+      icon: "bi-people",
+      href: "/preclientes",
+      color: "bg-primary bg-opacity-10 text-primary",
+    },
+    {
       title: "Presupuestos",
       description: "Administrar presupuestos",
       icon: "bi-file-text",

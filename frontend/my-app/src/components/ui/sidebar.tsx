@@ -26,6 +26,11 @@ export function Sidebar({ collapsed, toggleSidebar }: SidebarProps) {
       href: "/clientes",
     },
     {
+      title: "Preclientes",
+      icon: "bi-people",
+      href: "/preclientes",
+    },
+    {
       title: "Presupuestos",
       icon: "bi-file-text",
       href: "/presupuestos",

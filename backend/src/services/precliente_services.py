@@ -4,20 +4,17 @@ from typing import Optional
 from pony.orm.core import TransactionIntegrityError, flush
 from src import models, schemas
 
-class ClientServices:
+class PreclientServices:
     def __init__(self):
         pass
 
-    def crear_cliente(self, cliente: schemas.ClientCreate) -> dict:
+    def crear_cliente(self, cliente: schemas.PreclientCreate) -> dict:
         with db_session:
             try:
-                nuevo_cliente = models.Cliente(
+                nuevo_cliente = models.Precliente(
                     nombre=cliente.nombre,
                     apellido=cliente.apellido,
-                    dni=cliente.dni,
-                    direccion=cliente.direccion,
-                    celular=cliente.celular,
-                    notas=cliente.notas
+                    celular=cliente.celular
                 )
                 return {
                     "message": "Cliente creado exitosamente",
@@ -31,7 +28,7 @@ class ClientServices:
     def get_todos_clientes(self):
         with db_session:
             try:
-                clientes = list(models.Cliente.select())
+                clientes = list(models.Precliente.select())
 
                 clientes_list = []
                 for cliente in clientes:
@@ -39,10 +36,7 @@ class ClientServices:
                         "id": cliente.id,
                         "nombre": cliente.nombre,
                         "apellido": cliente.apellido,
-                        "dni":cliente.dni,
-                        "direccion": cliente.direccion,
-                        "celular": cliente.celular,
-                        "notas":cliente.notas
+                        "celular": cliente.celular
                     }
                     clientes_list.append(clientes_dict)
                 
@@ -52,45 +46,36 @@ class ClientServices:
             except Exception as e:
                 raise HTTPException(status_code=500, detail="Error al obtener los clientes")
             
-    def buscar_sucursal_por_dni(self, cliente_dni: int) -> dict:
+    def buscar_cliente_por_celular(self, cliente_celular: str) -> dict:
         with db_session:
-            cliente = models.Cliente.get(id=cliente_dni)
+            cliente = models.Precliente.get(id=cliente_celular)
             if not cliente:
                 raise HTTPException(status_code=404, detail="Cliente no encontrado")
             return {
                 "id": cliente.id,
                 "nombre": cliente.nombre,
                 "apellido": cliente.apellido,
-                "dni":cliente.dni,
-                "direccion": cliente.direccion,
                 "celular": cliente.celular,
-                "notas":cliente.notas
             }
         
-    def actualizar_cliente(self, id: int, cliente_actualizar: schemas.ClientCreate) -> dict:
+    def actualizar_cliente(self, id: int, cliente_actualizar: schemas.PreclientCreate) -> dict:
         with db_session:
             try:
-                cliente = models.Cliente.get(id=id)
+                cliente = models.Precliente.get(id=id)
                 if not cliente:
                     raise HTTPException(status_code=404, detail="Cliente no encontrado")
                 
                 #actualiza los atributos del cliente
                 cliente.nombre = cliente_actualizar.nombre
                 cliente.apellido = cliente_actualizar.apellido
-                cliente.dni = cliente_actualizar.dni
-                cliente.direccion = cliente_actualizar.direccion
                 cliente.celular = cliente_actualizar.celular
-                cliente.notas = cliente_actualizar.notas
                 return {"message": "Cliente actualizado correctamente",
                         "success" : True, 
                         "data": {
                             "id": cliente.id,
                             "nombre": cliente.nombre,
                             "apellido": cliente.apellido,
-                            "dni":cliente.dni,
-                            "direccion": cliente.direccion,
                             "celular": cliente.celular,
-                            "notas":cliente.notas
                         }
                 }
             
@@ -102,7 +87,7 @@ class ClientServices:
     def eliminar_cliente(self, id: int) -> dict:
         with db_session:
             try:
-                cliente = models.Cliente.get(id=id)
+                cliente = models.Precliente.get(id=id)
                 if not cliente:
                     raise HTTPException(status_code=404, detail="Cliente no encontrado")
                 cliente.delete()
