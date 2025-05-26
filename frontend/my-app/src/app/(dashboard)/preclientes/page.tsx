@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react"
 import ClientesPage from "../clientes/page"
 import ReactPaginate from 'react-paginate'
+import ClienteModal from "@/components/clienteModal"
+
 
 
 type Precliente = {
@@ -22,8 +24,19 @@ export default function PreclientesPage() {
   const [cargando, setCargando] = useState(true)
   // PAGINACIÓN: Estados nuevos
   const [currentPage, setCurrentPage] = useState(0)
-  const clientesPorPagina = 6
+  const clientesPorPagina = 12
   const offset = currentPage * clientesPorPagina
+  const [showClienteModal, setShowClienteModal] = useState(false)
+  const [preclienteIdConvertir, setPreclienteIdConvertir] = useState<string | null>(null)
+  const [formDataCliente, setFormDataCliente] = useState({
+    nombre: "",
+    apellido: "",
+    celular: "",
+    dni: "",
+    direccion: "",
+    notas: "",
+  })
+
 
   const handlePageChange = (selectedItem: { selected: number }) => {
     setCurrentPage(selectedItem.selected)
@@ -132,6 +145,19 @@ export default function PreclientesPage() {
       console.error("Error al eliminar cliente", err)
     }
   }
+  const iniciarConversionPrecliente = (precliente: Precliente) => {
+  setFormDataCliente({
+    nombre: precliente.nombre,
+    apellido: precliente.apellido,
+    celular: precliente.celular,
+    dni: "",
+    direccion: "",
+    notas: "",
+  })
+  setPreclienteIdConvertir(precliente.id || null)
+  setShowClienteModal(true)
+}
+
 
   const guardarCliente = async () => {
     const metodo = clienteActual ? "PUT" : "POST"
@@ -198,6 +224,43 @@ export default function PreclientesPage() {
   const clientesPaginados = clientesFiltrados.slice(offset, offset + clientesPorPagina)
   const pageCount = Math.ceil(clientesFiltrados.length / clientesPorPagina)
 
+  const guardarClienteDesdePrecliente = async () => {
+  if (!preclienteIdConvertir) return
+
+  if (!formDataCliente.dni || !formDataCliente.direccion) {
+    alert("DNI y Dirección son obligatorios")
+    return
+  }
+
+  try {
+    const res = await fetch(`http://localhost:8000/preclientes/convertir/${preclienteIdConvertir}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        dni: formDataCliente.dni.trim(),
+        direccion: formDataCliente.direccion.trim(),
+      }),
+    })
+
+    if (!res.ok) {
+      const error = await res.json()
+      alert(`Error: ${error.detail || "No se pudo convertir el precliente"}`)
+      return
+    }
+
+    setShowClienteModal(false)
+    setPreclienteIdConvertir(null)
+    fetchClientes() // 🔁 recarga preclientes
+  } catch (err) {
+    console.error("Error al convertir precliente", err)
+    alert("Error inesperado")
+  }
+}
+
+
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -254,7 +317,7 @@ export default function PreclientesPage() {
                         <div className="btn-group">
                           <button
                             className="btn btn-sm btn-outline-secondary"
-                            onClick={() => setPreclienteSeleccionado(cliente)}
+                            onClick={() => iniciarConversionPrecliente(cliente)}
                             title="Convertir"
                           >
                             <i className="bi bi-person"></i>
@@ -310,11 +373,17 @@ export default function PreclientesPage() {
         </div> )}
       <br />
 
-      <ClientesPage
-        preclienteSeleccionado={preclienteSeleccionado || undefined}
-        onConversionCompleta={fetchClientes}
+      <ClienteModal
+        show={showClienteModal}
+        formData={formDataCliente}
+        onChange={(e) => {
+          const { name, value } = e.target
+          setFormDataCliente((prev) => ({ ...prev, [name]: value }))
+        }}
+        onClose={() => setShowClienteModal(false)}
+        onSave={guardarClienteDesdePrecliente}
+        modoEdicion={false}
       />
-
 
       {/* Modal para crear/editar cliente */}
       <div

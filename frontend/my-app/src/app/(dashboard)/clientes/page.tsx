@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react"
 import ReactPaginate from 'react-paginate'
+import ClienteModal from "@/components/clienteModal"
 
 type Cliente = {
   id: string
@@ -40,7 +41,7 @@ export default function ClientesPage({
 
   // PAGINACIÓN: Estados nuevos
   const [currentPage, setCurrentPage] = useState(0)
-  const clientesPorPagina = 3
+  const clientesPorPagina = 12
   const offset = currentPage * clientesPorPagina
 
   const handlePageChange = (selectedItem: { selected: number }) => {
@@ -312,7 +313,6 @@ export default function ClientesPage({
               <tbody>
                 {clientesPaginados.length > 0 ?  (
                   clientesPaginados.map((cliente, index) => (
-                    
                     <tr key={cliente.id || `cliente-${index}`}>
                       <td className="fw-medium">{cliente.nombre}</td>
                       <td>{cliente.apellido}</td>
@@ -374,117 +374,15 @@ export default function ClientesPage({
       </div> )}
 
       {/* Modal para crear/editar cliente */}
-      <div
-        className={`modal fade ${showModal ? "show" : ""}`}
-        style={{ display: showModal ? "block" : "none" }}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="modal-dialog">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">{clienteActual ? "Editar Cliente" : "Nuevo Cliente"}</h5>
-              <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
-            </div>
-            <div className="modal-body">
-              <form>
-                <div className="mb-3">
-                  <label htmlFor="nombre" className="form-label">
-                    Nombre
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="nombre"
-                    name="nombre"
-                    value={formData.nombre}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="apellido" className="form-label">
-                    Apellido
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="apellido"
-                    name="apellido"
-                    value={formData.apellido}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="dni" className="form-label">
-                    DNI
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="dni"
-                    name="dni"
-                    value={formData.dni}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="direccion" className="form-label">
-                    Dirección
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="direccion"
-                    name="direccion"
-                    value={formData.direccion}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="celular" className="form-label">
-                    Celular
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="celular"
-                    name="celular"
-                    value={formData.celular}
-                    onChange={handleChange}
-                  />
-                  <div className="mb-3">
-                  <label htmlFor="notas" className="form-label">
-                    Notas
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="notas"
-                    name="notas"
-                    value={formData.notas}
-                    onChange={handleChange}
-                  />
-                </div>
-                  
-                </div>
-              </form>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                Cancelar
-              </button>
-              <button type="button" className="btn btn-primary" onClick={guardarCliente}>
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div
-        className={`modal-backdrop fade ${showModal ? "show" : ""}`}
-        style={{ display: showModal ? "block" : "none" }}
-      ></div>
+      <ClienteModal
+        show={showModal}
+        formData={formData}
+        onChange={handleChange}
+        onClose={() => setShowModal(false)}
+        onSave={guardarCliente}
+        modoEdicion={!!clienteActual}
+      />
+
 
       {/* Modal para confirmar eliminación */}
       <div
