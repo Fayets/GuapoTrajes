@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react"
 import ClientesPage from "../clientes/page"
+import ReactPaginate from 'react-paginate'
+
 
 type Precliente = {
   id: string
@@ -17,7 +19,15 @@ export default function PreclientesPage() {
   const [showModal, setShowModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [preclienteSeleccionado, setPreclienteSeleccionado] = useState<Precliente | null>(null);
+  const [cargando, setCargando] = useState(true)
+  // PAGINACIÓN: Estados nuevos
+  const [currentPage, setCurrentPage] = useState(0)
+  const clientesPorPagina = 6
+  const offset = currentPage * clientesPorPagina
 
+  const handlePageChange = (selectedItem: { selected: number }) => {
+    setCurrentPage(selectedItem.selected)
+  }
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -41,8 +51,10 @@ export default function PreclientesPage() {
       
     }
   }, [token])
+  
 
   const fetchClientes = async () => {
+    setCargando(true)
     try {
       const res = await fetch("http://localhost:8000/preclientes/all", {
         headers: {
@@ -69,6 +81,8 @@ export default function PreclientesPage() {
       setPreclientes(clientesConId)
     } catch (err) {
       console.error("Error al obtener clientes", err)
+    } finally {
+      setCargando(false)
     }
   }
 
@@ -165,20 +179,24 @@ export default function PreclientesPage() {
         setPreclientes([...preclientes, nuevoCliente])
       }
 
+      
       setShowModal(false)
       setClienteActual(null)
       fetchClientes() // Recargar los clientes después de guardar para asegurar datos actualizados
+    
     } catch (err) {
       console.error("Error al guardar cliente", err)
       alert("Error al guardar cliente. Por favor, intente nuevamente.")
     }
   }
 
-  
 
   const clientesFiltrados = preclientes.filter((cliente) =>
     `${cliente.nombre} ${cliente.apellido}`.toLowerCase().includes(busqueda.toLowerCase())
   )
+
+  const clientesPaginados = clientesFiltrados.slice(offset, offset + clientesPorPagina)
+  const pageCount = Math.ceil(clientesFiltrados.length / clientesPorPagina)
 
   return (
     <div>
@@ -189,7 +207,7 @@ export default function PreclientesPage() {
         </div>
         <button className="btn btn-primary" onClick={nuevoCliente}>
           <i className="bi bi-plus me-2"></i>
-          Nuevo Cliente
+          Nuevo Precliente
         </button>
       </div>
 
@@ -207,65 +225,96 @@ export default function PreclientesPage() {
           />
         </div>
       </div>
-
-      <div className="card">
-        <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Apellido</th>
-                <th>Celular</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientesFiltrados.length > 0 ? (
-                clientesFiltrados.map((cliente, index) => (
-                  // Usar una combinación del índice y el ID para garantizar unicidad
-                  <tr key={cliente.id || `cliente-${index}`}>
-                    <td className="fw-medium">{cliente.nombre}</td>
-                    <td>{cliente.apellido}</td>
-                    <td>{cliente.celular}</td>
-                    <td>
-                      <div className="btn-group">
-                        <button
-                          className="btn btn-sm btn-outline-seconary"
-                          onClick={() => setPreclienteSeleccionado(cliente)}
-                          title="Convertir"
-                        >
-                          <i className="bi bi-pencil"></i>
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-secondary"
-                          onClick={() => editarCliente(cliente)}
-                          title="Editar"
-                        >
-                          <i className="bi bi-pencil"></i>
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          onClick={() => confirmarEliminar(cliente)}
-                          title="Eliminar"
-                        >
-                          <i className="bi bi-trash"></i>
-                        </button>
-                      </div>
+      {cargando ? (
+        <div className="d-flex justify-content-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+        </div>
+        ) : (
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Apellido</th>
+                  <th>Celular</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientesPaginados.length > 0 ? (
+                  clientesPaginados.map((cliente, index) => (
+                    <tr key={cliente.id || `cliente-${index}`}>
+                      <td className="fw-medium">{cliente.nombre}</td>
+                      <td>{cliente.apellido}</td>
+                      <td>{cliente.celular}</td>
+                      <td>
+                        <div className="btn-group">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => setPreclienteSeleccionado(cliente)}
+                            title="Convertir"
+                          >
+                            <i className="bi bi-person"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => editarCliente(cliente)}
+                            title="Editar"
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => confirmarEliminar(cliente)}
+                            title="Eliminar"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center">
+                      No se encontraron clientes
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="text-center">
-                    No se encontraron clientes
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                )}
+              </tbody>
+              <div className="d-flex justify-content-center mt-3">
+                <ReactPaginate
+                  previousLabel={"←"}
+                  nextLabel={"→"}
+                  breakLabel={"..."}
+                  pageCount={pageCount}
+                  onPageChange={handlePageChange}
+                  containerClassName={"pagination"}
+                  pageClassName={"page-item"}
+                  pageLinkClassName={"page-link"}
+                  previousClassName={"page-item"}
+                  previousLinkClassName={"page-link"}
+                  nextClassName={"page-item"}
+                  nextLinkClassName={"page-link"}
+                  breakClassName={"page-item"}
+                  breakLinkClassName={"page-link"}
+                  activeClassName={"active"}
+                  forcePage={currentPage}
+                />
+              </div>
+            </table>
+          </div>
+        </div> )}
       <br />
-      <ClientesPage preclienteSeleccionado={preclienteSeleccionado || undefined} />
+
+      <ClientesPage
+        preclienteSeleccionado={preclienteSeleccionado || undefined}
+        onConversionCompleta={fetchClientes}
+      />
+
 
       {/* Modal para crear/editar cliente */}
       <div

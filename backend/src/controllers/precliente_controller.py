@@ -82,3 +82,14 @@ def eliminar_cliente(precliente_id: int, current_user=Depends(get_current_user))
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error al eliminar el cliente")
+    
+@router.post("/convertir/{precliente_id}")
+def convertir_precliente(
+    precliente_id: int,
+    datos: schemas.ConvertirPreclienteRequest,  # Crear este schema abajo
+    current_user=Depends(get_current_user)
+):
+    try:
+        return servicio.convertir_a_cliente(precliente_id, datos.direccion, datos.dni)
+    except HTTPException as e:
+        return {"message": e.detail, "success": False, "data": None}

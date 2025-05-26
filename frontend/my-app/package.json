@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tanstack/react-table": "^8.21.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "jsbarcode": "^3.11.6",
@@ -16,6 +17,8 @@
     "next": "^15.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-paginate": "^8.3.0",
+    "react-pagination": "^1.0.0",
     "recharts": "^2.15.2",
     "sonner": "^2.0.3"
   },

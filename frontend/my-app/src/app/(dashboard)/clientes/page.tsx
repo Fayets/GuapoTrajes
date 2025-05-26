@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import PreclientesPage from "../preclientes/page"
+import ReactPaginate from 'react-paginate'
 
 type Cliente = {
   id: string
@@ -17,16 +17,35 @@ type Precliente = {
   nombre: string
   apellido: string
   celular: string
+  
 }
 
 
-export default function ClientesPage({ preclienteSeleccionado }: { preclienteSeleccionado?: Precliente })
+export default function ClientesPage({
+  preclienteSeleccionado,
+  onConversionCompleta
+    }: {
+    preclienteSeleccionado?: Precliente
+    onConversionCompleta?: () => void
+  })
  {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [busqueda, setBusqueda] = useState("")
   const [clienteActual, setClienteActual] = useState<Cliente | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [cargando, setCargando] = useState(true)
+  const [preclienteSeleccionadoId, setPreclienteSeleccionadoId] = useState<string | null>(null)
+
+
+  // PAGINACIÓN: Estados nuevos
+  const [currentPage, setCurrentPage] = useState(0)
+  const clientesPorPagina = 3
+  const offset = currentPage * clientesPorPagina
+
+  const handlePageChange = (selectedItem: { selected: number }) => {
+    setCurrentPage(selectedItem.selected)
+  }
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -46,7 +65,7 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
     }
   }, [])
 
-  const convertirPreclienteACliente = (precliente: Precliente) => {
+  const convertirPreclienteACliente = (precliente: Precliente & { id?: string }) => {
         setClienteActual(null); // Queremos registrar un nuevo cliente
         setFormData({
           nombre: precliente.nombre,
@@ -56,7 +75,10 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
           celular: precliente.celular,
           notas: "",
         });
-        setShowModal(true); // Abre el modal para completar el resto
+        if (precliente.id) {
+          setPreclienteSeleccionadoId(precliente.id)
+        }
+        setShowModal(true)
       };
       
   useEffect(() => {
@@ -73,6 +95,7 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
   }, [token])
 
   const fetchClientes = async () => {
+    setCargando(true)
     try {
       const res = await fetch("http://localhost:8000/clientes/all", {
         headers: {
@@ -99,7 +122,10 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
       setClientes(clientesConId)
     } catch (err) {
       console.error("Error al obtener clientes", err)
-    }
+    } finally {
+    setCargando(false)
+  }
+    
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,68 +182,84 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
   }
 
   const guardarCliente = async () => {
-    const metodo = clienteActual ? "PUT" : "POST"
-    const url = clienteActual
-      ? `http://localhost:8000/clientes/update/${clienteActual.id}`
-      : `http://localhost:8000/clientes/register`
+  if (!formData.nombre || !formData.apellido || !formData.dni) {
+    alert("Por favor complete los campos obligatorios: Nombre, Apellido y DNI")
+    return
+  }
 
-    // Validar datos antes de enviar
-    if (!formData.nombre || !formData.apellido || !formData.dni) {
-      alert("Por favor complete los campos obligatorios: Nombre, Apellido y DNI");
-      return;
-    }
+  const datosFormateados = {
+    nombre: formData.nombre.trim(),
+    apellido: formData.apellido.trim(),
+    dni: formData.dni.trim(),
+    direccion: formData.direccion.trim(),
+    celular: formData.celular.trim(),
+    notas: formData.notas.trim(),
+  }
 
-    // Asegurarse de que todos los campos sean strings
-    const datosFormateados = {
-      nombre: formData.nombre.trim(),
-      apellido: formData.apellido.trim(),
-      dni: formData.dni.trim(),
-      direccion: formData.direccion.trim(),
-      celular: formData.celular.trim(),
-      notas: formData.notas.trim(),
-    }
+  try {
+    console.log("Enviando datos:", datosFormateados)
 
-    
+    let url = ""
+    let metodo = "POST"
+    let body: string = "" 
 
-    try {
-      console.log("Enviando datos:", datosFormateados);
-      
-      const res = await fetch(url, {
-        method: metodo,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(datosFormateados),
+    if (clienteActual) {
+      // Edición de cliente ya existente
+      url = `http://localhost:8000/clientes/update/${clienteActual.id}`
+      metodo = "PUT"
+      body = JSON.stringify(datosFormateados)
+    } else if (preclienteSeleccionadoId) {
+      // Conversión de precliente a cliente
+      url = `http://localhost:8000/preclientes/convertir/${preclienteSeleccionadoId}`
+      metodo = "POST"
+      body = JSON.stringify({
+        direccion: datosFormateados.direccion,
+        dni: datosFormateados.dni
       })
+    } else {
+      // Alta normal de cliente
+      url = `http://localhost:8000/clientes/register`
+      metodo = "POST"
+      body = JSON.stringify(datosFormateados)
+    }
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Error del servidor:", errorData);
-        alert(`Error al guardar cliente: ${errorData.detail || 'Revise los datos ingresados'}`);
-        return;
-      }
+    const res = await fetch(url, {
+      method: metodo,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body,
+    })
 
-      const nuevoCliente = await res.json();
+    if (!res.ok) {
+      const errorData = await res.json()
+      console.error("Error del servidor:", errorData)
+      alert(`Error al guardar cliente: ${errorData.detail || 'Revise los datos ingresados'}`)
+      return
+    }
 
-      if (clienteActual) {
-        setClientes(clientes.map((c) => (c.id === clienteActual.id ? nuevoCliente : c)))
-      } else {
-        setClientes([...clientes, nuevoCliente])
-      }
-
-      setShowModal(false)
-      setClienteActual(null)
-      fetchClientes() // Recargar los clientes después de guardar para asegurar datos actualizados
-    } catch (err) {
-      console.error("Error al guardar cliente", err)
-      alert("Error al guardar cliente. Por favor, intente nuevamente.")
+    const nuevoCliente = await res.json()
+    setClientes([...clientes, nuevoCliente.data || nuevoCliente]) // según la estructura devuelta
+    setShowModal(false)
+    setClienteActual(null)
+    setPreclienteSeleccionadoId(null)
+    fetchClientes()
+    if (onConversionCompleta) {
+      onConversionCompleta()
+    }
+  } catch (err) {
+    console.error("Error al guardar cliente", err)
+    alert("Error al guardar cliente. Por favor, intente nuevamente.")
     }
   }
+
 
   const clientesFiltrados = clientes.filter((cliente) =>
     `${cliente.nombre} ${cliente.apellido}`.toLowerCase().includes(busqueda.toLowerCase())
   )
+  const clientesPaginados = clientesFiltrados.slice(offset, offset + clientesPorPagina)
+  const pageCount = Math.ceil(clientesFiltrados.length / clientesPorPagina)
 
   return (
     <div>
@@ -246,61 +288,90 @@ export default function ClientesPage({ preclienteSeleccionado }: { preclienteSel
           />
         </div>
       </div>
-
-      <div className="card">
-        <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Apellido</th>
-                <th>DNI</th>
-                <th>Dirección</th>
-                <th>Celular</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientesFiltrados.length > 0 ? (
-                clientesFiltrados.map((cliente, index) => (
-                  // Usar una combinación del índice y el ID para garantizar unicidad
-                  <tr key={cliente.id || `cliente-${index}`}>
-                    <td className="fw-medium">{cliente.nombre}</td>
-                    <td>{cliente.apellido}</td>
-                    <td>{cliente.dni}</td>
-                    <td>{cliente.direccion}</td>
-                    <td>{cliente.celular}</td>
-                    <td>
-                      <div className="btn-group">
-                        <button
-                          className="btn btn-sm btn-outline-secondary"
-                          onClick={() => editarCliente(cliente)}
-                          title="Editar"
-                        >
-                          <i className="bi bi-pencil"></i>
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          onClick={() => confirmarEliminar(cliente)}
-                          title="Eliminar"
-                        >
-                          <i className="bi bi-trash"></i>
-                        </button>
-                      </div>
+      {cargando ? (
+        <div className="d-flex justify-content-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+        </div>
+        ) : (
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Apellido</th>
+                  <th>DNI</th>
+                  <th>Dirección</th>
+                  <th>Celular</th>
+                  <th>Notas</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientesPaginados.length > 0 ?  (
+                  clientesPaginados.map((cliente, index) => (
+                    
+                    <tr key={cliente.id || `cliente-${index}`}>
+                      <td className="fw-medium">{cliente.nombre}</td>
+                      <td>{cliente.apellido}</td>
+                      <td>{cliente.celular}</td>
+                      <td>{cliente.direccion}</td>
+                      <td>{cliente.celular}</td>
+                      <td>{cliente.notas}</td>
+                      <td>
+                        <div className="btn-group">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => editarCliente(cliente)}
+                            title="Editar"
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => confirmarEliminar(cliente)}
+                            title="Eliminar"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center">
+                      No se encontraron clientes
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="text-center">
-                    No se encontraron clientes
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                )}
+              </tbody>
+              <div className="d-flex justify-content-center mt-3">
+                <ReactPaginate
+                  previousLabel={"←"}
+                  nextLabel={"→"}
+                  breakLabel={"..."}
+                  pageCount={pageCount}
+                  onPageChange={handlePageChange}
+                  containerClassName={"pagination"}
+                  pageClassName={"page-item"}
+                  pageLinkClassName={"page-link"}
+                  previousClassName={"page-item"}
+                  previousLinkClassName={"page-link"}
+                  nextClassName={"page-item"}
+                  nextLinkClassName={"page-link"}
+                  breakClassName={"page-item"}
+                  breakLinkClassName={"page-link"}
+                  activeClassName={"active"}
+                  forcePage={currentPage}
+                />
+              </div> 
+            </table> 
+          </div>
+          
+      </div> )}
 
       {/* Modal para crear/editar cliente */}
       <div

@@ -40,8 +40,6 @@ class PreclientServices:
                     }
                     clientes_list.append(clientes_dict)
                 
-                if not clientes_list:
-                    raise HTTPException(status_code=404, detail="No hay clientes disponibles")
                 return clientes_list
             except Exception as e:
                 raise HTTPException(status_code=500, detail="Error al obtener los clientes")
@@ -96,3 +94,33 @@ class PreclientServices:
             except Exception as e:
                 print(f"Error al eliminar el cliente: {e}")
                 raise HTTPException(status_code=500, detail="Error inesperado al eliminar el cliente")
+            
+
+    def convertir_a_cliente(self, precliente_id: int, direccion: str, dni: str) -> dict:
+        with db_session:
+            precliente = models.Precliente.get(id=precliente_id)
+            if not precliente:
+                raise HTTPException(status_code=404, detail="Precliente no encontrado")
+
+            # Validar duplicados por DNI o celular
+            cliente_existente = models.Cliente.get(lambda c: c.dni == dni or c.celular == precliente.celular)
+            if cliente_existente:
+                raise HTTPException(status_code=400, detail="Ya existe un cliente con ese DNI o celular")
+
+            # Crear cliente completo
+            cliente = models.Cliente(
+                nombre=precliente.nombre,
+                apellido=precliente.apellido,
+                celular=precliente.celular,
+                direccion=direccion,
+                dni=dni
+            )
+
+            # Eliminar el precliente
+            precliente.delete()
+
+            return {
+                "message": "Precliente convertido exitosamente",
+                "success": True,
+                "data": cliente.to_dict()
+            }

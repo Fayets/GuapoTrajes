@@ -131,6 +131,11 @@ class PreclientUpdateResponse(BaseModel):
     success: bool
     data: PreclientResponse
 
+class ConvertirPreclienteRequest(BaseModel):
+    direccion: str
+    dni: str
+
+
 
 #Lavanderia
 class LavanderiaCreate(BaseModel):
