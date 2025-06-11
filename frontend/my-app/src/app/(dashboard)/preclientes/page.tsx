@@ -1,33 +1,34 @@
-"use client"
+"use client";
 
-import React, { useEffect, useState } from "react"
-import ClientesPage from "../clientes/page"
-import ReactPaginate from 'react-paginate'
-import ClienteModal from "@/components/clienteModal"
-
-
+import React, { useEffect, useState } from "react";
+import ClientesPage from "../clientes/page";
+import ReactPaginate from "react-paginate";
+import ClienteModal from "@/components/modales/clienteModal";
 
 type Precliente = {
-  id: string
-  nombre: string
-  apellido: string
-  celular: string
-}
+  id: string;
+  nombre: string;
+  apellido: string;
+  celular: string;
+};
 
 export default function PreclientesPage() {
-  const [preclientes, setPreclientes] = useState<Precliente[]>([])
-  const [busqueda, setBusqueda] = useState("")
-  const [clienteActual, setClienteActual] = useState<Precliente | null>(null)
-  const [showModal, setShowModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [preclienteSeleccionado, setPreclienteSeleccionado] = useState<Precliente | null>(null);
-  const [cargando, setCargando] = useState(true)
+  const [preclientes, setPreclientes] = useState<Precliente[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [clienteActual, setClienteActual] = useState<Precliente | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [preclienteSeleccionado, setPreclienteSeleccionado] =
+    useState<Precliente | null>(null);
+  const [cargando, setCargando] = useState(true);
   // PAGINACIÓN: Estados nuevos
-  const [currentPage, setCurrentPage] = useState(0)
-  const clientesPorPagina = 12
-  const offset = currentPage * clientesPorPagina
-  const [showClienteModal, setShowClienteModal] = useState(false)
-  const [preclienteIdConvertir, setPreclienteIdConvertir] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(0);
+  const clientesPorPagina = 12;
+  const offset = currentPage * clientesPorPagina;
+  const [showClienteModal, setShowClienteModal] = useState(false);
+  const [preclienteIdConvertir, setPreclienteIdConvertir] = useState<
+    string | null
+  >(null);
   const [formDataCliente, setFormDataCliente] = useState({
     nombre: "",
     apellido: "",
@@ -35,54 +36,51 @@ export default function PreclientesPage() {
     dni: "",
     direccion: "",
     notas: "",
-  })
-
+  });
 
   const handlePageChange = (selectedItem: { selected: number }) => {
-    setCurrentPage(selectedItem.selected)
-  }
+    setCurrentPage(selectedItem.selected);
+  };
 
   const [formData, setFormData] = useState({
     nombre: "",
     apellido: "",
     celular: "",
-  })
+  });
 
-  const [token, setToken] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = localStorage.getItem("token")
+    const t = localStorage.getItem("token");
     if (t) {
-      setToken(t)
+      setToken(t);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
     if (token) {
       console.log("Token disponible, obteniendo clientes...");
       fetchClientes();
-      
     }
-  }, [token])
-  
+  }, [token]);
 
   const fetchClientes = async () => {
-    setCargando(true)
+    setCargando(true);
     try {
       const res = await fetch("http://localhost:8000/preclientes/all", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      })
-      
+      });
+
       if (!res.ok) {
         console.error("Error al obtener clientes:", res.status);
         return;
       }
-      
-      const data = await res.json()
+
+      const data = await res.json();
       console.log("Datos recibidos del servidor:", data);
-      
+
       // Asegurarse de que cada cliente tenga un ID único
       const clientesConId = data.map((cliente: Precliente, index: number) => {
         // Si el cliente no tiene un ID, asignarle uno temporal basado en el índice
@@ -91,83 +89,87 @@ export default function PreclientesPage() {
         }
         return cliente;
       });
-      setPreclientes(clientesConId)
+      setPreclientes(clientesConId);
     } catch (err) {
-      console.error("Error al obtener clientes", err)
+      console.error("Error al obtener clientes", err);
     } finally {
-      setCargando(false)
+      setCargando(false);
     }
-  }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const nuevoCliente = () => {
-    setClienteActual(null)
+    setClienteActual(null);
     setFormData({
       nombre: "",
       apellido: "",
       celular: "",
-    })
-    setShowModal(true)
-  }
+    });
+    setShowModal(true);
+  };
 
   const editarCliente = (cliente: Precliente) => {
-    setClienteActual(cliente)
+    setClienteActual(cliente);
     setFormData({
       nombre: cliente.nombre,
       apellido: cliente.apellido,
       celular: cliente.celular,
-    })
-    setShowModal(true)
-  }
+    });
+    setShowModal(true);
+  };
 
   const confirmarEliminar = (cliente: Precliente) => {
-    setClienteActual(cliente)
-    setShowDeleteModal(true)
-  }
+    setClienteActual(cliente);
+    setShowDeleteModal(true);
+  };
 
   const eliminarCliente = async () => {
-    if (!clienteActual) return
+    if (!clienteActual) return;
     try {
-      await fetch(`http://localhost:8000/preclientes/delete/${clienteActual.id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      setPreclientes(preclientes.filter((c) => c.id !== clienteActual.id))
-      setShowDeleteModal(false)
-      setClienteActual(null)
+      await fetch(
+        `http://localhost:8000/preclientes/delete/${clienteActual.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setPreclientes(preclientes.filter((c) => c.id !== clienteActual.id));
+      setShowDeleteModal(false);
+      setClienteActual(null);
     } catch (err) {
-      console.error("Error al eliminar cliente", err)
+      console.error("Error al eliminar cliente", err);
     }
-  }
+  };
   const iniciarConversionPrecliente = (precliente: Precliente) => {
-  setFormDataCliente({
-    nombre: precliente.nombre,
-    apellido: precliente.apellido,
-    celular: precliente.celular,
-    dni: "",
-    direccion: "",
-    notas: "",
-  })
-  setPreclienteIdConvertir(precliente.id || null)
-  setShowClienteModal(true)
-}
-
+    setFormDataCliente({
+      nombre: precliente.nombre,
+      apellido: precliente.apellido,
+      celular: precliente.celular,
+      dni: "",
+      direccion: "",
+      notas: "",
+    });
+    setPreclienteIdConvertir(precliente.id || null);
+    setShowClienteModal(true);
+  };
 
   const guardarCliente = async () => {
-    const metodo = clienteActual ? "PUT" : "POST"
+    const metodo = clienteActual ? "PUT" : "POST";
     const url = clienteActual
       ? `http://localhost:8000/preclientes/update/${clienteActual.id}`
-      : `http://localhost:8000/preclientes/register`
+      : `http://localhost:8000/preclientes/register`;
 
     // Validar datos antes de enviar
     if (!formData.nombre || !formData.apellido || !formData.celular) {
-      alert("Por favor complete los campos obligatorios: Nombre, Apellido y Celular");
+      alert(
+        "Por favor complete los campos obligatorios: Nombre, Apellido y Celular"
+      );
       return;
     }
 
@@ -176,11 +178,11 @@ export default function PreclientesPage() {
       nombre: formData.nombre.trim(),
       apellido: formData.apellido.trim(),
       celular: formData.celular.trim(),
-    }
+    };
 
     try {
       console.log("Enviando datos:", datosFormateados);
-      
+
       const res = await fetch(url, {
         method: metodo,
         headers: {
@@ -188,78 +190,88 @@ export default function PreclientesPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(datosFormateados),
-      })
+      });
 
       if (!res.ok) {
         const errorData = await res.json();
         console.error("Error del servidor:", errorData);
-        alert(`Error al guardar cliente: ${errorData.detail || 'Revise los datos ingresados'}`);
+        alert(
+          `Error al guardar cliente: ${
+            errorData.detail || "Revise los datos ingresados"
+          }`
+        );
         return;
       }
 
       const nuevoCliente = await res.json();
 
       if (clienteActual) {
-        setPreclientes(preclientes.map((c) => (c.id === clienteActual.id ? nuevoCliente : c)))
+        setPreclientes(
+          preclientes.map((c) => (c.id === clienteActual.id ? nuevoCliente : c))
+        );
       } else {
-        setPreclientes([...preclientes, nuevoCliente])
+        setPreclientes([...preclientes, nuevoCliente]);
       }
 
-      
-      setShowModal(false)
-      setClienteActual(null)
-      fetchClientes() // Recargar los clientes después de guardar para asegurar datos actualizados
-    
+      setShowModal(false);
+      setClienteActual(null);
+      fetchClientes(); // Recargar los clientes después de guardar para asegurar datos actualizados
     } catch (err) {
-      console.error("Error al guardar cliente", err)
-      alert("Error al guardar cliente. Por favor, intente nuevamente.")
+      console.error("Error al guardar cliente", err);
+      alert("Error al guardar cliente. Por favor, intente nuevamente.");
     }
-  }
-
+  };
 
   const clientesFiltrados = preclientes.filter((cliente) =>
-    `${cliente.nombre} ${cliente.apellido}`.toLowerCase().includes(busqueda.toLowerCase())
-  )
+    `${cliente.nombre} ${cliente.apellido}`
+      .toLowerCase()
+      .includes(busqueda.toLowerCase())
+  );
 
-  const clientesPaginados = clientesFiltrados.slice(offset, offset + clientesPorPagina)
-  const pageCount = Math.ceil(clientesFiltrados.length / clientesPorPagina)
+  const clientesPaginados = clientesFiltrados.slice(
+    offset,
+    offset + clientesPorPagina
+  );
+  const pageCount = Math.ceil(clientesFiltrados.length / clientesPorPagina);
 
   const guardarClienteDesdePrecliente = async () => {
-  if (!preclienteIdConvertir) return
+    if (!preclienteIdConvertir) return;
 
-  if (!formDataCliente.dni || !formDataCliente.direccion) {
-    alert("DNI y Dirección son obligatorios")
-    return
-  }
-
-  try {
-    const res = await fetch(`http://localhost:8000/preclientes/convertir/${preclienteIdConvertir}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        dni: formDataCliente.dni.trim(),
-        direccion: formDataCliente.direccion.trim(),
-      }),
-    })
-
-    if (!res.ok) {
-      const error = await res.json()
-      alert(`Error: ${error.detail || "No se pudo convertir el precliente"}`)
-      return
+    if (!formDataCliente.dni || !formDataCliente.direccion) {
+      alert("DNI y Dirección son obligatorios");
+      return;
     }
 
-    setShowClienteModal(false)
-    setPreclienteIdConvertir(null)
-    fetchClientes() // 🔁 recarga preclientes
-  } catch (err) {
-    console.error("Error al convertir precliente", err)
-    alert("Error inesperado")
-  }
-}
+    try {
+      const res = await fetch(
+        `http://localhost:8000/preclientes/convertir/${preclienteIdConvertir}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            dni: formDataCliente.dni.trim(),
+            direccion: formDataCliente.direccion.trim(),
+          }),
+        }
+      );
 
+      if (!res.ok) {
+        const error = await res.json();
+        alert(`Error: ${error.detail || "No se pudo convertir el precliente"}`);
+        return;
+      }
+
+      setShowClienteModal(false);
+      setPreclienteIdConvertir(null);
+      fetchClientes(); // 🔁 recarga preclientes
+    } catch (err) {
+      console.error("Error al convertir precliente", err);
+      alert("Error inesperado");
+    }
+  };
 
   return (
     <div>
@@ -294,7 +306,7 @@ export default function PreclientesPage() {
             <span className="visually-hidden">Cargando...</span>
           </div>
         </div>
-        ) : (
+      ) : (
         <div className="card">
           <div className="table-responsive">
             <table className="table table-hover mb-0">
@@ -370,15 +382,16 @@ export default function PreclientesPage() {
               </div>
             </table>
           </div>
-        </div> )}
+        </div>
+      )}
       <br />
 
       <ClienteModal
         show={showClienteModal}
         formData={formDataCliente}
         onChange={(e) => {
-          const { name, value } = e.target
-          setFormDataCliente((prev) => ({ ...prev, [name]: value }))
+          const { name, value } = e.target;
+          setFormDataCliente((prev) => ({ ...prev, [name]: value }));
         }}
         onClose={() => setShowClienteModal(false)}
         onSave={guardarClienteDesdePrecliente}
@@ -396,8 +409,14 @@ export default function PreclientesPage() {
         <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">{clienteActual ? "Editar Cliente" : "Nuevo Cliente"}</h5>
-              <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
+              <h5 className="modal-title">
+                {clienteActual ? "Editar Cliente" : "Nuevo Cliente"}
+              </h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowModal(false)}
+              ></button>
             </div>
             <div className="modal-body">
               <form>
@@ -443,10 +462,18 @@ export default function PreclientesPage() {
               </form>
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowModal(false)}
+              >
                 Cancelar
               </button>
-              <button type="button" className="btn btn-primary" onClick={guardarCliente}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={guardarCliente}
+              >
                 Guardar
               </button>
             </div>
@@ -470,18 +497,32 @@ export default function PreclientesPage() {
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">Confirmar eliminación</h5>
-              <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowDeleteModal(false)}
+              ></button>
             </div>
             <div className="modal-body">
               <p>
-                ¿Está seguro que desea eliminar al cliente {clienteActual?.nombre} {clienteActual?.apellido}? Esta acción no se puede deshacer.
+                ¿Está seguro que desea eliminar al cliente{" "}
+                {clienteActual?.nombre} {clienteActual?.apellido}? Esta acción
+                no se puede deshacer.
               </p>
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+              >
                 Cancelar
               </button>
-              <button type="button" className="btn btn-danger" onClick={eliminarCliente}>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={eliminarCliente}
+              >
                 Eliminar
               </button>
             </div>
@@ -493,5 +534,5 @@ export default function PreclientesPage() {
         style={{ display: showDeleteModal ? "block" : "none" }}
       ></div>
     </div>
-  )
+  );
 }

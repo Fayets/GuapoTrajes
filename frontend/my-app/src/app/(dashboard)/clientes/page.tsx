@@ -1,52 +1,50 @@
-"use client"
+"use client";
 
-import React, { useEffect, useState } from "react"
-import ReactPaginate from 'react-paginate'
-import ClienteModal from "@/components/clienteModal"
+import React, { useEffect, useState } from "react";
+import ReactPaginate from "react-paginate";
+import ClienteModal from "@/components/modales/clienteModal";
 
 type Cliente = {
-  id: string
-  nombre: string
-  apellido: string
-  dni: string
-  direccion: string
-  celular: string
-  notas: string
-}
+  id: string;
+  nombre: string;
+  apellido: string;
+  dni: string;
+  direccion: string;
+  celular: string;
+  notas: string;
+};
 
 type Precliente = {
-  nombre: string
-  apellido: string
-  celular: string
-  
-}
-
+  nombre: string;
+  apellido: string;
+  celular: string;
+};
 
 export default function ClientesPage({
   preclienteSeleccionado,
-  onConversionCompleta
-    }: {
-    preclienteSeleccionado?: Precliente
-    onConversionCompleta?: () => void
-  })
- {
-  const [clientes, setClientes] = useState<Cliente[]>([])
-  const [busqueda, setBusqueda] = useState("")
-  const [clienteActual, setClienteActual] = useState<Cliente | null>(null)
-  const [showModal, setShowModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [cargando, setCargando] = useState(true)
-  const [preclienteSeleccionadoId, setPreclienteSeleccionadoId] = useState<string | null>(null)
-
+  onConversionCompleta,
+}: {
+  preclienteSeleccionado?: Precliente;
+  onConversionCompleta?: () => void;
+}) {
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [clienteActual, setClienteActual] = useState<Cliente | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [preclienteSeleccionadoId, setPreclienteSeleccionadoId] = useState<
+    string | null
+  >(null);
 
   // PAGINACIÓN: Estados nuevos
-  const [currentPage, setCurrentPage] = useState(0)
-  const clientesPorPagina = 12
-  const offset = currentPage * clientesPorPagina
+  const [currentPage, setCurrentPage] = useState(0);
+  const clientesPorPagina = 12;
+  const offset = currentPage * clientesPorPagina;
 
   const handlePageChange = (selectedItem: { selected: number }) => {
-    setCurrentPage(selectedItem.selected)
-  }
+    setCurrentPage(selectedItem.selected);
+  };
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -55,33 +53,35 @@ export default function ClientesPage({
     direccion: "",
     celular: "",
     notas: "",
-  })
+  });
 
-  const [token, setToken] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = localStorage.getItem("token")
+    const t = localStorage.getItem("token");
     if (t) {
-      setToken(t)
+      setToken(t);
     }
-  }, [])
+  }, []);
 
-  const convertirPreclienteACliente = (precliente: Precliente & { id?: string }) => {
-        setClienteActual(null); // Queremos registrar un nuevo cliente
-        setFormData({
-          nombre: precliente.nombre,
-          apellido: precliente.apellido,
-          dni: "",
-          direccion: "",
-          celular: precliente.celular,
-          notas: "",
-        });
-        if (precliente.id) {
-          setPreclienteSeleccionadoId(precliente.id)
-        }
-        setShowModal(true)
-      };
-      
+  const convertirPreclienteACliente = (
+    precliente: Precliente & { id?: string }
+  ) => {
+    setClienteActual(null); // Queremos registrar un nuevo cliente
+    setFormData({
+      nombre: precliente.nombre,
+      apellido: precliente.apellido,
+      dni: "",
+      direccion: "",
+      celular: precliente.celular,
+      notas: "",
+    });
+    if (precliente.id) {
+      setPreclienteSeleccionadoId(precliente.id);
+    }
+    setShowModal(true);
+  };
+
   useEffect(() => {
     if (preclienteSeleccionado) {
       convertirPreclienteACliente(preclienteSeleccionado);
@@ -93,25 +93,25 @@ export default function ClientesPage({
       console.log("Token disponible, obteniendo clientes...");
       fetchClientes();
     }
-  }, [token])
+  }, [token]);
 
   const fetchClientes = async () => {
-    setCargando(true)
+    setCargando(true);
     try {
       const res = await fetch("http://localhost:8000/clientes/all", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      })
-      
+      });
+
       if (!res.ok) {
         console.error("Error al obtener clientes:", res.status);
         return;
       }
-      
-      const data = await res.json()
+
+      const data = await res.json();
       console.log("Datos recibidos del servidor:", data);
-      
+
       // Asegurarse de que cada cliente tenga un ID único
       const clientesConId = data.map((cliente: Cliente, index: number) => {
         // Si el cliente no tiene un ID, asignarle uno temporal basado en el índice
@@ -120,22 +120,21 @@ export default function ClientesPage({
         }
         return cliente;
       });
-      setClientes(clientesConId)
+      setClientes(clientesConId);
     } catch (err) {
-      console.error("Error al obtener clientes", err)
+      console.error("Error al obtener clientes", err);
     } finally {
-    setCargando(false)
-  }
-    
-  }
+      setCargando(false);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const nuevoCliente = () => {
-    setClienteActual(null)
+    setClienteActual(null);
     setFormData({
       nombre: "",
       apellido: "",
@@ -143,12 +142,12 @@ export default function ClientesPage({
       direccion: "",
       celular: "",
       notas: "",
-    })
-    setShowModal(true)
-  }
+    });
+    setShowModal(true);
+  };
 
   const editarCliente = (cliente: Cliente) => {
-    setClienteActual(cliente)
+    setClienteActual(cliente);
     setFormData({
       nombre: cliente.nombre,
       apellido: cliente.apellido,
@@ -156,111 +155,121 @@ export default function ClientesPage({
       direccion: cliente.direccion,
       celular: cliente.celular,
       notas: cliente.notas,
-    })
-    setShowModal(true)
-  }
+    });
+    setShowModal(true);
+  };
 
   const confirmarEliminar = (cliente: Cliente) => {
-    setClienteActual(cliente)
-    setShowDeleteModal(true)
-  }
+    setClienteActual(cliente);
+    setShowDeleteModal(true);
+  };
 
   const eliminarCliente = async () => {
-    if (!clienteActual) return
+    if (!clienteActual) return;
     try {
       await fetch(`http://localhost:8000/clientes/delete/${clienteActual.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      })
-      setClientes(clientes.filter((c) => c.id !== clienteActual.id))
-      setShowDeleteModal(false)
-      setClienteActual(null)
+      });
+      setClientes(clientes.filter((c) => c.id !== clienteActual.id));
+      setShowDeleteModal(false);
+      setClienteActual(null);
     } catch (err) {
-      console.error("Error al eliminar cliente", err)
+      console.error("Error al eliminar cliente", err);
     }
-  }
+  };
 
   const guardarCliente = async () => {
-  if (!formData.nombre || !formData.apellido || !formData.dni) {
-    alert("Por favor complete los campos obligatorios: Nombre, Apellido y DNI")
-    return
-  }
-
-  const datosFormateados = {
-    nombre: formData.nombre.trim(),
-    apellido: formData.apellido.trim(),
-    dni: formData.dni.trim(),
-    direccion: formData.direccion.trim(),
-    celular: formData.celular.trim(),
-    notas: formData.notas.trim(),
-  }
-
-  try {
-    console.log("Enviando datos:", datosFormateados)
-
-    let url = ""
-    let metodo = "POST"
-    let body: string = "" 
-
-    if (clienteActual) {
-      // Edición de cliente ya existente
-      url = `http://localhost:8000/clientes/update/${clienteActual.id}`
-      metodo = "PUT"
-      body = JSON.stringify(datosFormateados)
-    } else if (preclienteSeleccionadoId) {
-      // Conversión de precliente a cliente
-      url = `http://localhost:8000/preclientes/convertir/${preclienteSeleccionadoId}`
-      metodo = "POST"
-      body = JSON.stringify({
-        direccion: datosFormateados.direccion,
-        dni: datosFormateados.dni
-      })
-    } else {
-      // Alta normal de cliente
-      url = `http://localhost:8000/clientes/register`
-      metodo = "POST"
-      body = JSON.stringify(datosFormateados)
+    if (!formData.nombre || !formData.apellido || !formData.dni) {
+      alert(
+        "Por favor complete los campos obligatorios: Nombre, Apellido y DNI"
+      );
+      return;
     }
 
-    const res = await fetch(url, {
-      method: metodo,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body,
-    })
+    const datosFormateados = {
+      nombre: formData.nombre.trim(),
+      apellido: formData.apellido.trim(),
+      dni: formData.dni.trim(),
+      direccion: formData.direccion.trim(),
+      celular: formData.celular.trim(),
+      notas: formData.notas.trim(),
+    };
 
-    if (!res.ok) {
-      const errorData = await res.json()
-      console.error("Error del servidor:", errorData)
-      alert(`Error al guardar cliente: ${errorData.detail || 'Revise los datos ingresados'}`)
-      return
-    }
+    try {
+      console.log("Enviando datos:", datosFormateados);
 
-    const nuevoCliente = await res.json()
-    setClientes([...clientes, nuevoCliente.data || nuevoCliente]) // según la estructura devuelta
-    setShowModal(false)
-    setClienteActual(null)
-    setPreclienteSeleccionadoId(null)
-    fetchClientes()
-    if (onConversionCompleta) {
-      onConversionCompleta()
-    }
-  } catch (err) {
-    console.error("Error al guardar cliente", err)
-    alert("Error al guardar cliente. Por favor, intente nuevamente.")
-    }
-  }
+      let url = "";
+      let metodo = "POST";
+      let body: string = "";
 
+      if (clienteActual) {
+        // Edición de cliente ya existente
+        url = `http://localhost:8000/clientes/update/${clienteActual.id}`;
+        metodo = "PUT";
+        body = JSON.stringify(datosFormateados);
+      } else if (preclienteSeleccionadoId) {
+        // Conversión de precliente a cliente
+        url = `http://localhost:8000/preclientes/convertir/${preclienteSeleccionadoId}`;
+        metodo = "POST";
+        body = JSON.stringify({
+          direccion: datosFormateados.direccion,
+          dni: datosFormateados.dni,
+        });
+      } else {
+        // Alta normal de cliente
+        url = `http://localhost:8000/clientes/register`;
+        metodo = "POST";
+        body = JSON.stringify(datosFormateados);
+      }
+
+      const res = await fetch(url, {
+        method: metodo,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Error del servidor:", errorData);
+        alert(
+          `Error al guardar cliente: ${
+            errorData.detail || "Revise los datos ingresados"
+          }`
+        );
+        return;
+      }
+
+      const nuevoCliente = await res.json();
+      setClientes([...clientes, nuevoCliente.data || nuevoCliente]); // según la estructura devuelta
+      setShowModal(false);
+      setClienteActual(null);
+      setPreclienteSeleccionadoId(null);
+      fetchClientes();
+      if (onConversionCompleta) {
+        onConversionCompleta();
+      }
+    } catch (err) {
+      console.error("Error al guardar cliente", err);
+      alert("Error al guardar cliente. Por favor, intente nuevamente.");
+    }
+  };
 
   const clientesFiltrados = clientes.filter((cliente) =>
-    `${cliente.nombre} ${cliente.apellido}`.toLowerCase().includes(busqueda.toLowerCase())
-  )
-  const clientesPaginados = clientesFiltrados.slice(offset, offset + clientesPorPagina)
-  const pageCount = Math.ceil(clientesFiltrados.length / clientesPorPagina)
+    `${cliente.nombre} ${cliente.apellido}`
+      .toLowerCase()
+      .includes(busqueda.toLowerCase())
+  );
+  const clientesPaginados = clientesFiltrados.slice(
+    offset,
+    offset + clientesPorPagina
+  );
+  const pageCount = Math.ceil(clientesFiltrados.length / clientesPorPagina);
 
   return (
     <div>
@@ -295,7 +304,7 @@ export default function ClientesPage({
             <span className="visually-hidden">Cargando...</span>
           </div>
         </div>
-        ) : (
+      ) : (
         <div className="card">
           <div className="table-responsive">
             <table className="table table-hover mb-0">
@@ -311,7 +320,7 @@ export default function ClientesPage({
                 </tr>
               </thead>
               <tbody>
-                {clientesPaginados.length > 0 ?  (
+                {clientesPaginados.length > 0 ? (
                   clientesPaginados.map((cliente, index) => (
                     <tr key={cliente.id || `cliente-${index}`}>
                       <td className="fw-medium">{cliente.nombre}</td>
@@ -367,11 +376,11 @@ export default function ClientesPage({
                   activeClassName={"active"}
                   forcePage={currentPage}
                 />
-              </div> 
-            </table> 
+              </div>
+            </table>
           </div>
-          
-      </div> )}
+        </div>
+      )}
 
       {/* Modal para crear/editar cliente */}
       <ClienteModal
@@ -382,7 +391,6 @@ export default function ClientesPage({
         onSave={guardarCliente}
         modoEdicion={!!clienteActual}
       />
-
 
       {/* Modal para confirmar eliminación */}
       <div
@@ -396,18 +404,32 @@ export default function ClientesPage({
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">Confirmar eliminación</h5>
-              <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowDeleteModal(false)}
+              ></button>
             </div>
             <div className="modal-body">
               <p>
-                ¿Está seguro que desea eliminar al cliente {clienteActual?.nombre} {clienteActual?.apellido}? Esta acción no se puede deshacer.
+                ¿Está seguro que desea eliminar al cliente{" "}
+                {clienteActual?.nombre} {clienteActual?.apellido}? Esta acción
+                no se puede deshacer.
               </p>
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+              >
                 Cancelar
               </button>
-              <button type="button" className="btn btn-danger" onClick={eliminarCliente}>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={eliminarCliente}
+              >
                 Eliminar
               </button>
             </div>
@@ -419,5 +441,5 @@ export default function ClientesPage({
         style={{ display: showDeleteModal ? "block" : "none" }}
       ></div>
     </div>
-  )
+  );
 }

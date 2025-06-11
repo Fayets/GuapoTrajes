@@ -1,302 +1,394 @@
-"use client"
+"use client";
 
-import type React from "react"
+import { useEffect, useState } from "react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import PresupuestoModal from "@/components/modales/presupuestoModal";
 
-import { useState } from "react"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 // Tipos
+
 type Cliente = {
-  id: string
-  nombre: string
-}
+  id: number;
+  nombre: string;
+  apellido: string;
+};
 
 type Producto = {
-  id: string
-  nombre: string
-  precio: number
-}
+  id: number;
+  descripcion: string;
+  codigo_barra: string;
+  precio_alquiler_efectivo: number;
+  inmovilizado: boolean;
+  estado?: string;
+};
 
 type ItemPresupuesto = {
-  id: string
-  productoId: string
-  productoNombre: string
-  cantidad: number
-  precioUnitario: number
-  subtotal: number
-}
+  id: number;
+  productoId: number;
+  productoNombre: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+};
 
 type Presupuesto = {
-  id: string
-  numero: string
-  fecha: Date
-  clienteId: string
-  clienteNombre: string
-  items: ItemPresupuesto[]
-  total: number
-  estado: "pendiente" | "aprobado" | "rechazado" | "vencido"
-  observaciones: string
-}
+  id: number;
+  numero: string;
+  fecha_evento: string;
+  cliente_id: number;
+  cliente_nombre: string;
+  items: ItemPresupuesto[];
+  total: number;
+  estado: "pendiente" | "aprobado" | "rechazado" | "vencido";
+  observaciones: string;
+  fecha_retiro?: string;
+  fecha_devolucion?: string;
+  categoria_evento?: string;
+  nombre_agasajado?: string;
+  lugar_evento?: string;
+};
 
-// Datos de ejemplo
-const clientesEjemplo: Cliente[] = [
-  { id: "1", nombre: "Juan Pérez" },
-  { id: "2", nombre: "María López" },
-  { id: "3", nombre: "Carlos Rodríguez" },
-]
-
-const productosEjemplo: Producto[] = [
-  { id: "1", nombre: "Traje Slim Fit", precio: 120000 },
-  { id: "2", nombre: "Camisa Formal", precio: 35000 },
-  { id: "3", nombre: "Corbata Seda", precio: 15000 },
-  { id: "4", nombre: "Pantalón Vestir", precio: 45000 },
-]
-
-const presupuestosEjemplo: Presupuesto[] = [
-  {
-    id: "1",
-    numero: "PRES-001",
-    fecha: new Date(2023, 2, 15),
-    clienteId: "1",
-    clienteNombre: "Juan Pérez",
-    items: [
-      {
-        id: "1",
-        productoId: "1",
-        productoNombre: "Traje Slim Fit",
-        cantidad: 1,
-        precioUnitario: 120000,
-        subtotal: 120000,
-      },
-      {
-        id: "2",
-        productoId: "2",
-        productoNombre: "Camisa Formal",
-        cantidad: 2,
-        precioUnitario: 35000,
-        subtotal: 70000,
-      },
-    ],
-    total: 190000,
-    estado: "aprobado",
-    observaciones: "Cliente frecuente, aplicar 10% de descuento en próxima compra",
-  },
-  {
-    id: "2",
-    numero: "PRES-002",
-    fecha: new Date(2023, 3, 20),
-    clienteId: "2",
-    clienteNombre: "María López",
-    items: [
-      {
-        id: "1",
-        productoId: "4",
-        productoNombre: "Pantalón Vestir",
-        cantidad: 1,
-        precioUnitario: 45000,
-        subtotal: 45000,
-      },
-      { id: "2", productoId: "3", productoNombre: "Corbata Seda", cantidad: 1, precioUnitario: 15000, subtotal: 15000 },
-    ],
-    total: 60000,
-    estado: "pendiente",
-    observaciones: "",
-  },
-]
+type PresupuestoResponse = {
+  id: number;
+  numero: string;
+  cliente_id: number;
+  cliente_nombre: string;
+  fecha_evento: string;
+  fecha_retiro?: string;
+  fecha_devolucion?: string;
+  categoria_evento?: string;
+  nombre_agasajado?: string;
+  lugar_evento?: string;
+  observaciones?: string;
+  total: number;
+  estado: string;
+  items: ItemPresupuesto[];
+};
 
 export default function PresupuestosPage() {
-  const [presupuestos, setPresupuestos] = useState<Presupuesto[]>(presupuestosEjemplo)
-  const [busqueda, setBusqueda] = useState("")
-  const [presupuestoActual, setPresupuestoActual] = useState<Presupuesto | null>(null)
-  const [showModal, setShowModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [showViewModal, setShowViewModal] = useState(false)
+  const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [presupuestoActual, setPresupuestoActual] =
+    useState<Presupuesto | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [clienteFiltro, setClienteFiltro] = useState("");
+  const [productoFiltro, setProductoFiltro] = useState("");
+  const [presupuestoSeleccionado, setPresupuestoSeleccionado] =
+    useState<PresupuestoResponse | null>(null);
+  const [verModoLectura, setVerModoLectura] = useState(false);
 
-  // Estado para el formulario
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
   const [formData, setFormData] = useState({
     clienteId: "",
     observaciones: "",
-  })
+    fechaEvento: "",
+    fechaRetiro: "",
+    fechaDevolucion: "",
+    categoria: "",
+    agasajado: "",
+    lugar: "",
+  });
 
-  // Estado para los items del presupuesto
-  const [items, setItems] = useState<ItemPresupuesto[]>([])
+  const [items, setItems] = useState<ItemPresupuesto[]>([]);
   const [nuevoItem, setNuevoItem] = useState({
     productoId: "",
     cantidad: 1,
-  })
+  });
 
-  // Filtrar presupuestos por búsqueda
-  const presupuestosFiltrados = presupuestos.filter(
-    (presupuesto) =>
-      presupuesto.numero.toLowerCase().includes(busqueda.toLowerCase()) ||
-      presupuesto.clienteNombre.toLowerCase().includes(busqueda.toLowerCase()),
-  )
+  useEffect(() => {
+    fetchClientes();
+    fetchProductos();
+    fetchPresupuestos();
+  }, []);
 
-  // Manejar cambios en el formulario principal
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+  const fetchClientes = async () => {
+    try {
+      const token = localStorage.getItem("token"); // o donde guardes el token JWT
+      const res = await fetch("http://127.0.0.1:8000/clientes/all", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // agregas el Bearer token aquí
+        },
+      });
 
-  // Manejar cambio de cliente en el select
+      if (!res.ok) {
+        throw new Error(`Error ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      setClientes(data);
+    } catch (error) {
+      console.error("Error fetching clientes:", error);
+      // aquí puedes agregar un estado de error o mostrar notificación
+    }
+  };
+
+  const fetchProductos = async () => {
+    try {
+      const token = localStorage.getItem("token"); // o donde guardes el token JWT
+      const res = await fetch("http://127.0.0.1:8000/productos/all", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // agregas el Bearer token aquí
+        },
+      });
+
+      if (!res.ok) throw new Error("Error al obtener productos");
+
+      const data = await res.json();
+      console.log("Productos cargados:", data); // <-- agregá esta línea
+      setProductos(data);
+    } catch (error) {
+      console.error("Error fetching productos:", error);
+    }
+  };
+
   const handleClienteChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setFormData((prev) => ({ ...prev, clienteId: e.target.value }))
-  }
+    setFormData((prev) => ({ ...prev, clienteId: e.target.value }));
+  };
 
-  // Manejar cambios en el nuevo item
   const handleItemChange = (name: string, value: string | number) => {
-    setNuevoItem((prev) => ({ ...prev, [name]: value }))
-  }
+    setNuevoItem((prev) => ({ ...prev, [name]: value }));
+  };
 
-  // Agregar nuevo item al presupuesto
-  const agregarItem = () => {
-    const producto = productosEjemplo.find((p) => p.id === nuevoItem.productoId)
-    if (!producto) return
+  const verificarDisponibilidad = async () => {
+    const { fechaRetiro, fechaDevolucion } = formData;
+    const productoId = nuevoItem.productoId;
 
-    const precioUnitario = producto.precio
-    const subtotal = precioUnitario * nuevoItem.cantidad
+    if (!productoId || !fechaRetiro || !fechaDevolucion) {
+      alert("Por favor completá las fechas y seleccioná un producto.");
+      return false;
+    }
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8000/productos/${productoId}/disponibilidad?fecha_retiro=${fechaRetiro}&fecha_devolucion=${fechaDevolucion}`
+      );
+
+      const data = await res.json();
+      return data.disponible;
+    } catch (error) {
+      console.error("Error al verificar disponibilidad", error);
+      alert("No se pudo verificar la disponibilidad. Intente más tarde.");
+      return false;
+    }
+  };
+
+  const agregarItem = async () => {
+    const producto = productos.find(
+      (p) => p.id === Number(nuevoItem.productoId)
+    );
+    if (!producto) return;
+
+    const res = await fetch(
+      `http://127.0.0.1:8000/productos/${producto.id}/disponibilidad?fecha_retiro=${formData.fechaRetiro}&fecha_devolucion=${formData.fechaDevolucion}`
+    );
+    const data = await res.json();
+
+    if (!data.disponible) {
+      alert(
+        `El producto ${producto.descripcion} no está disponible en la fecha seleccionada.`
+      );
+      return;
+    }
+
+    const precioUnitario = producto.precio_alquiler_efectivo;
+    const subtotal = precioUnitario * nuevoItem.cantidad;
 
     const newItem: ItemPresupuesto = {
-      id: Date.now().toString(),
+      id: Date.now(),
       productoId: producto.id,
-      productoNombre: producto.nombre,
+      productoNombre: producto.descripcion,
       cantidad: nuevoItem.cantidad,
       precioUnitario,
       subtotal,
-    }
+    };
 
-    setItems([...items, newItem])
-    setNuevoItem({
-      productoId: "",
-      cantidad: 1,
-    })
-  }
+    setItems([...items, newItem]);
+    setNuevoItem({ productoId: "", cantidad: 1 });
+  };
 
-  // Eliminar item del presupuesto
-  const eliminarItem = (id: string) => {
-    setItems(items.filter((item) => item.id !== id))
-  }
+  const eliminarItem = (id: number) => {
+    setItems(items.filter((item) => item.id !== Number(id)));
+  };
 
-  // Calcular total del presupuesto
   const calcularTotal = () => {
-    return items.reduce((total, item) => total + item.subtotal, 0)
-  }
+    return items.reduce((total, item) => total + item.subtotal, 0);
+  };
 
-  // Abrir formulario para nuevo presupuesto
   const nuevoPresupuesto = () => {
-    setPresupuestoActual(null)
+    setPresupuestoActual(null);
     setFormData({
       clienteId: "",
       observaciones: "",
-    })
-    setItems([])
-    setShowModal(true)
-  }
+      fechaEvento: "",
+      fechaRetiro: "",
+      fechaDevolucion: "",
+      categoria: "",
+      agasajado: "",
+      lugar: "",
+    });
+    setItems([]);
+    setShowModal(true);
+  };
 
-  // Abrir formulario para editar presupuesto
-  const editarPresupuesto = (presupuesto: Presupuesto) => {
-    setPresupuestoActual(presupuesto)
-    setFormData({
-      clienteId: presupuesto.clienteId,
-      observaciones: presupuesto.observaciones,
-    })
-    setItems(presupuesto.items)
-    setShowModal(true)
-  }
-
-  // Ver detalles del presupuesto
-  const verPresupuesto = (presupuesto: Presupuesto) => {
-    setPresupuestoActual(presupuesto)
-    setShowViewModal(true)
-  }
-
-  // Confirmar eliminación de presupuesto
-  const confirmarEliminar = (presupuesto: Presupuesto) => {
-    setPresupuestoActual(presupuesto)
-    setShowDeleteModal(true)
-  }
-
-  // Eliminar presupuesto
-  const eliminarPresupuesto = () => {
-    if (presupuestoActual) {
-      setPresupuestos(presupuestos.filter((p) => p.id !== presupuestoActual.id))
-      setShowDeleteModal(false)
-    }
-  }
-
-  // Guardar presupuesto (nuevo o editado)
-  const guardarPresupuesto = () => {
-    if (!formData.clienteId || items.length === 0) {
-      alert("Debe seleccionar un cliente y agregar al menos un producto")
-      return
+  const guardarPresupuesto = async () => {
+    if (
+      !formData.clienteId ||
+      items.length === 0 ||
+      !formData.fechaEvento ||
+      !formData.categoria
+    ) {
+      alert("Completa todos los campos requeridos");
+      return;
     }
 
-    const cliente = clientesEjemplo.find((c) => c.id === formData.clienteId)
-    if (!cliente) return
+    const total = calcularTotal();
+    const payload = {
+      cliente_id: parseInt(formData.clienteId),
+      fecha_evento: formData.fechaEvento,
+      fecha_retiro: formData.fechaRetiro || null,
+      fecha_devolucion: formData.fechaDevolucion || null,
+      categoria_evento: formData.categoria,
+      nombre_agasajado: formData.agasajado,
+      lugar_evento: formData.lugar,
+      observaciones: formData.observaciones,
+      items: items.map((item) => ({
+        producto_id: item.productoId,
+        cantidad: item.cantidad,
+        precio_unitario: item.precioUnitario,
+        subtotal: item.subtotal,
+      })),
+    };
 
-    const total = calcularTotal()
+    const res = await fetch("http://127.0.0.1:8000/presupuestos/presupuestos", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-    if (presupuestoActual) {
-      // Editar presupuesto existente
-      setPresupuestos(
-        presupuestos.map((p) =>
-          p.id === presupuestoActual.id
-            ? {
-                ...p,
-                clienteId: formData.clienteId,
-                clienteNombre: cliente.nombre,
-                items: [...items],
-                total,
-                observaciones: formData.observaciones,
-              }
-            : p,
-        ),
-      )
+    if (res.ok) {
+      setShowModal(false);
+      fetchPresupuestos();
     } else {
-      // Crear nuevo presupuesto
-      const nuevoId = (Math.max(...presupuestos.map((p) => Number.parseInt(p.id))) + 1).toString()
-      const nuevoNumero = `PRES-${nuevoId.padStart(3, "0")}`
-
-      setPresupuestos([
-        ...presupuestos,
-        {
-          id: nuevoId,
-          numero: nuevoNumero,
-          fecha: new Date(),
-          clienteId: formData.clienteId,
-          clienteNombre: cliente.nombre,
-          items: [...items],
-          total,
-          estado: "pendiente",
-          observaciones: formData.observaciones,
-        },
-      ])
+      alert("Error al guardar presupuesto");
     }
+  };
 
-    setShowModal(false)
-  }
+  const fetchPresupuestos = async () => {
+    try {
+      const res = await fetch(
+        "http://127.0.0.1:8000/presupuestos/presupuestos",
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
 
-  // Obtener clase de badge según estado
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Respuesta inválida:", res.status, errText);
+        throw new Error("Error al obtener presupuestos");
+      }
+
+      const data = await res.json();
+      console.log("Presupuestos desde backend:", data);
+      if (!Array.isArray(data)) {
+        console.warn("La respuesta de presupuestos no es un array:", data);
+        setPresupuestos([]); // Prevención
+      } else {
+        const presupuestosAdaptados = data.map((p: any) => ({
+          ...p,
+          items: p.items.map((item: any) => ({
+            ...item,
+            productoNombre: item.producto_nombre,
+          })),
+        }));
+
+        setPresupuestos(presupuestosAdaptados);
+      }
+    } catch (error) {
+      console.error("Error en fetchPresupuestos:", error);
+      setPresupuestos([]); // Prevención adicional
+    }
+  };
+
   const getEstadoClass = (estado: string) => {
     switch (estado) {
       case "aprobado":
-        return "bg-success"
+        return "bg-success";
       case "rechazado":
-        return "bg-danger"
+        return "bg-danger";
       case "vencido":
-        return "bg-secondary"
+        return "bg-secondary";
       default:
-        return "bg-warning"
+        return "bg-warning";
     }
+  };
+
+  const abrirPresupuestoVista = (presupuesto: PresupuestoResponse) => {
+    setPresupuestoSeleccionado(presupuesto);
+
+    setFormData({
+      clienteId: presupuesto.cliente_id.toString(),
+      fechaEvento: presupuesto.fecha_evento,
+      fechaRetiro: presupuesto.fecha_retiro || "",
+      fechaDevolucion: presupuesto.fecha_devolucion || "",
+      categoria: presupuesto.categoria_evento || "",
+      agasajado: presupuesto.nombre_agasajado || "",
+      lugar: presupuesto.lugar_evento || "",
+      observaciones: presupuesto.observaciones || "",
+    });
+
+    setItems(presupuesto.items);
+    setVerModoLectura(true);
+    setShowModal(true);
+  };
+
+  function toPresupuestoResponse(p: Presupuesto): PresupuestoResponse {
+    return {
+      id: p.id,
+      numero: p.numero,
+      cliente_id: p.cliente_id,
+      cliente_nombre: p.cliente_nombre,
+      fecha_evento: p.fecha_evento,
+      total: p.total,
+      estado: p.estado,
+      items: p.items,
+      observaciones: p.observaciones,
+      fecha_retiro: p["fecha_retiro"] || "",
+      fecha_devolucion: p["fecha_devolucion"] || "",
+      categoria_evento: p["categoria_evento"] || "",
+      nombre_agasajado: p["nombre_agasajado"] || "",
+      lugar_evento: p["lugar_evento"] || "",
+    };
   }
 
   return (
-    <div>
+    <div className="container py-4 p-2">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="fw-bold">Presupuestos</h1>
-          <p className="text-muted">Gestión de presupuestos para clientes</p>
+          <p className="text-muted">Gestión y seguimiento de presupuestos.</p>
         </div>
         <button className="btn btn-primary" onClick={nuevoPresupuesto}>
           <i className="bi bi-plus me-2"></i>
@@ -304,387 +396,108 @@ export default function PresupuestosPage() {
         </button>
       </div>
 
-      <div className="mb-4">
-        <div className="input-group">
-          <span className="input-group-text">
-            <i className="bi bi-search"></i>
-          </span>
-          <input
-            type="search"
-            className="form-control"
-            placeholder="Buscar presupuestos..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-          />
-        </div>
-      </div>
+      {/* Tabla */}
 
       <div className="card">
         <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead>
+          <table className="table table-striped table-hover">
+            <thead className="table-light">
               <tr>
-                <th>Número</th>
-                <th>Fecha</th>
+                <th>N°</th>
                 <th>Cliente</th>
+                <th>Fecha Evento</th>
                 <th>Total</th>
                 <th>Estado</th>
-                <th>Acciones</th>
+                <th className="text-center">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {presupuestosFiltrados.length > 0 ? (
-                presupuestosFiltrados.map((presupuesto) => (
-                  <tr key={presupuesto.id}>
-                    <td className="fw-medium">{presupuesto.numero}</td>
-                    <td>{format(presupuesto.fecha, "dd/MM/yyyy", { locale: es })}</td>
-                    <td>{presupuesto.clienteNombre}</td>
-                    <td>${presupuesto.total.toLocaleString()}</td>
+              {presupuestos.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center text-muted py-4">
+                    No hay presupuestos cargados.
+                  </td>
+                </tr>
+              ) : (
+                presupuestos.map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.numero}</td>
+                    <td>{p.cliente_nombre}</td>
                     <td>
-                      <span className={`badge ${getEstadoClass(presupuesto.estado)}`}>
-                        {presupuesto.estado.charAt(0).toUpperCase() + presupuesto.estado.slice(1)}
+                      {p.fecha_evento
+                        ? format(new Date(p.fecha_evento), "dd/MM/yyyy", {
+                            locale: es,
+                          })
+                        : "Sin fecha"}
+                    </td>
+
+                    <td>${p.total.toLocaleString()}</td>
+                    <td>
+                      <span className={`badge ${getEstadoClass(p.estado)}`}>
+                        {p.estado.charAt(0).toUpperCase() + p.estado.slice(1)}
                       </span>
                     </td>
-                    <td>
+                    <td className="text-center">
                       <div className="btn-group">
                         <button
                           className="btn btn-sm btn-outline-secondary"
-                          onClick={() => verPresupuesto(presupuesto)}
-                          title="Ver detalles"
+                          title="Ver presupuesto"
+                          onClick={() =>
+                            abrirPresupuestoVista(toPresupuestoResponse(p))
+                          }
                         >
-                          <i className="bi bi-eye"></i>
+                          Ver
                         </button>
                         <button
-                          className="btn btn-sm btn-outline-secondary"
-                          onClick={() => editarPresupuesto(presupuesto)}
-                          title="Editar"
+                          className="btn btn-sm btn-outline-primary"
+                          title="Convertir en orden"
+                          onClick={() => alert("Funcionalidad en desarrollo")}
                         >
-                          <i className="bi bi-pencil"></i>
-                        </button>
-                        <button className="btn btn-sm btn-outline-secondary" title="Descargar PDF">
-                          <i className="bi bi-download"></i>
+                          Orden
                         </button>
                         <button
                           className="btn btn-sm btn-outline-danger"
-                          onClick={() => confirmarEliminar(presupuesto)}
                           title="Eliminar"
+                          onClick={() => alert("Eliminar en desarrollo")}
                         >
-                          <i className="bi bi-trash"></i>
+                          ✕
                         </button>
                       </div>
                     </td>
                   </tr>
                 ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="text-center">
-                    No se encontraron presupuestos
-                  </td>
-                </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
-
-      {/* Modal para crear/editar presupuesto */}
-      <div
-        className={`modal fade ${showModal ? "show" : ""}`}
-        style={{ display: showModal ? "block" : "none" }}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="modal-dialog modal-xl">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">{presupuestoActual ? "Editar Presupuesto" : "Nuevo Presupuesto"}</h5>
-              <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
-            </div>
-            <div className="modal-body">
-              <form>
-                <div className="mb-3">
-                  <label htmlFor="cliente" className="form-label">
-                    Cliente
-                  </label>
-                  <select
-                    className="form-select"
-                    id="cliente"
-                    value={formData.clienteId}
-                    onChange={handleClienteChange}
-                  >
-                    <option value="">Seleccione un cliente</option>
-                    {clientesEjemplo.map((cliente) => (
-                      <option key={cliente.id} value={cliente.id}>
-                        {cliente.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="card mb-3">
-                  <div className="card-header">
-                    <h5 className="mb-0">Productos</h5>
-                  </div>
-                  <div className="card-body">
-                    <div className="row mb-3">
-                      <div className="col-md-5">
-                        <label htmlFor="producto" className="form-label">
-                          Producto
-                        </label>
-                        <select
-                          className="form-select"
-                          id="producto"
-                          value={nuevoItem.productoId}
-                          onChange={(e) => handleItemChange("productoId", e.target.value)}
-                        >
-                          <option value="">Seleccione un producto</option>
-                          {productosEjemplo.map((producto) => (
-                            <option key={producto.id} value={producto.id}>
-                              {producto.nombre} - ${producto.precio.toLocaleString()}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="col-md-3">
-                        <label htmlFor="cantidad" className="form-label">
-                          Cantidad
-                        </label>
-                        <input
-                          type="number"
-                          className="form-control"
-                          id="cantidad"
-                          min="1"
-                          value={nuevoItem.cantidad}
-                          onChange={(e) => handleItemChange("cantidad", Number.parseInt(e.target.value))}
-                        />
-                      </div>
-                      <div className="col-md-4 d-flex align-items-end">
-                        <button
-                          type="button"
-                          className="btn btn-primary w-100"
-                          onClick={agregarItem}
-                          disabled={!nuevoItem.productoId || nuevoItem.cantidad < 1}
-                        >
-                          Agregar Producto
-                        </button>
-                      </div>
-                    </div>
-
-                    {items.length > 0 ? (
-                      <div className="table-responsive">
-                        <table className="table table-bordered">
-                          <thead>
-                            <tr>
-                              <th>Producto</th>
-                              <th>Cantidad</th>
-                              <th>Precio Unit.</th>
-                              <th>Subtotal</th>
-                              <th></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {items.map((item) => (
-                              <tr key={item.id}>
-                                <td>{item.productoNombre}</td>
-                                <td>{item.cantidad}</td>
-                                <td>${item.precioUnitario.toLocaleString()}</td>
-                                <td>${item.subtotal.toLocaleString()}</td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline-danger"
-                                    onClick={() => eliminarItem(item.id)}
-                                  >
-                                    <i className="bi bi-trash"></i>
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                            <tr>
-                              <td colSpan={3} className="text-end fw-bold">
-                                Total:
-                              </td>
-                              <td className="fw-bold">${calcularTotal().toLocaleString()}</td>
-                              <td></td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="text-center py-3 text-muted">No hay productos agregados</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <label htmlFor="observaciones" className="form-label">
-                    Observaciones
-                  </label>
-                  <textarea
-                    className="form-control"
-                    id="observaciones"
-                    name="observaciones"
-                    rows={3}
-                    value={formData.observaciones}
-                    onChange={handleChange}
-                  ></textarea>
-                </div>
-              </form>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                Cancelar
-              </button>
-              <button type="button" className="btn btn-primary" onClick={guardarPresupuesto}>
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div
-        className={`modal-backdrop fade ${showModal ? "show" : ""}`}
-        style={{ display: showModal ? "block" : "none" }}
-      ></div>
-
-      {/* Modal para ver detalles del presupuesto */}
-      <div
-        className={`modal fade ${showViewModal ? "show" : ""}`}
-        style={{ display: showViewModal ? "block" : "none" }}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="modal-dialog modal-lg">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title d-flex align-items-center">
-                Presupuesto {presupuestoActual?.numero}
-                {presupuestoActual && (
-                  <span className={`badge ms-2 ${getEstadoClass(presupuestoActual.estado)}`}>
-                    {presupuestoActual.estado.charAt(0).toUpperCase() + presupuestoActual.estado.slice(1)}
-                  </span>
-                )}
-              </h5>
-              <button type="button" className="btn-close" onClick={() => setShowViewModal(false)}></button>
-            </div>
-            <div className="modal-body">
-              {presupuestoActual && (
-                <>
-                  <div className="row mb-4">
-                    <div className="col-md-6">
-                      <div className="card">
-                        <div className="card-body">
-                          <div className="d-flex justify-content-between mb-2">
-                            <span className="text-muted">Fecha:</span>
-                            <span>{format(presupuestoActual.fecha, "dd/MM/yyyy", { locale: es })}</span>
-                          </div>
-                          <div className="d-flex justify-content-between mb-2">
-                            <span className="text-muted">Cliente:</span>
-                            <span>{presupuestoActual.clienteNombre}</span>
-                          </div>
-                          <div className="d-flex justify-content-between">
-                            <span className="text-muted">Total:</span>
-                            <span className="fw-bold">${presupuestoActual.total.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="card">
-                        <div className="card-body">
-                          <h6 className="fw-bold mb-2">Observaciones</h6>
-                          <p className="text-muted small">{presupuestoActual.observaciones || "Sin observaciones"}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="table-responsive">
-                    <table className="table table-bordered">
-                      <thead>
-                        <tr>
-                          <th>Producto</th>
-                          <th>Cantidad</th>
-                          <th>Precio Unit.</th>
-                          <th>Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {presupuestoActual.items.map((item) => (
-                          <tr key={item.id}>
-                            <td>{item.productoNombre}</td>
-                            <td>{item.cantidad}</td>
-                            <td>${item.precioUnitario.toLocaleString()}</td>
-                            <td>${item.subtotal.toLocaleString()}</td>
-                          </tr>
-                        ))}
-                        <tr>
-                          <td colSpan={3} className="text-end fw-bold">
-                            Total:
-                          </td>
-                          <td className="fw-bold">${presupuestoActual.total.toLocaleString()}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowViewModal(false)}>
-                Cerrar
-              </button>
-              <button type="button" className="btn btn-primary">
-                <i className="bi bi-download me-2"></i>
-                Descargar PDF
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div
-        className={`modal-backdrop fade ${showViewModal ? "show" : ""}`}
-        style={{ display: showViewModal ? "block" : "none" }}
-      ></div>
-
-      {/* Modal para confirmar eliminación */}
-      <div
-        className={`modal fade ${showDeleteModal ? "show" : ""}`}
-        style={{ display: showDeleteModal ? "block" : "none" }}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="modal-dialog">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Confirmar eliminación</h5>
-              <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
-            </div>
-            <div className="modal-body">
-              <p>
-                ¿Está seguro que desea eliminar el presupuesto {presupuestoActual?.numero}? Esta acción no se puede
-                deshacer.
-              </p>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
-                Cancelar
-              </button>
-              <button type="button" className="btn btn-danger" onClick={eliminarPresupuesto}>
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div
-        className={`modal-backdrop fade ${showDeleteModal ? "show" : ""}`}
-        style={{ display: showDeleteModal ? "block" : "none" }}
-      ></div>
+      {/* Modal */}
+      <PresupuestoModal
+        show={showModal}
+        verModoLectura={verModoLectura}
+        presupuestoSeleccionado={presupuestoSeleccionado}
+        formData={formData}
+        setFormData={setFormData}
+        clientes={clientes}
+        clienteFiltro={clienteFiltro}
+        setClienteFiltro={setClienteFiltro}
+        handleClienteChange={handleClienteChange}
+        productos={productos}
+        productoFiltro={productoFiltro}
+        setProductoFiltro={setProductoFiltro}
+        nuevoItem={nuevoItem}
+        handleItemChange={handleItemChange}
+        verificarDisponibilidad={verificarDisponibilidad}
+        agregarItem={agregarItem}
+        eliminarItem={eliminarItem}
+        items={items}
+        calcularTotal={calcularTotal}
+        guardarPresupuesto={guardarPresupuesto}
+        onClose={() => {
+          setShowModal(false);
+          setVerModoLectura(false);
+        }}
+      />
     </div>
-  )
+  );
 }
-
