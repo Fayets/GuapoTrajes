@@ -74,6 +74,72 @@ export default function PresupuestoModal({
     console.log(items);
   }
 
+  // Agrega arriba del return, dentro del componente
+  const fechaEvento = formData.fechaEvento
+    ? new Date(formData.fechaEvento)
+    : null;
+  const fechaRetiro = formData.fechaRetiro
+    ? new Date(formData.fechaRetiro)
+    : null;
+  const fechaDevolucion = formData.fechaDevolucion
+    ? new Date(formData.fechaDevolucion)
+    : null;
+
+  const formatDate = (date: Date) => date.toISOString().split("T")[0];
+
+  const handleFechaChange = (key: string, value: string) => {
+    const nuevaFecha = new Date(value);
+    const nuevaData = { ...formData, [key]: value };
+
+    if (key === "fechaEvento") {
+      if (formData.fechaRetiro && new Date(formData.fechaRetiro) > nuevaFecha) {
+        nuevaData.fechaRetiro = value;
+      }
+      if (
+        formData.fechaDevolucion &&
+        new Date(formData.fechaDevolucion) <= nuevaFecha
+      ) {
+        const siguiente = new Date(nuevaFecha);
+        siguiente.setDate(siguiente.getDate() + 1);
+        nuevaData.fechaDevolucion = formatDate(siguiente);
+      }
+    }
+
+    if (key === "fechaRetiro") {
+      if (formData.fechaEvento && nuevaFecha > new Date(formData.fechaEvento)) {
+        nuevaData.fechaEvento = value;
+      }
+      if (
+        formData.fechaDevolucion &&
+        nuevaFecha >= new Date(formData.fechaDevolucion)
+      ) {
+        const siguiente = new Date(nuevaFecha);
+        siguiente.setDate(siguiente.getDate() + 1);
+        nuevaData.fechaDevolucion = formatDate(siguiente);
+      }
+    }
+
+    if (key === "fechaDevolucion") {
+      const eventoOK =
+        formData.fechaEvento && nuevaFecha > new Date(formData.fechaEvento);
+      const retiroOK =
+        formData.fechaRetiro && nuevaFecha > new Date(formData.fechaRetiro);
+      if (!eventoOK || !retiroOK) {
+        // Se ajusta automáticamente a un día después del evento o retiro
+        const base =
+          fechaEvento && fechaRetiro
+            ? new Date(Math.max(+fechaEvento, +fechaRetiro))
+            : fechaEvento || fechaRetiro;
+        if (base) {
+          base.setDate(base.getDate() + 1);
+          nuevaData.fechaDevolucion = formatDate(base);
+        }
+      }
+    }
+
+    setFormData(nuevaData);
+  };
+
   return (
     <Dialog open={show} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="modal-dialog modal-lg">
@@ -142,12 +208,28 @@ export default function PresupuestoModal({
                   type="date"
                   className="form-control"
                   value={formData[key]}
-                  onChange={(e) =>
-                    setFormData((prev: any) => ({
-                      ...prev,
-                      [key]: e.target.value,
-                    }))
+                  min={
+                    key === "fechaEvento"
+                      ? formData.fechaRetiro || undefined
+                      : key === "fechaRetiro"
+                      ? undefined
+                      : formData.fechaEvento &&
+                        formData.fechaRetiro &&
+                        formatDate(
+                          new Date(
+                            Math.max(
+                              new Date(formData.fechaEvento).getTime(),
+                              new Date(formData.fechaRetiro).getTime()
+                            ) + 86400000
+                          )
+                        )
                   }
+                  max={
+                    key === "fechaRetiro" && formData.fechaEvento
+                      ? formData.fechaEvento
+                      : undefined
+                  }
+                  onChange={(e) => handleFechaChange(key, e.target.value)}
                 />
               )}
             </div>

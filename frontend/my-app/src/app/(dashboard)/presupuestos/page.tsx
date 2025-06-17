@@ -48,7 +48,12 @@ type Presupuesto = {
   cliente_nombre: string;
   items: ItemPresupuesto[];
   total: number;
-  estado: "pendiente" | "aprobado" | "rechazado" | "vencido";
+  estado:
+    | "pendiente"
+    | "aprobado"
+    | "rechazado"
+    | "vencido"
+    | "convertido_orden";
   observaciones: string;
   fecha_retiro?: string;
   fecha_devolucion?: string;
@@ -87,6 +92,7 @@ export default function PresupuestosPage() {
   const [presupuestoSeleccionado, setPresupuestoSeleccionado] =
     useState<PresupuestoResponse | null>(null);
   const [verModoLectura, setVerModoLectura] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -106,6 +112,13 @@ export default function PresupuestosPage() {
     productoId: "",
     cantidad: 1,
   });
+
+  const [modalSeniaAbierto, setModalSeniaAbierto] = useState(false);
+  const [senia, setSenia] = useState("");
+  const [presupuestoAConvertir, setPresupuestoAConvertir] = useState<{
+    id: number;
+    cliente: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchClientes();
@@ -132,25 +145,24 @@ export default function PresupuestosPage() {
       setClientes(data);
     } catch (error) {
       console.error("Error fetching clientes:", error);
-      // aquí puedes agregar un estado de error o mostrar notificación
     }
   };
 
   const fetchProductos = async () => {
     try {
-      const token = localStorage.getItem("token"); // o donde guardes el token JWT
+      const token = localStorage.getItem("token");
       const res = await fetch("http://127.0.0.1:8000/productos/all", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // agregas el Bearer token aquí
+          Authorization: `Bearer ${token}`,
         },
       });
 
       if (!res.ok) throw new Error("Error al obtener productos");
 
       const data = await res.json();
-      console.log("Productos cargados:", data); // <-- agregá esta línea
+      console.log("Productos cargados:", data);
       setProductos(data);
     } catch (error) {
       console.error("Error fetching productos:", error);
@@ -293,6 +305,7 @@ export default function PresupuestosPage() {
   };
 
   const fetchPresupuestos = async () => {
+    setCargando(true);
     try {
       const res = await fetch(
         "http://127.0.0.1:8000/presupuestos/presupuestos",
@@ -329,6 +342,8 @@ export default function PresupuestosPage() {
     } catch (error) {
       console.error("Error en fetchPresupuestos:", error);
       setPresupuestos([]); // Prevención adicional
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -340,8 +355,50 @@ export default function PresupuestosPage() {
         return "bg-danger";
       case "vencido":
         return "bg-secondary";
+      case "convertido_orden":
+        return "bg-success"; // nuevo estado
       default:
         return "bg-warning";
+    }
+  };
+
+  const convertirEnOrden = async (
+    presupuestoId: number,
+    clienteNombre: string
+  ) => {
+    const seña = prompt(
+      `Ingrese el monto de la seña recibida de ${clienteNombre}:`
+    );
+    if (!seña || isNaN(parseFloat(seña))) {
+      alert("Monto inválido.");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        "http://127.0.0.1:8000/ordenes-trabajo/ordenes/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            presupuesto_id: presupuestoId,
+            seña_pagada: parseFloat(seña),
+          }),
+        }
+      );
+
+      if (res.ok) {
+        alert("Orden de trabajo generada con éxito.");
+      } else {
+        const error = await res.json();
+        alert(`Error al generar orden: ${error.detail}`);
+      }
+    } catch (err) {
+      console.error("Error al convertir en orden:", err);
+      alert("Error inesperado al generar orden.");
     }
   };
 
@@ -382,6 +439,74 @@ export default function PresupuestosPage() {
       lugar_evento: p["lugar_evento"] || "",
     };
   }
+  const confirmarSenia = async () => {
+    if (!presupuestoAConvertir) return;
+
+    const monto = parseFloat(senia);
+    if (isNaN(monto) || monto <= 0) {
+      alert("Monto inválido.");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        "http://127.0.0.1:8000/ordenes-trabajo/ordenes/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            presupuesto_id: presupuestoAConvertir.id,
+            seña_pagada: monto,
+          }),
+        }
+      );
+
+      if (res.ok) {
+        alert("Orden de trabajo generada con éxito.");
+        setModalSeniaAbierto(false);
+        fetchPresupuestos(); // <== ✅ actualiza la tabla
+      } else {
+        const error = await res.json();
+        alert(`Error al generar orden: ${error.detail}`);
+      }
+    } catch (err) {
+      console.error("Error al generar orden:", err);
+      alert("Error inesperado.");
+    }
+  };
+
+  const eliminarPresupuesto = async (id: number) => {
+    const confirmar = confirm(
+      "¿Estás seguro que querés eliminar este presupuesto?"
+    );
+    if (!confirmar) return;
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8000/presupuestos/presupuestos/eliminar/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (res.ok) {
+        alert("Presupuesto eliminado.");
+        fetchPresupuestos(); // Recargar tabla
+      } else {
+        const error = await res.json();
+        alert(`Error al eliminar: ${error.detail}`);
+      }
+    } catch (err) {
+      console.error("Error al eliminar presupuesto:", err);
+      alert("Error inesperado al eliminar presupuesto.");
+    }
+  };
 
   return (
     <div className="container py-4 p-2">
@@ -397,80 +522,110 @@ export default function PresupuestosPage() {
       </div>
 
       {/* Tabla */}
-
-      <div className="card">
-        <div className="table-responsive">
-          <table className="table table-striped table-hover">
-            <thead className="table-light">
-              <tr>
-                <th>N°</th>
-                <th>Cliente</th>
-                <th>Fecha Evento</th>
-                <th>Total</th>
-                <th>Estado</th>
-                <th className="text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {presupuestos.length === 0 ? (
+      {cargando ? (
+        <div className="d-flex justify-content-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-striped table-hover">
+              <thead className="table-light">
                 <tr>
-                  <td colSpan={6} className="text-center text-muted py-4">
-                    No hay presupuestos cargados.
-                  </td>
+                  <th>N°</th>
+                  <th>Cliente</th>
+                  <th>Fecha Evento</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                  <th className="text-center">Acciones</th>
                 </tr>
-              ) : (
-                presupuestos.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.numero}</td>
-                    <td>{p.cliente_nombre}</td>
-                    <td>
-                      {p.fecha_evento
-                        ? format(new Date(p.fecha_evento), "dd/MM/yyyy", {
-                            locale: es,
-                          })
-                        : "Sin fecha"}
-                    </td>
+              </thead>
 
-                    <td>${p.total.toLocaleString()}</td>
-                    <td>
-                      <span className={`badge ${getEstadoClass(p.estado)}`}>
-                        {p.estado.charAt(0).toUpperCase() + p.estado.slice(1)}
-                      </span>
-                    </td>
-                    <td className="text-center">
-                      <div className="btn-group">
-                        <button
-                          className="btn btn-sm btn-outline-secondary"
-                          title="Ver presupuesto"
-                          onClick={() =>
-                            abrirPresupuestoVista(toPresupuestoResponse(p))
-                          }
-                        >
-                          Ver
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-primary"
-                          title="Convertir en orden"
-                          onClick={() => alert("Funcionalidad en desarrollo")}
-                        >
-                          Orden
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          title="Eliminar"
-                          onClick={() => alert("Eliminar en desarrollo")}
-                        >
-                          ✕
-                        </button>
-                      </div>
+              <tbody>
+                {presupuestos.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center text-muted py-4">
+                      No hay presupuestos cargados.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  presupuestos.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.numero}</td>
+                      <td>{p.cliente_nombre}</td>
+                      <td>
+                        {p.fecha_evento
+                          ? format(new Date(p.fecha_evento), "dd/MM/yyyy", {
+                              locale: es,
+                            })
+                          : "Sin fecha"}
+                      </td>
+
+                      <td>${p.total.toLocaleString()}</td>
+                      <td>
+                        <span className={`badge ${getEstadoClass(p.estado)}`}>
+                          {p.estado.charAt(0).toUpperCase() + p.estado.slice(1)}
+                        </span>
+                      </td>
+                      <td className="text-center">
+                        <div className="btn-group">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            title="Ver presupuesto"
+                            onClick={() =>
+                              abrirPresupuestoVista(toPresupuestoResponse(p))
+                            }
+                          >
+                            Ver
+                          </button>
+                          {p.estado.toLowerCase() === "convertido_orden" ||
+                          p.estado.toLowerCase() === "aprobado" ? (
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              disabled
+                              title="Presupuesto ya convertido"
+                            >
+                              Convertido
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              title="Convertir en orden"
+                              onClick={() => {
+                                setPresupuestoAConvertir({
+                                  id: p.id,
+                                  cliente: p.cliente_nombre,
+                                });
+                                setSenia("");
+                                setModalSeniaAbierto(true);
+                              }}
+                            >
+                              Orden
+                            </button>
+                          )}
+                          {p.estado.toLowerCase() === "convertido_orden" ||
+                          p.estado.toLowerCase() === "aprobado" ? (
+                            <div></div>
+                          ) : (
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => eliminarPresupuesto(p.id)}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
       {/* Modal */}
       <PresupuestoModal
         show={showModal}
@@ -498,6 +653,37 @@ export default function PresupuestosPage() {
           setVerModoLectura(false);
         }}
       />
+      {/* Modal de Seña */}
+      <Dialog open={modalSeniaAbierto} onOpenChange={setModalSeniaAbierto}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ingrese seña</DialogTitle>
+            <DialogDescription>
+              Seña recibida de {presupuestoAConvertir?.cliente}
+            </DialogDescription>
+          </DialogHeader>
+
+          <input
+            type="number"
+            className="form-control my-3"
+            placeholder="Monto de seña"
+            value={senia}
+            onChange={(e) => setSenia(e.target.value)}
+          />
+
+          <DialogFooter>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setModalSeniaAbierto(false)}
+            >
+              Cancelar
+            </button>
+            <button className="btn btn-primary" onClick={confirmarSenia}>
+              Confirmar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

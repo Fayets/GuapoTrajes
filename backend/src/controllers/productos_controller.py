@@ -1,4 +1,4 @@
-from fastapi import HTTPException, APIRouter, Depends
+from fastapi import HTTPException, APIRouter, Depends, Query
 from pony.orm import *
 from src import schemas
 from src.services.productos_services import ProductoServices
@@ -6,6 +6,8 @@ from src.controllers.auth_controller import get_current_user
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from src.schemas import ProductUpdateResponse
+from datetime import date
+from src.services.disponibilidad_services import verificar_disponibilidad
 # Product controller
 
 router = APIRouter()
@@ -152,3 +154,23 @@ def low_stock_count(current_user=Depends(get_current_user)):
         raise HTTPException(
             status_code=500, detail="Error inesperado al obtener la cantidad de productos con stock bajo."
         )
+    
+@router.get("/{producto_id}/disponibilidad")
+def disponibilidad(
+    producto_id: int,
+    fecha_retiro: date = Query(..., description="Fecha de retiro"),
+    fecha_devolucion: date = Query(..., description="Fecha de devolución")
+):
+    try:
+        print("Verificando disponibilidad para:", producto_id, fecha_retiro, fecha_devolucion)
+        disponible = verificar_disponibilidad(producto_id, fecha_retiro, fecha_devolucion)
+        return {
+            "producto_id": producto_id,
+            "fecha_retiro": fecha_retiro,
+            "fecha_devolucion": fecha_devolucion,
+            "disponible": disponible
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(e))

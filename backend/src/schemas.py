@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime
 from src.models import Roles, Sucursal
 
 #SUCURSALES
@@ -173,3 +173,74 @@ class RegresoProductoModistaResponse(BaseModel):
     estado: Optional[str] = None
 
 
+# --- PRESUPUESTOS ---
+class ItemPresupuestoIn(BaseModel):
+    producto_id: int
+    cantidad: int
+    precio_unitario: float
+    subtotal: float
+
+class PresupuestoCreate(BaseModel):
+    cliente_id: int
+    fecha_evento: date
+    fecha_retiro: Optional[date]
+    fecha_devolucion: Optional[date]
+    categoria_evento: Optional[str]
+    nombre_agasajado: Optional[str]
+    lugar_evento: Optional[str]
+    observaciones: Optional[str]
+    items: List[ItemPresupuestoIn]
+
+class ItemPresupuestoOut(BaseModel):
+    producto_id: int
+    descripcion: str
+    cantidad: int
+    precio_unitario: float
+    subtotal: float
+
+    class Config:
+        from_attributes = True
+
+class ItemPresupuestoResponse(BaseModel):
+    producto_id: int
+    cantidad: int
+    precio_unitario: float
+    subtotal: float
+    producto_nombre: str  # Asegurate de incluir esto
+
+class PresupuestoResponse(BaseModel):
+    id: int
+    numero: str
+    cliente_id: int
+    cliente_nombre: str
+    fecha_evento: str
+    fecha_retiro: Optional[str]
+    fecha_devolucion: Optional[str]
+    categoria_evento: Optional[str]
+    nombre_agasajado: Optional[str]
+    lugar_evento: Optional[str]
+    observaciones: str
+    total: float
+    estado: str
+    items: List[ItemPresupuestoResponse]
+
+# --- ORDEN DE TRABAJO ---
+class ProductoReservadoSchema(BaseModel):
+    producto_id: int
+    estado: str
+    fecha_bloqueo: date
+    observaciones: Optional[str] = None
+
+class OrdenTrabajoCreateSchema(BaseModel):
+    presupuesto_id: int
+    seña_pagada: float
+
+class OrdenTrabajoResponseSchema(BaseModel):
+    id: int
+    presupuesto_id: int
+    fecha_creacion: datetime
+    fecha_evento: date
+    estado: str
+    seña_pagada: float
+    saldo_pendiente: float
+    productos_reservados: List[ProductoReservadoSchema]

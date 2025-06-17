@@ -1,7 +1,7 @@
 from pony.orm import *
 from enum import Enum
 from .db import db
-from datetime import date 
+from datetime import date, datetime 
 
 # Definicion de los roles
 class Roles(str, Enum):
@@ -59,6 +59,8 @@ class Producto(db.Entity):
     inmovilizado = Required(bool, default=False)
     productos_modistas = Set("ProductoModista")  # Añadir esta línea
     productos_lavanderias = Set("ProductoLavanderia")  # Añadir esta línea
+    productos_reservados = Set("ProductoReservado")
+    items_presupuesto = Set("ItemPresupuesto")
     _table_ = "Productos"
 
 class Cliente(db.Entity):
@@ -69,6 +71,8 @@ class Cliente(db.Entity):
     direccion = Required(str)
     celular = Required(str)
     notas = Optional(str)
+    presupuestos = Set("Presupuesto")
+    cuentas_corrientes = Set("CuentaCorriente")
     _table_ = "Cliente"
 
 class Precliente(db.Entity):
@@ -76,7 +80,7 @@ class Precliente(db.Entity):
     nombre = Required(str)
     apellido = Required(str)
     celular = Required(str)
-    table = "Precliente"
+    _table_ = "Precliente"
 
 class Modista(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -111,3 +115,66 @@ class ProductoLavanderia(db.Entity):
     fecha_salida = Optional(date)
     notas = Optional(str)
     _table_ = "ProductosLavanderias"
+
+#Presupuestos
+
+class Presupuesto(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    numero = Required(str)
+    cliente = Required(Cliente)
+    fecha_evento = Required(date)
+    fecha_retiro = Optional(date)
+    fecha_devolucion = Optional(date)
+    fecha_creacion = Required(datetime, default=lambda: datetime.now())
+    categoria_evento = Optional(str)
+    nombre_agasajado = Optional(str)
+    lugar_evento = Optional(str)
+    observaciones = Optional(str)
+    total = Required(float)
+    estado = Required(str, default="pendiente")
+    items = Set("ItemPresupuesto") 
+    orden_trabajo = Optional("OrdenTrabajo")
+    _table_ = "Presupuesto" 
+
+class ItemPresupuesto(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    presupuesto = Required(Presupuesto)
+    producto = Required(Producto)
+    cantidad = Required(int)
+    precio_unitario = Required(float)
+    subtotal = Required(float)
+    _table_ = "ItemPresupuesto"
+
+
+class OrdenTrabajo(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    presupuesto = Required('Presupuesto')  # FK
+    fecha_creacion = Required(datetime, default=lambda: datetime.now())
+    fecha_evento = Required(date)
+    estado = Required(str, default='pendiente')  # pendiente, lista, cancelada, completada
+    seña_pagada = Required(float)
+    saldo_pendiente = Required(float)
+    recibo_emitido = Optional(str)  # URL o ID de comprobante
+    productos_reservados = Set('ProductoReservado')
+    _table_ = "OrdenesTrabajo"
+
+class ProductoReservado(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    orden_trabajo = Required(OrdenTrabajo)
+    producto = Required('Producto')
+    estado = Required(str, default='reservado')  # reservado, entregado, no disponible
+    fecha_bloqueo = Required(date)
+    observaciones = Optional(str)
+    _table_ = "ProductosReservados"
+
+
+class CuentaCorriente(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    cliente = Required(Cliente)
+    fecha = Required(datetime, default=lambda: datetime.now())
+    concepto = Required(str)
+    tipo = Required(str)  # "credito" (entra dinero) o "debito" (sale dinero)
+    monto = Required(float)
+    saldo_post = Required(float)  # saldo luego de aplicar ese movimiento
+    referencia_orden = Optional(int)
+    _table_ = "CuentaCorriente"
