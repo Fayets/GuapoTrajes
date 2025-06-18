@@ -48,8 +48,6 @@ def crear_presupuesto(data: PresupuestoCreate) -> int:
 
 @db_session
 def listar_presupuestos():
-    print("DEBUG: Provider:", db.provider)
-    print("DEBUG: Database:", db.schema)    
     return [
         PresupuestoResponse(
             id=p.id,
@@ -65,6 +63,8 @@ def listar_presupuestos():
             observaciones=p.observaciones or "",
             total=p.total,
             estado=p.estado,
+            seña_pagada=p.orden_trabajo.seña_pagada if p.orden_trabajo else None,
+            metodo_pago=p.orden_trabajo.metodo_pago if p.orden_trabajo else None,
             items=[
                 ItemPresupuestoResponse(
                     producto_id=item.producto.id,

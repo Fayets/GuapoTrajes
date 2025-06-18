@@ -28,3 +28,4 @@ typing_extensions
 uvicorn     
 axios
 python-dotenv
+reportlab

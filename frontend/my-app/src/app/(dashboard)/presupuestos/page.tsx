@@ -60,6 +60,8 @@ type Presupuesto = {
   categoria_evento?: string;
   nombre_agasajado?: string;
   lugar_evento?: string;
+  seña_pagada?: number;
+  metodo_pago?: string;
 };
 
 type PresupuestoResponse = {
@@ -77,6 +79,8 @@ type PresupuestoResponse = {
   total: number;
   estado: string;
   items: ItemPresupuesto[];
+  seña_pagada?: number;
+  metodo_pago?: string;
 };
 
 export default function PresupuestosPage() {
@@ -93,6 +97,10 @@ export default function PresupuestosPage() {
     useState<PresupuestoResponse | null>(null);
   const [verModoLectura, setVerModoLectura] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [metodoPago, setMetodoPago] = useState("");
+  const [mostrarModalRecibo, setMostrarModalRecibo] = useState(false);
+  const [presupuestoParaRecibo, setPresupuestoParaRecibo] =
+    useState<Presupuesto | null>(null);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -364,7 +372,8 @@ export default function PresupuestosPage() {
 
   const convertirEnOrden = async (
     presupuestoId: number,
-    clienteNombre: string
+    clienteNombre: string,
+    metodoPago: string
   ) => {
     const seña = prompt(
       `Ingrese el monto de la seña recibida de ${clienteNombre}:`
@@ -386,6 +395,7 @@ export default function PresupuestosPage() {
           body: JSON.stringify({
             presupuesto_id: presupuestoId,
             seña_pagada: parseFloat(seña),
+            metodo_pago: metodoPago,
           }),
         }
       );
@@ -460,14 +470,17 @@ export default function PresupuestosPage() {
           body: JSON.stringify({
             presupuesto_id: presupuestoAConvertir.id,
             seña_pagada: monto,
+            metodo_pago: metodoPago,
           }),
         }
       );
 
       if (res.ok) {
+        const data = await res.json();
+        const orderId = data.id;
         alert("Orden de trabajo generada con éxito.");
         setModalSeniaAbierto(false);
-        fetchPresupuestos(); // <== ✅ actualiza la tabla
+        fetchPresupuestos();
       } else {
         const error = await res.json();
         alert(`Error al generar orden: ${error.detail}`);
@@ -507,7 +520,14 @@ export default function PresupuestosPage() {
       alert("Error inesperado al eliminar presupuesto.");
     }
   };
-
+  const abrirModalRecibo = (presupuesto: Presupuesto) => {
+    setPresupuestoParaRecibo(presupuesto);
+    setMostrarModalRecibo(true);
+  };
+  const handleImprimirRecibo = () => {
+    // A completar luego con lógica de generación de PDF
+    console.log("Imprimir PDF", presupuestoParaRecibo);
+  };
   return (
     <div className="container py-4 p-2">
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -583,11 +603,11 @@ export default function PresupuestosPage() {
                           {p.estado.toLowerCase() === "convertido_orden" ||
                           p.estado.toLowerCase() === "aprobado" ? (
                             <button
-                              className="btn btn-sm btn-secondary"
-                              disabled
+                              className="btn btn-sm btn-outline-primary"
                               title="Presupuesto ya convertido"
+                              onClick={() => abrirModalRecibo(p)}
                             >
-                              Convertido
+                              EmitirRecibo
                             </button>
                           ) : (
                             <button
@@ -670,6 +690,20 @@ export default function PresupuestosPage() {
             value={senia}
             onChange={(e) => setSenia(e.target.value)}
           />
+          <div className="mb-3">
+            <label className="form-label">Método de pago</label>
+            <select
+              className="form-select"
+              value={metodoPago}
+              onChange={(e) => setMetodoPago(e.target.value)}
+            >
+              <option value="">Seleccionar...</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
 
           <DialogFooter>
             <button
@@ -684,6 +718,57 @@ export default function PresupuestosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Recibo Seña */}
+      {mostrarModalRecibo && presupuestoParaRecibo && (
+        <div
+          className="modal fade show d-block"
+          tabIndex={-1}
+          role="dialog"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+        >
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Recibo de Seña</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setMostrarModalRecibo(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  <strong>Cliente:</strong>{" "}
+                  {presupuestoParaRecibo.cliente_nombre}
+                </p>
+                <p>
+                  <strong>Seña pagada:</strong> $
+                  {presupuestoParaRecibo.seña_pagada}
+                </p>
+                <p>
+                  <strong>Método de pago:</strong>{" "}
+                  {presupuestoParaRecibo.metodo_pago}
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => handleImprimirRecibo()}
+                >
+                  Imprimir PDF
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setMostrarModalRecibo(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

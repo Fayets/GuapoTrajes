@@ -3,7 +3,7 @@ from src.models import OrdenTrabajo, ProductoReservado, Presupuesto, Producto
 from datetime import datetime, timedelta
 
 @db_session
-def crear_orden_trabajo(presupuesto_id: int, seña_pagada: float):
+def crear_orden_trabajo(presupuesto_id: int, seña_pagada: float, metodo_pago: str):
     presupuesto = Presupuesto.get(id=presupuesto_id)
     if not presupuesto:
         raise ValueError("Presupuesto no encontrado")
@@ -16,7 +16,8 @@ def crear_orden_trabajo(presupuesto_id: int, seña_pagada: float):
         presupuesto=presupuesto,
         fecha_evento=presupuesto.fecha_evento,
         seña_pagada=seña_pagada,
-        saldo_pendiente=saldo_pendiente
+        saldo_pendiente=saldo_pendiente,
+        metodo_pago=metodo_pago
     )
     for item in presupuesto.items:
         producto = item.producto

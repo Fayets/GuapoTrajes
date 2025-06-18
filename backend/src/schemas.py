@@ -223,6 +223,8 @@ class PresupuestoResponse(BaseModel):
     total: float
     estado: str
     items: List[ItemPresupuestoResponse]
+    seña_pagada: Optional[float] = None
+    metodo_pago: Optional[str] = None
 
 # --- ORDEN DE TRABAJO ---
 class ProductoReservadoSchema(BaseModel):
@@ -234,6 +236,7 @@ class ProductoReservadoSchema(BaseModel):
 class OrdenTrabajoCreateSchema(BaseModel):
     presupuesto_id: int
     seña_pagada: float
+    metodo_pago: str
 
 class OrdenTrabajoResponseSchema(BaseModel):
     id: int
@@ -243,4 +246,5 @@ class OrdenTrabajoResponseSchema(BaseModel):
     estado: str
     seña_pagada: float
     saldo_pendiente: float
+    metodo_pago: str
     productos_reservados: List[ProductoReservadoSchema]

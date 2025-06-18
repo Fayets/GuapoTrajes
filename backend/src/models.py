@@ -133,7 +133,7 @@ class Presupuesto(db.Entity):
     total = Required(float)
     estado = Required(str, default="pendiente")
     items = Set("ItemPresupuesto") 
-    orden_trabajo = Optional("OrdenTrabajo")
+    orden_trabajo = Optional("OrdenTrabajo", reverse="presupuesto")
     _table_ = "Presupuesto" 
 
 class ItemPresupuesto(db.Entity):
@@ -148,13 +148,14 @@ class ItemPresupuesto(db.Entity):
 
 class OrdenTrabajo(db.Entity):
     id = PrimaryKey(int, auto=True)
-    presupuesto = Required('Presupuesto')  # FK
+    presupuesto = Required(Presupuesto, reverse="orden_trabajo")  # FK
     fecha_creacion = Required(datetime, default=lambda: datetime.now())
     fecha_evento = Required(date)
     estado = Required(str, default='pendiente')  # pendiente, lista, cancelada, completada
     seña_pagada = Required(float)
     saldo_pendiente = Required(float)
     recibo_emitido = Optional(str)  # URL o ID de comprobante
+    metodo_pago = Required(str)
     productos_reservados = Set('ProductoReservado')
     _table_ = "OrdenesTrabajo"
 
