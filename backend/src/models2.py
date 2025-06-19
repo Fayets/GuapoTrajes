@@ -16,7 +16,7 @@ class Sucursal(db.Entity):
     usuarios = Set("Usuario") # UNA SUCURSAL TIENE VARIOS USUARIOS
     productos = Set("Producto")
     venta = Set("Venta")
-    _table_ = "Sucursales"
+    table = "Sucursales"
 
 class EstadoProducto(str, Enum):
     SALON = "SALON"
@@ -34,7 +34,7 @@ class Usuario(db.Entity):
     apellido = Required(str, column="apellido")
     rol = Required(Roles)
     sucursal = Required(Sucursal) #UN USUARIO PERTENECE A UNA SUCURSAL
-    _table_ = "Usuarios"
+    table = "Usuarios"
 
 class Producto(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -63,7 +63,7 @@ class Producto(db.Entity):
     productos_reservados = Set("ProductoReservado")
     items_presupuesto = Set("ItemPresupuesto")
     detalles = Set("DetalleVenta")
-    _table_ = "Productos"
+    table = "Productos"
 
 class Cliente(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -76,14 +76,14 @@ class Cliente(db.Entity):
     presupuestos = Set("Presupuesto")
     cuentas_corrientes = Set("CuentaCorriente")
     ventas = Set("Venta")
-    _table_ = "Cliente"
+    table = "Cliente"
 
 class Precliente(db.Entity):
     id = PrimaryKey(int, auto=True)
     nombre = Required(str)
     apellido = Required(str)
     celular = Required(str)
-    _table_ = "Precliente"
+    table = "Precliente"
 
 class Modista(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -91,7 +91,7 @@ class Modista(db.Entity):
     telefono = Optional(str)
     direccion = Optional(str)
     productos = Set("ProductoModista")
-    _table_ = "Modistas"
+    table = "Modistas"
 
 class Lavanderia(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -99,7 +99,7 @@ class Lavanderia(db.Entity):
     telefono = Optional(str)
     direccion = Optional(str)
     productos = Set("ProductoLavanderia")
-    _table_ = "Lavanderias"
+    table = "Lavanderias"
 
 class ProductoModista(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -108,7 +108,7 @@ class ProductoModista(db.Entity):
     fecha_ingreso = Required(date, default=lambda: date.today())
     fecha_salida = Optional(date)
     notas = Optional(str)
-    _table_ = "ProductosModistas"
+    table = "ProductosModistas"
 
 class ProductoLavanderia(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -117,7 +117,7 @@ class ProductoLavanderia(db.Entity):
     fecha_ingreso = Required(date, default=lambda: date.today())
     fecha_salida = Optional(date)
     notas = Optional(str)
-    _table_ = "ProductosLavanderias"
+    table = "ProductosLavanderias"
 
 #Presupuestos
 
@@ -137,7 +137,7 @@ class Presupuesto(db.Entity):
     estado = Required(str, default="pendiente")
     items = Set("ItemPresupuesto") 
     orden_trabajo = Optional("OrdenTrabajo", reverse="presupuesto")
-    _table_ = "Presupuesto" 
+    table = "Presupuesto" 
 
 class ItemPresupuesto(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -146,7 +146,7 @@ class ItemPresupuesto(db.Entity):
     cantidad = Required(int)
     precio_unitario = Required(float)
     subtotal = Required(float)
-    _table_ = "ItemPresupuesto"
+    table = "ItemPresupuesto"
 
 
 class OrdenTrabajo(db.Entity):
@@ -160,7 +160,7 @@ class OrdenTrabajo(db.Entity):
     recibo_emitido = Optional(str)  # URL o ID de comprobante
     metodo_pago = Required(str)
     productos_reservados = Set('ProductoReservado')
-    _table_ = "OrdenesTrabajo"
+    table = "OrdenesTrabajo"
 
 class ProductoReservado(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -169,7 +169,7 @@ class ProductoReservado(db.Entity):
     estado = Required(str, default='reservado')  # reservado, entregado, no disponible
     fecha_bloqueo = Required(date)
     observaciones = Optional(str)
-    _table_ = "ProductosReservados"
+    table = "ProductosReservados"
 
 
 class CuentaCorriente(db.Entity):
@@ -181,7 +181,7 @@ class CuentaCorriente(db.Entity):
     monto = Required(float)
     saldo_post = Required(float)  # saldo luego de aplicar ese movimiento
     referencia_orden = Optional(int)
-    _table_ = "CuentaCorriente"
+    table = "CuentaCorriente"
 
 class TipoPrecio(str, Enum):
     LISTA = "Lista"
@@ -197,7 +197,7 @@ class Venta(db.Entity):
     total = Required(float, default=0.0)
     detalles = Set("DetalleVenta")
     sucursal = Required(Sucursal)
-    _table_ = "Ventas"
+    table = "Ventas"
 
 class DetalleVenta(db.Entity):
     id = PrimaryKey(int, auto=True)
@@ -206,4 +206,4 @@ class DetalleVenta(db.Entity):
     cantidad = Required(int, default=1)
     precio_unitario = Required(float)
     subtotal = Required(float)  # cantidad * precio_unitario
-    _table_ = "DetallesVenta"
+    table = "DetallesVenta"

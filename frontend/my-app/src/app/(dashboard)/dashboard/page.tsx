@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "next/link";
 
 export default function Dashboard() {
   const modules = [
@@ -29,6 +29,13 @@ export default function Dashboard() {
       icon: "bi-clipboard",
       href: "/ordenes",
       color: "bg-dark bg-opacity-10 text-purple",
+    },
+    {
+      title: "Ventas",
+      description: "Venta de productos",
+      icon: "bi-box",
+      href: "/ventas",
+      color: "bg-warning bg-opacity-10 text-warning",
     },
     {
       title: "Productos",
@@ -80,14 +87,16 @@ export default function Dashboard() {
       icon: "bi-basket",
       href: "/lavanderia",
       color: "bg-dark bg-opacity-10 text-info",
-    }
-  ]
+    },
+  ];
 
   return (
     <div>
       <div className="mb-4">
         <h1 className="fw-bold">Dashboard</h1>
-        <p className="text-muted">Bienvenido al sistema de administración de Guapo Trajes</p>
+        <p className="text-muted">
+          Bienvenido al sistema de administración de Guapo Trajes
+        </p>
       </div>
 
       <div className="row g-4">
@@ -110,5 +119,5 @@ export default function Dashboard() {
         ))}
       </div>
     </div>
-  )
+  );
 }

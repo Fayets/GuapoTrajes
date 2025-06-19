@@ -248,3 +248,32 @@ class OrdenTrabajoResponseSchema(BaseModel):
     saldo_pendiente: float
     metodo_pago: str
     productos_reservados: List[ProductoReservadoSchema]
+
+class VentaDetalleCreate(BaseModel):
+    producto_id: int
+    cantidad: int
+
+class VentaCreate(BaseModel):
+    cliente_id: int
+    sucursal_id: int
+    tipo_precio: str  # Debe ser uno de: Lista, Efectivo, Medio Uso, Liquidacion
+    productos: List[VentaDetalleCreate]
+
+class ProductoVentaOut(BaseModel):
+    producto_id: int
+    codigo: str
+    descripcion: str
+    cantidad: int
+    precio_unitario: float
+    subtotal: float
+
+class VentaOut(BaseModel):
+    id: int
+    fecha: datetime
+    total: float
+    tipo_precio: str
+    cliente_id: int
+    cliente_nombre: str
+    sucursal_id: int
+    sucursal_nombre: str
+    productos: List[ProductoVentaOut]
