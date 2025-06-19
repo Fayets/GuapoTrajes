@@ -524,10 +524,40 @@ export default function PresupuestosPage() {
     setPresupuestoParaRecibo(presupuesto);
     setMostrarModalRecibo(true);
   };
-  const handleImprimirRecibo = () => {
-    // A completar luego con lógica de generación de PDF
-    console.log("Imprimir PDF", presupuestoParaRecibo);
+
+  const imprimirRecibo = () => {
+    const recibo = document.getElementById("recibo-impresion");
+    if (!recibo) return;
+
+    const ventana = window.open("", "_blank", "width=600,height=800");
+    if (!ventana) return;
+
+    const contenido = recibo.cloneNode(true) as HTMLElement;
+
+    const style = `
+    <style>
+      body {
+        margin: 20px;
+        font-family: sans-serif;
+      }
+      h3 {
+        text-align: center;
+      }
+      p {
+        margin: 4px 0;
+      }
+    </style>
+  `;
+
+    ventana.document.body.innerHTML = style;
+    ventana.document.body.appendChild(contenido);
+
+    setTimeout(() => {
+      ventana.print();
+      ventana.close();
+    }, 500);
   };
+
   return (
     <div className="container py-4 p-2">
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -607,7 +637,7 @@ export default function PresupuestosPage() {
                               title="Presupuesto ya convertido"
                               onClick={() => abrirModalRecibo(p)}
                             >
-                              EmitirRecibo
+                              Emitir Recibo
                             </button>
                           ) : (
                             <button
@@ -622,7 +652,7 @@ export default function PresupuestosPage() {
                                 setModalSeniaAbierto(true);
                               }}
                             >
-                              Orden
+                              Generar Orden
                             </button>
                           )}
                           {p.estado.toLowerCase() === "convertido_orden" ||
@@ -727,7 +757,7 @@ export default function PresupuestosPage() {
           role="dialog"
           style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
         >
-          <div className="modal-dialog">
+          <div className="modal-dialog" id="recibo-impresion">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Recibo de Seña</h5>
@@ -754,9 +784,9 @@ export default function PresupuestosPage() {
               <div className="modal-footer">
                 <button
                   className="btn btn-primary"
-                  onClick={() => handleImprimirRecibo()}
+                  onClick={() => imprimirRecibo()}
                 >
-                  Imprimir PDF
+                  Imprimir Recibo
                 </button>
                 <button
                   className="btn btn-secondary"
