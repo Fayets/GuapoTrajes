@@ -31,6 +31,10 @@ export default function OrdenesTrabajoPage() {
   const [ordenSeleccionada, setOrdenSeleccionada] =
     useState<OrdenTrabajo | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showPagoModal, setShowPagoModal] = useState(false);
+  const [montoPago, setMontoPago] = useState("");
+  const [metodoPago, setMetodoPago] = useState("");
+  const [loadingPago, setLoadingPago] = useState(false);
 
   useEffect(() => {
     fetchOrdenes();
@@ -53,6 +57,37 @@ export default function OrdenesTrabajoPage() {
       setOrdenes(data);
     } catch (error) {
       console.error("Error al cargar órdenes:", error);
+    }
+  };
+
+  const registrarPago = async () => {
+    if (!ordenSeleccionada || !montoPago || !metodoPago) return;
+    setLoadingPago(true);
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/pagos/adicional", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          presupuesto_id: ordenSeleccionada.presupuesto_id,
+          monto: parseFloat(montoPago),
+          metodo_pago: metodoPago,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Error al registrar el pago");
+
+      await fetchOrdenes();
+      setShowPagoModal(false);
+      setMontoPago("");
+      setMetodoPago("");
+    } catch (err) {
+      alert("Error al guardar el pago");
+    } finally {
+      setLoadingPago(false);
     }
   };
 
@@ -112,11 +147,9 @@ export default function OrdenesTrabajoPage() {
                     <td>{orden.id}</td>
                     <td>{orden.presupuesto_id}</td>
                     <td>
-                      {orden.fecha_evento
-                        ? format(new Date(orden.fecha_evento), "dd/MM/yyyy", {
-                            locale: es,
-                          })
-                        : "-"}
+                      {format(new Date(orden.fecha_evento), "dd/MM/yyyy", {
+                        locale: es,
+                      })}
                     </td>
                     <td>${orden.saldo_pendiente.toLocaleString()}</td>
                     <td>
@@ -124,7 +157,7 @@ export default function OrdenesTrabajoPage() {
                         {orden.estado}
                       </span>
                     </td>
-                    <td>
+                    <td className="d-flex gap-2">
                       <button
                         className="btn btn-sm btn-outline-secondary"
                         onClick={() => {
@@ -133,6 +166,15 @@ export default function OrdenesTrabajoPage() {
                         }}
                       >
                         Ver
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline-success"
+                        onClick={() => {
+                          setOrdenSeleccionada(orden);
+                          setShowPagoModal(true);
+                        }}
+                      >
+                        Pago
                       </button>
                     </td>
                   </tr>
@@ -149,8 +191,72 @@ export default function OrdenesTrabajoPage() {
         </div>
       </div>
 
+      {showPagoModal && ordenSeleccionada && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Registrar Pago Adicional</h5>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowPagoModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  <strong>Orden:</strong> #{ordenSeleccionada.id}
+                </p>
+                <p>
+                  <strong>Saldo pendiente actual:</strong> $
+                  {ordenSeleccionada.saldo_pendiente.toLocaleString()}
+                </p>
+                <div className="mb-3">
+                  <label className="form-label">Monto</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={montoPago}
+                    onChange={(e) => setMontoPago(e.target.value)}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Método de pago</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={metodoPago}
+                    onChange={(e) => setMetodoPago(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowPagoModal(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="btn btn-primary"
+                  disabled={loadingPago}
+                  onClick={registrarPago}
+                >
+                  Guardar Pago
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showViewModal && ordenSeleccionada && (
-        <div className="modal fade show" style={{ display: "block" }}>
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
@@ -193,7 +299,7 @@ export default function OrdenesTrabajoPage() {
                       Bloqueo:{" "}
                       {format(new Date(prod.fecha_bloqueo), "dd/MM/yyyy", {
                         locale: es,
-                      })}
+                      })}{" "}
                       {prod.observaciones && ` - Obs: ${prod.observaciones}`}
                     </li>
                   ))}

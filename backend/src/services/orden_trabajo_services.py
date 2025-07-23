@@ -1,5 +1,5 @@
 from pony.orm import db_session, select
-from src.models import OrdenTrabajo, ProductoReservado, Presupuesto, Producto
+from src.models import OrdenTrabajo, ProductoReservado, Presupuesto, Producto, CuentaCorriente
 from datetime import datetime, timedelta
 
 @db_session
@@ -19,6 +19,16 @@ def crear_orden_trabajo(presupuesto_id: int, seña_pagada: float, metodo_pago: s
         saldo_pendiente=saldo_pendiente,
         metodo_pago=metodo_pago
     )
+
+    CuentaCorriente(
+        cliente=presupuesto.cliente,
+        concepto=f"Seña inicial para presupuesto {presupuesto.numero}",
+        tipo="credito",
+        monto=seña_pagada,
+        saldo_post=seña_pagada,  # o calcular con lógica de saldo acumulado
+        referencia_orden=orden.id
+    )
+
     for item in presupuesto.items:
         producto = item.producto
         fecha_bloqueo = presupuesto.fecha_evento - timedelta(days=5)

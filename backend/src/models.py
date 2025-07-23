@@ -101,6 +101,11 @@ class Lavanderia(db.Entity):
     productos = Set("ProductoLavanderia")
     _table_ = "Lavanderias"
 
+class Evento(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    nombre = Required(str)
+    _table_ = "Eventos"
+
 class ProductoModista(db.Entity):
     id = PrimaryKey(int, auto=True)
     producto = Required(Producto)

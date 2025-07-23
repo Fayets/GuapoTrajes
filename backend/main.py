@@ -14,6 +14,8 @@ from src.controllers.precliente_controller import router as precliente_router
 from src.controllers.presupuestos_controller import router as presupuestos_router
 from src.controllers.orden_trabajo_controller import router as orden_trabajo_router
 from src.controllers.ventas_controller import router as ventas_router
+from src.controllers.pagos_controller import router as pagos_router
+from src.controllers.eventos_controller import router as eventos_router
 
 
 app = FastAPI()
@@ -60,6 +62,12 @@ app.include_router(orden_trabajo_router, prefix="/ordenes-trabajo", tags=["orden
 
 #Ventas
 app.include_router(ventas_router, prefix="/ventas", tags=["ventas"])
+
+#Pagos
+app.include_router(pagos_router, prefix="/pagos", tags=["Pagos"])
+
+#Eventos
+app.include_router(eventos_router, prefix="/eventos", tags=["Eventos"])
 
 # Personalizar el esquema de seguridad en OpenAPI para usar Bearer tokens
 def custom_openapi():

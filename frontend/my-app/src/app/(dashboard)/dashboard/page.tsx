@@ -38,6 +38,13 @@ export default function Dashboard() {
       color: "bg-warning bg-opacity-10 text-warning",
     },
     {
+      title: "Eventos",
+      description: "Tipos de eventos",
+      icon: "bi-box",
+      href: "/eventos",
+      color: "bg-warning bg-opacity-10 text-warning",
+    },
+    {
       title: "Productos",
       description: "Administrar productos",
       icon: "bi-box",

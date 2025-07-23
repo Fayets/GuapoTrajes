@@ -135,6 +135,13 @@ class ConvertirPreclienteRequest(BaseModel):
     direccion: str
     dni: str
 
+#Evento
+class EventoCreate(BaseModel):
+    nombre: str
+
+class EventoResponse(BaseModel):
+    id: int
+    nombre: str
 
 
 #Lavanderia

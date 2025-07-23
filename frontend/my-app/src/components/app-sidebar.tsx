@@ -1,12 +1,12 @@
-"use client"
+"use client";
 
-import { useAuth } from "@/context/auth-context"
-import { usePathname } from "next/navigation"
-import Link from "next/link"
-import { useSidebar } from "@/components/ui/sidebar" // Asegúrate de importar el hook
+import { useAuth } from "@/context/auth-context";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { useSidebar } from "@/components/ui/sidebar"; // Asegúrate de importar el hook
 
 import {
-  Sidebar, 
+  Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
@@ -14,7 +14,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarTrigger,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 import {
   Users,
   FileText,
@@ -27,15 +27,15 @@ import {
   LayoutDashboard,
   LogOut,
   User,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function AppSidebar() {
-  const { user, logout } = useAuth()
-  const pathname = usePathname()
+  const { user, logout } = useAuth();
+  const pathname = usePathname();
 
   // Obtén el estado del Sidebar y la función toggle desde el contexto
-  const { collapsed, toggleSidebar } = useSidebar()
+  const { collapsed, toggleSidebar } = useSidebar();
 
   const menuItems = [
     {
@@ -64,6 +64,16 @@ export function AppSidebar() {
       href: "/ordenes",
     },
     {
+      title: "Ventas",
+      icon: Package,
+      href: "/ventas",
+    },
+    {
+      title: "Eventos",
+      icon: Package,
+      href: "/eventos",
+    },
+    {
       title: "Productos",
       icon: Package,
       href: "/productos",
@@ -88,10 +98,12 @@ export function AppSidebar() {
       icon: BarChart3,
       href: "/reportes",
     },
-  ]
+  ];
 
   return (
-    <Sidebar collapsed={collapsed} onToggle={toggleSidebar}> {/* Usa el contexto para collapsed y onToggle */}
+    <Sidebar collapsed={collapsed} onToggle={toggleSidebar}>
+      {" "}
+      {/* Usa el contexto para collapsed y onToggle */}
       <SidebarHeader className="border-b py-4">
         <div className="flex items-center px-4">
           <h1 className="text-xl font-bold">Guapo Trajes</h1>
@@ -102,7 +114,11 @@ export function AppSidebar() {
         <SidebarMenu>
           {menuItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === item.href}
+                tooltip={item.title}
+              >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
                   <span>{item.title}</span>
@@ -117,11 +133,15 @@ export function AppSidebar() {
           <User className="h-5 w-5" />
           <span className="text-sm font-medium">{user?.name}</span>
         </div>
-        <Button variant="outline" className="w-full justify-start" onClick={logout}>
+        <Button
+          variant="outline"
+          className="w-full justify-start"
+          onClick={logout}
+        >
           <LogOut className="h-4 w-4 mr-2" />
           Cerrar sesión
         </Button>
       </SidebarFooter>
     </Sidebar>
-  )
+  );
 }

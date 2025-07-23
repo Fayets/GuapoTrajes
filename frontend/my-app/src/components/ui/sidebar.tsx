@@ -1,18 +1,18 @@
-"use client"
+"use client";
 
-import { useAuth } from "@/context/auth-context"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
+import { useAuth } from "@/context/auth-context";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 interface SidebarProps {
-  collapsed: boolean
-  toggleSidebar: () => void
+  collapsed: boolean;
+  toggleSidebar: () => void;
 }
 
 export function Sidebar({ collapsed, toggleSidebar }: SidebarProps) {
-  const { user, logout } = useAuth()
-  const pathname = usePathname()
+  const { user, logout } = useAuth();
+  const pathname = usePathname();
 
   const menuItems = [
     {
@@ -39,6 +39,16 @@ export function Sidebar({ collapsed, toggleSidebar }: SidebarProps) {
       title: "Órdenes de trabajo",
       icon: "bi-clipboard",
       href: "/ordenes",
+    },
+    {
+      title: "Ventas",
+      icon: "bi-cash",
+      href: "/ventas",
+    },
+    {
+      title: "Eventos",
+      icon: "bi-clipboard",
+      href: "/eventos",
     },
     {
       title: "Productos",
@@ -76,21 +86,37 @@ export function Sidebar({ collapsed, toggleSidebar }: SidebarProps) {
       icon: "bi-scissors",
       href: "/lavanderia",
     },
-  ]
+  ];
 
   return (
-    <div className={cn("sidebar d-flex flex-column", collapsed && "sidebar-collapsed")}>
+    <div
+      className={cn(
+        "sidebar d-flex flex-column",
+        collapsed && "sidebar-collapsed"
+      )}
+    >
       <div className="sidebar-header d-flex align-items-center">
         <h5 className="mb-0 fw-bold">Guapo Trajes</h5>
-        <button className="btn btn-link text-white ms-auto p-0" onClick={toggleSidebar} aria-label="Toggle Sidebar">
-          <i className={`bi ${collapsed ? "bi-arrow-right-square" : "bi-arrow-left-square"}`}></i>
+        <button
+          className="btn btn-link text-white ms-auto p-0"
+          onClick={toggleSidebar}
+          aria-label="Toggle Sidebar"
+        >
+          <i
+            className={`bi ${
+              collapsed ? "bi-arrow-right-square" : "bi-arrow-left-square"
+            }`}
+          ></i>
         </button>
       </div>
 
       <ul className="nav flex-column mt-3">
         {menuItems.map((item) => (
           <li className="nav-item" key={item.href}>
-            <Link href={item.href} className={`nav-link ${pathname === item.href ? "active" : ""}`}>
+            <Link
+              href={item.href}
+              className={`nav-link ${pathname === item.href ? "active" : ""}`}
+            >
               <i className={`bi ${item.icon}`}></i>
               <span>{item.title}</span>
             </Link>
@@ -109,6 +135,5 @@ export function Sidebar({ collapsed, toggleSidebar }: SidebarProps) {
         </button>
       </div>
     </div>
-  )
+  );
 }
-
