@@ -773,6 +773,10 @@ export default function PresupuestosPage() {
                   {presupuestoParaRecibo.cliente_nombre}
                 </p>
                 <p>
+                  <strong>Fecha de Evento</strong>{" "}
+                  {presupuestoParaRecibo.fecha_evento}
+                </p>
+                <p>
                   <strong>Seña pagada:</strong> $
                   {presupuestoParaRecibo.seña_pagada}
                 </p>
