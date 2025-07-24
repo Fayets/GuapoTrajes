@@ -73,6 +73,27 @@ export default function PresupuestoModal({
   {
     console.log(items);
   }
+  const [eventos, setEventos] = React.useState<
+    { id: number; nombre: string }[]
+  >([]);
+  React.useEffect(() => {
+    const fetchEventos = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/eventos/all", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        if (!res.ok) throw new Error("Error al cargar eventos");
+        const data = await res.json();
+        setEventos(data);
+      } catch (error) {
+        console.error("Error al cargar eventos:", error);
+      }
+    };
+
+    fetchEventos();
+  }, []);
 
   // Agrega arriba del return, dentro del componente
   const fechaEvento = formData.fechaEvento
@@ -253,11 +274,12 @@ export default function PresupuestoModal({
                   }))
                 }
               >
-                <option value="">Seleccionar</option>
-                <option value="casamiento">Casamiento</option>
-                <option value="15">Fiesta de 15</option>
-                <option value="cumpleaños">Cumpleaños</option>
-                <option value="egreso">Egreso</option>
+                <option value="">Seleccionar evento</option>
+                {eventos.map((evento) => (
+                  <option key={evento.id} value={evento.nombre}>
+                    {evento.nombre}
+                  </option>
+                ))}
               </select>
             )}
           </div>

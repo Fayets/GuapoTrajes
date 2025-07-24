@@ -13,6 +13,7 @@ export default function EventoPage() {
   const [eventoActual, setEventoActual] = useState<Evento | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -35,6 +36,7 @@ export default function EventoPage() {
   }, [token]);
 
   const fetchEventos = async () => {
+    setCargando(true);
     try {
       const res = await fetch("http://localhost:8000/eventos/all", {
         headers: {
@@ -61,6 +63,8 @@ export default function EventoPage() {
       setEvento(eventosConId);
     } catch (err) {
       console.error("Error al obtener evento.", err);
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -197,53 +201,61 @@ export default function EventoPage() {
           />
         </div>
       </div>
-
-      <div className="card">
-        <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {eventosFiltrados.length > 0 ? (
-                eventosFiltrados.map((evento, index) => (
-                  // Usar una combinación del índice y el ID para garantizar unicidad
-                  <tr key={evento.id || `lavanderia-${index}`}>
-                    <td className="fw-medium">{evento.nombre}</td>
-                    <td>
-                      <div className="btn-group">
-                        <button
-                          className="btn btn-sm btn-outline-secondary"
-                          onClick={() => editarEvento(evento)}
-                          title="Editar"
-                        >
-                          <i className="bi bi-pencil"></i>
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          onClick={() => confirmarEliminar(evento)}
-                          title="Eliminar"
-                        >
-                          <i className="bi bi-trash"></i>
-                        </button>
-                      </div>
+      {/* Tabla */}
+      {cargando ? (
+        <div className="d-flex justify-content-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {eventosFiltrados.length > 0 ? (
+                  eventosFiltrados.map((evento, index) => (
+                    // Usar una combinación del índice y el ID para garantizar unicidad
+                    <tr key={evento.id || `lavanderia-${index}`}>
+                      <td className="fw-medium">{evento.nombre}</td>
+                      <td>
+                        <div className="btn-group">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => editarEvento(evento)}
+                            title="Editar"
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => confirmarEliminar(evento)}
+                            title="Eliminar"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center">
+                      No se encontraron eventos.
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="text-center">
-                    No se encontraron eventos.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Modal para crear/editar eventos */}
       <div

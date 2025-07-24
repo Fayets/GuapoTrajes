@@ -35,12 +35,14 @@ export default function OrdenesTrabajoPage() {
   const [montoPago, setMontoPago] = useState("");
   const [metodoPago, setMetodoPago] = useState("");
   const [loadingPago, setLoadingPago] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     fetchOrdenes();
   }, []);
 
   const fetchOrdenes = async () => {
+    setCargando(true);
     try {
       const res = await fetch(
         "http://127.0.0.1:8000/ordenes-trabajo/ordenes/ordenes-trabajo",
@@ -57,6 +59,8 @@ export default function OrdenesTrabajoPage() {
       setOrdenes(data);
     } catch (error) {
       console.error("Error al cargar órdenes:", error);
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -126,70 +130,80 @@ export default function OrdenesTrabajoPage() {
           onChange={(e) => setBusqueda(e.target.value)}
         />
       </div>
-
-      <div className="card">
-        <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead>
-              <tr>
-                <th>Orden N°</th>
-                <th>Presupuesto</th>
-                <th>Fecha Evento</th>
-                <th>Saldo Pendiente</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ordenesFiltradas.length > 0 ? (
-                ordenesFiltradas.map((orden) => (
-                  <tr key={orden.id}>
-                    <td>{orden.id}</td>
-                    <td>{orden.presupuesto_id}</td>
-                    <td>
-                      {format(new Date(orden.fecha_evento), "dd/MM/yyyy", {
-                        locale: es,
-                      })}
-                    </td>
-                    <td>${orden.saldo_pendiente.toLocaleString()}</td>
-                    <td>
-                      <span className={`badge ${getEstadoClass(orden.estado)}`}>
-                        {orden.estado}
-                      </span>
-                    </td>
-                    <td className="d-flex gap-2">
-                      <button
-                        className="btn btn-sm btn-outline-secondary"
-                        onClick={() => {
-                          setOrdenSeleccionada(orden);
-                          setShowViewModal(true);
-                        }}
-                      >
-                        Ver
-                      </button>
-                      <button
-                        className="btn btn-sm btn-outline-success"
-                        onClick={() => {
-                          setOrdenSeleccionada(orden);
-                          setShowPagoModal(true);
-                        }}
-                      >
-                        Pago
-                      </button>
+      {/* Tabla */}
+      {cargando ? (
+        <div className="d-flex justify-content-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Orden N°</th>
+                  <th>Presupuesto</th>
+                  <th>Fecha Evento</th>
+                  <th>Saldo Pendiente</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ordenesFiltradas.length > 0 ? (
+                  ordenesFiltradas.map((orden) => (
+                    <tr key={orden.id}>
+                      <td>{orden.id}</td>
+                      <td>{orden.presupuesto_id}</td>
+                      <td>
+                        {format(new Date(orden.fecha_evento), "dd/MM/yyyy", {
+                          locale: es,
+                        })}
+                      </td>
+                      <td>${orden.saldo_pendiente.toLocaleString()}</td>
+                      <td>
+                        <span
+                          className={`badge ${getEstadoClass(orden.estado)}`}
+                        >
+                          {orden.estado}
+                        </span>
+                      </td>
+                      <td className="d-flex gap-2">
+                        <button
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => {
+                            setOrdenSeleccionada(orden);
+                            setShowViewModal(true);
+                          }}
+                        >
+                          Ver
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-success"
+                          onClick={() => {
+                            setOrdenSeleccionada(orden);
+                            setShowPagoModal(true);
+                          }}
+                        >
+                          Pago
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center text-muted py-4">
+                      No se encontraron órdenes.
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="text-center text-muted py-4">
-                    No se encontraron órdenes.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {showPagoModal && ordenSeleccionada && (
         <div

@@ -99,6 +99,8 @@ export default function PresupuestosPage() {
   const [cargando, setCargando] = useState(true);
   const [metodoPago, setMetodoPago] = useState("");
   const [mostrarModalRecibo, setMostrarModalRecibo] = useState(false);
+  const [eventos, setEventos] = useState<string[]>([]);
+
   const [presupuestoParaRecibo, setPresupuestoParaRecibo] =
     useState<Presupuesto | null>(null);
 
