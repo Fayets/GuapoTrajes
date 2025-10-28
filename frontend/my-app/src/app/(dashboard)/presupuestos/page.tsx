@@ -1,0 +1,866 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import PresupuestoModal from "@/components/modales/presupuestoModal";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
+// Tipos
+
+type Cliente = {
+  id: number;
+  nombre: string;
+  apellido: string;
+};
+
+type Producto = {
+  id: number;
+  descripcion: string;
+  codigo_barra: string;
+  precio_alquiler_efectivo: number;
+  inmovilizado: boolean;
+  estado?: string;
+};
+
+type ItemPresupuesto = {
+  id: number;
+  productoId: number;
+  productoNombre: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+};
+
+type Presupuesto = {
+  id: number;
+  numero: string;
+  fecha_evento: string;
+  cliente_id: number;
+  cliente_nombre: string;
+  items: ItemPresupuesto[];
+  total: number;
+  estado:
+    | "pendiente"
+    | "aprobado"
+    | "rechazado"
+    | "vencido"
+    | "convertido_orden";
+  observaciones: string;
+  fecha_retiro?: string;
+  fecha_devolucion?: string;
+  categoria_evento?: string;
+  nombre_agasajado?: string;
+  lugar_evento?: string;
+  seña_pagada?: number;
+  payment_method?: string;  // Cambiado de metodo_pago
+};
+
+type PresupuestoResponse = {
+  id: number;
+  numero: string;
+  cliente_id: number;
+  cliente_nombre: string;
+  fecha_evento: string;
+  fecha_retiro?: string;
+  fecha_devolucion?: string;
+  categoria_evento?: string;
+  nombre_agasajado?: string;
+  lugar_evento?: string;
+  observaciones?: string;
+  total: number;
+  estado: string;
+  items: ItemPresupuesto[];
+  seña_pagada?: number;
+  payment_method?: string;  // Cambiado de metodo_pago
+};
+
+export default function PresupuestosPage() {
+  const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [presupuestoActual, setPresupuestoActual] =
+    useState<Presupuesto | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [clienteFiltro, setClienteFiltro] = useState("");
+  const [productoFiltro, setProductoFiltro] = useState("");
+  const [presupuestoSeleccionado, setPresupuestoSeleccionado] =
+    useState<PresupuestoResponse | null>(null);
+  const [verModoLectura, setVerModoLectura] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [metodoPago, setMetodoPago] = useState("");
+
+  // Métodos de pago consistentes con ventas
+  const metodosPago = [
+    { value: "EFECTIVO", label: "Efectivo" },
+    { value: "DEBITO", label: "Débito" },
+    { value: "CREDITO", label: "Crédito" },
+    { value: "BILLETERA_VIRTUAL", label: "Billetera Virtual" },
+    { value: "TRANSFERENCIA", label: "Transferencia" },
+  ];
+  const [mostrarModalRecibo, setMostrarModalRecibo] = useState(false);
+  const [eventos, setEventos] = useState<string[]>([]);
+
+  const [presupuestoParaRecibo, setPresupuestoParaRecibo] =
+    useState<Presupuesto | null>(null);
+
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [formData, setFormData] = useState({
+    clienteId: "",
+    observaciones: "",
+    fechaEvento: "",
+    fechaRetiro: "",
+    fechaDevolucion: "",
+    categoria: "",
+    agasajado: "",
+    lugar: "",
+  });
+
+  const [items, setItems] = useState<ItemPresupuesto[]>([]);
+  const [nuevoItem, setNuevoItem] = useState({
+    productoId: "",
+    cantidad: 1,
+  });
+
+  const [modalSeniaAbierto, setModalSeniaAbierto] = useState(false);
+  const [senia, setSenia] = useState("");
+  const [presupuestoAConvertir, setPresupuestoAConvertir] = useState<{
+    id: number;
+    cliente: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetchClientes();
+    fetchProductos();
+    fetchPresupuestos();
+  }, []);
+
+  const fetchClientes = async () => {
+    try {
+      const token = localStorage.getItem("token"); // o donde guardes el token JWT
+      const res = await fetch("http://127.0.0.1:8000/clientes/all", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // agregas el Bearer token aquí
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Error ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      setClientes(data);
+    } catch (error) {
+      console.error("Error fetching clientes:", error);
+    }
+  };
+
+  const fetchProductos = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://127.0.0.1:8000/productos/all", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) throw new Error("Error al obtener productos");
+
+      const data = await res.json();
+      console.log("Productos cargados:", data);
+      setProductos(data);
+    } catch (error) {
+      console.error("Error fetching productos:", error);
+    }
+  };
+
+  const handleClienteChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFormData((prev) => ({ ...prev, clienteId: e.target.value }));
+  };
+
+  const handleItemChange = (name: string, value: string | number) => {
+    setNuevoItem((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const verificarDisponibilidad = async () => {
+    const { fechaRetiro, fechaDevolucion } = formData;
+    const productoId = nuevoItem.productoId;
+
+    if (!productoId || !fechaRetiro || !fechaDevolucion) {
+      alert("Por favor completá las fechas y seleccioná un producto.");
+      return false;
+    }
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8000/productos/${productoId}/disponibilidad?fecha_retiro=${fechaRetiro}&fecha_devolucion=${fechaDevolucion}`
+      );
+
+      const data = await res.json();
+      return data.disponible;
+    } catch (error) {
+      console.error("Error al verificar disponibilidad", error);
+      alert("No se pudo verificar la disponibilidad. Intente más tarde.");
+      return false;
+    }
+  };
+
+  const agregarItem = async () => {
+    const producto = productos.find(
+      (p) => p.id === Number(nuevoItem.productoId)
+    );
+    if (!producto) return;
+
+    const res = await fetch(
+      `http://127.0.0.1:8000/productos/${producto.id}/disponibilidad?fecha_retiro=${formData.fechaRetiro}&fecha_devolucion=${formData.fechaDevolucion}`
+    );
+    const data = await res.json();
+
+    if (!data.disponible) {
+      alert(
+        `El producto ${producto.descripcion} no está disponible en la fecha seleccionada.`
+      );
+      return;
+    }
+
+    const precioUnitario = producto.precio_alquiler_efectivo;
+    const subtotal = precioUnitario * nuevoItem.cantidad;
+
+    const newItem: ItemPresupuesto = {
+      id: Date.now(),
+      productoId: producto.id,
+      productoNombre: producto.descripcion,
+      cantidad: nuevoItem.cantidad,
+      precioUnitario,
+      subtotal,
+    };
+
+    setItems([...items, newItem]);
+    setNuevoItem({ productoId: "", cantidad: 1 });
+  };
+
+  const eliminarItem = (id: number) => {
+    setItems(items.filter((item) => item.id !== Number(id)));
+  };
+
+  const calcularTotal = () => {
+    return items.reduce((total, item) => total + item.subtotal, 0);
+  };
+
+  const nuevoPresupuesto = () => {
+    setPresupuestoActual(null);
+    setFormData({
+      clienteId: "",
+      observaciones: "",
+      fechaEvento: "",
+      fechaRetiro: "",
+      fechaDevolucion: "",
+      categoria: "",
+      agasajado: "",
+      lugar: "",
+    });
+    setItems([]);
+    setShowModal(true);
+  };
+
+  const guardarPresupuesto = async () => {
+    if (
+      !formData.clienteId ||
+      items.length === 0 ||
+      !formData.fechaEvento ||
+      !formData.categoria
+    ) {
+      alert("Completa todos los campos requeridos");
+      return;
+    }
+
+    const total = calcularTotal();
+    const payload = {
+      cliente_id: parseInt(formData.clienteId),
+      fecha_evento: formData.fechaEvento,
+      fecha_retiro: formData.fechaRetiro || null,
+      fecha_devolucion: formData.fechaDevolucion || null,
+      categoria_evento: formData.categoria,
+      nombre_agasajado: formData.agasajado,
+      lugar_evento: formData.lugar,
+      observaciones: formData.observaciones,
+      items: items.map((item) => ({
+        producto_id: item.productoId,
+        cantidad: item.cantidad,
+        precio_unitario: item.precioUnitario,
+        subtotal: item.subtotal,
+      })),
+    };
+
+    console.log("Enviando payload:", payload);
+    console.log("Token:", localStorage.getItem("token") ? "Presente" : "Ausente");
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/presupuestos/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      console.log("Status Code:", res.status);
+      console.log("Response Headers:", res.headers);
+      console.log("Response URL:", res.url);
+      console.log("URL esperada: http://127.0.0.1:8000/presupuestos/");
+
+      if (res.ok) {
+        const responseData = await res.json();
+        console.log("Respuesta exitosa:", responseData);
+        setShowModal(false);
+        fetchPresupuestos();
+        alert("Presupuesto guardado exitosamente");
+      } else {
+        const errorText = await res.text();
+        console.error("Error al guardar presupuesto:", res.status, errorText);
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          alert(`Error al guardar presupuesto: ${errorData.detail || errorData.message || 'Error desconocido'}`);
+        } catch {
+          alert(`Error al guardar presupuesto: ${errorText}`);
+        }
+      }
+    } catch (error) {
+      console.error("Error de conexión:", error);
+      alert("Error de conexión al guardar presupuesto");
+    }
+  };
+
+  const fetchPresupuestos = async () => {
+    setCargando(true);
+    try {
+      const res = await fetch(
+        "http://127.0.0.1:8000/presupuestos/",
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Respuesta inválida:", res.status, errText);
+        throw new Error("Error al obtener presupuestos");
+      }
+
+      const data = await res.json();
+      console.log("Presupuestos desde backend:", data);
+      if (!Array.isArray(data)) {
+        console.warn("La respuesta de presupuestos no es un array:", data);
+        setPresupuestos([]); // Prevención
+      } else {
+        const presupuestosAdaptados = data.map((p: any) => ({
+          ...p,
+          items: p.items.map((item: any) => ({
+            ...item,
+            productoNombre: item.producto_nombre,
+          })),
+        }));
+
+        setPresupuestos(presupuestosAdaptados);
+      }
+    } catch (error) {
+      console.error("Error en fetchPresupuestos:", error);
+      setPresupuestos([]); // Prevención adicional
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const getEstadoClass = (estado: string) => {
+    switch (estado) {
+      case "aprobado":
+        return "bg-success";
+      case "rechazado":
+        return "bg-danger";
+      case "vencido":
+        return "bg-secondary";
+      case "convertido_orden":
+        return "bg-success"; // nuevo estado
+      default:
+        return "bg-warning";
+    }
+  };
+
+  const convertirEnOrden = async (
+    presupuestoId: number,
+    clienteNombre: string,
+    metodoPago: string
+  ) => {
+    const seña = prompt(
+      `Ingrese el monto de la seña recibida de ${clienteNombre}:`
+    );
+    if (!seña || isNaN(parseFloat(seña))) {
+      alert("Monto inválido.");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        "http://127.0.0.1:8000/ordenes/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            presupuesto_id: presupuestoId,
+            seña_pagada: parseFloat(seña),
+            payment_method: metodoPago,  // Cambiado a payment_method
+          }),
+        }
+      );
+
+      if (res.ok) {
+        alert("Orden de trabajo generada con éxito.");
+      } else {
+        const error = await res.json();
+        alert(`Error al generar orden: ${error.detail}`);
+      }
+    } catch (err) {
+      console.error("Error al convertir en orden:", err);
+      alert("Error inesperado al generar orden.");
+    }
+  };
+
+  const abrirPresupuestoVista = (presupuesto: PresupuestoResponse) => {
+    setPresupuestoSeleccionado(presupuesto);
+
+    setFormData({
+      clienteId: presupuesto.cliente_id.toString(),
+      fechaEvento: presupuesto.fecha_evento,
+      fechaRetiro: presupuesto.fecha_retiro || "",
+      fechaDevolucion: presupuesto.fecha_devolucion || "",
+      categoria: presupuesto.categoria_evento || "",
+      agasajado: presupuesto.nombre_agasajado || "",
+      lugar: presupuesto.lugar_evento || "",
+      observaciones: presupuesto.observaciones || "",
+    });
+
+    setItems(presupuesto.items);
+    setVerModoLectura(true);
+    setShowModal(true);
+  };
+
+  function toPresupuestoResponse(p: Presupuesto): PresupuestoResponse {
+    return {
+      id: p.id,
+      numero: p.numero,
+      cliente_id: p.cliente_id,
+      cliente_nombre: p.cliente_nombre,
+      fecha_evento: p.fecha_evento,
+      total: p.total,
+      estado: p.estado,
+      items: p.items,
+      observaciones: p.observaciones,
+      fecha_retiro: p["fecha_retiro"] || "",
+      fecha_devolucion: p["fecha_devolucion"] || "",
+      categoria_evento: p["categoria_evento"] || "",
+      nombre_agasajado: p["nombre_agasajado"] || "",
+      lugar_evento: p["lugar_evento"] || "",
+    };
+  }
+  const confirmarSenia = async () => {
+    if (!presupuestoAConvertir) return;
+
+    const monto = parseFloat(senia);
+    if (isNaN(monto) || monto <= 0) {
+      alert("Monto inválido.");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        "http://127.0.0.1:8000/ordenes/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            presupuesto_id: presupuestoAConvertir.id,
+            seña_pagada: monto,
+            payment_method: metodoPago,  // Cambiado a payment_method
+          }),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        const orderId = data.id;
+        alert("Orden de trabajo generada con éxito.");
+        setModalSeniaAbierto(false);
+        fetchPresupuestos();
+      } else {
+        const error = await res.json();
+        alert(`Error al generar orden: ${error.detail}`);
+      }
+    } catch (err) {
+      console.error("Error al generar orden:", err);
+      alert("Error inesperado.");
+    }
+  };
+
+  const eliminarPresupuesto = async (id: number) => {
+    const confirmar = confirm(
+      "¿Estás seguro que querés eliminar este presupuesto?"
+    );
+    if (!confirmar) return;
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:8000/presupuestos/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (res.ok) {
+        alert("Presupuesto eliminado.");
+        fetchPresupuestos(); // Recargar tabla
+      } else {
+        const error = await res.json();
+        alert(`Error al eliminar: ${error.detail}`);
+      }
+    } catch (err) {
+      console.error("Error al eliminar presupuesto:", err);
+      alert("Error inesperado al eliminar presupuesto.");
+    }
+  };
+  const abrirModalRecibo = (presupuesto: Presupuesto) => {
+    setPresupuestoParaRecibo(presupuesto);
+    setMostrarModalRecibo(true);
+  };
+
+  const imprimirRecibo = () => {
+    const recibo = document.getElementById("recibo-impresion");
+    if (!recibo) return;
+
+    const ventana = window.open("", "_blank", "width=600,height=800");
+    if (!ventana) return;
+
+    const contenido = recibo.cloneNode(true) as HTMLElement;
+
+    const style = `
+    <style>
+      body {
+        margin: 20px;
+        font-family: sans-serif;
+      }
+      h3 {
+        text-align: center;
+      }
+      p {
+        margin: 4px 0;
+      }
+    </style>
+  `;
+
+    ventana.document.body.innerHTML = style;
+    ventana.document.body.appendChild(contenido);
+
+    setTimeout(() => {
+      ventana.print();
+      ventana.close();
+    }, 500);
+  };
+
+  return (
+    <div className="container py-4 p-2">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 className="fw-bold">Presupuestos</h1>
+          <p className="text-muted">Gestión y seguimiento de presupuestos.</p>
+        </div>
+        <button className="btn btn-primary" onClick={nuevoPresupuesto}>
+          <i className="bi bi-plus me-2"></i>
+          Nuevo Presupuesto
+        </button>
+      </div>
+
+      {/* Tabla */}
+      {cargando ? (
+        <div className="d-flex justify-content-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-striped table-hover">
+              <thead className="table-light">
+                <tr>
+                  <th>N°</th>
+                  <th>Cliente</th>
+                  <th>Fecha Evento</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                  <th className="text-center">Acciones</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {presupuestos.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center text-muted py-4">
+                      No hay presupuestos cargados.
+                    </td>
+                  </tr>
+                ) : (
+                  presupuestos.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.numero}</td>
+                      <td>{p.cliente_nombre}</td>
+                      <td>
+                        {p.fecha_evento
+                          ? format(new Date(p.fecha_evento), "dd/MM/yyyy", {
+                              locale: es,
+                            })
+                          : "Sin fecha"}
+                      </td>
+
+                      <td>${p.total.toLocaleString()}</td>
+                      <td>
+                        <span className={`badge ${getEstadoClass(p.estado)}`}>
+                          {p.estado.charAt(0).toUpperCase() + p.estado.slice(1)}
+                        </span>
+                      </td>
+                      <td className="text-center">
+                        <div className="btn-group">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            title="Ver presupuesto"
+                            onClick={() =>
+                              abrirPresupuestoVista(toPresupuestoResponse(p))
+                            }
+                          >
+                            Ver
+                          </button>
+                          {p.estado.toLowerCase() === "convertido_orden" ||
+                          p.estado.toLowerCase() === "aprobado" ? (
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              title="Presupuesto ya convertido"
+                              onClick={() => abrirModalRecibo(p)}
+                            >
+                              Emitir Recibo
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              title="Convertir en orden"
+                              onClick={() => {
+                                setPresupuestoAConvertir({
+                                  id: p.id,
+                                  cliente: p.cliente_nombre,
+                                });
+                                setSenia("");
+                                setModalSeniaAbierto(true);
+                              }}
+                            >
+                              Generar Orden
+                            </button>
+                          )}
+                          {p.estado.toLowerCase() === "convertido_orden" ||
+                          p.estado.toLowerCase() === "aprobado" ? (
+                            <div></div>
+                          ) : (
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => eliminarPresupuesto(p.id)}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {/* Modal */}
+      <PresupuestoModal
+        show={showModal}
+        verModoLectura={verModoLectura}
+        presupuestoSeleccionado={presupuestoSeleccionado}
+        formData={formData}
+        setFormData={setFormData}
+        clientes={clientes}
+        clienteFiltro={clienteFiltro}
+        setClienteFiltro={setClienteFiltro}
+        handleClienteChange={handleClienteChange}
+        productos={productos}
+        productoFiltro={productoFiltro}
+        setProductoFiltro={setProductoFiltro}
+        nuevoItem={nuevoItem}
+        handleItemChange={handleItemChange}
+        verificarDisponibilidad={verificarDisponibilidad}
+        agregarItem={agregarItem}
+        eliminarItem={eliminarItem}
+        items={items}
+        calcularTotal={calcularTotal}
+        guardarPresupuesto={guardarPresupuesto}
+        onClose={() => {
+          setShowModal(false);
+          setVerModoLectura(false);
+        }}
+      />
+      {/* Modal de Seña */}
+      <Dialog open={modalSeniaAbierto} onOpenChange={setModalSeniaAbierto}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ingrese seña</DialogTitle>
+            <DialogDescription>
+              Seña recibida de {presupuestoAConvertir?.cliente}
+            </DialogDescription>
+          </DialogHeader>
+
+          <input
+            type="number"
+            className="form-control my-3"
+            placeholder="Monto de seña"
+            value={senia}
+            onChange={(e) => setSenia(e.target.value)}
+          />
+          <div className="mb-3">
+            <label className="form-label">Método de pago</label>
+            <div className="space-y-2">
+              {metodosPago.map((metodo) => (
+                <div
+                  key={metodo.value}
+                  className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                    metodoPago === metodo.value
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => setMetodoPago(metodo.value)}
+                >
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      name="metodoPago"
+                      value={metodo.value}
+                      checked={metodoPago === metodo.value}
+                      onChange={() => setMetodoPago(metodo.value)}
+                      className="mr-3"
+                    />
+                    <span className="font-medium">{metodo.label}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {!metodoPago && (
+              <div className="text-sm text-red-500 mt-2">
+                Debes seleccionar un método de pago
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setModalSeniaAbierto(false)}
+            >
+              Cancelar
+            </button>
+            <button 
+              className="btn btn-primary" 
+              onClick={confirmarSenia}
+              disabled={!metodoPago}
+            >
+              Confirmar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Recibo Seña */}
+      {mostrarModalRecibo && presupuestoParaRecibo && (
+        <div
+          className="modal fade show d-block"
+          tabIndex={-1}
+          role="dialog"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+        >
+          <div className="modal-dialog" id="recibo-impresion">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Recibo de Seña</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setMostrarModalRecibo(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  <strong>Cliente:</strong>{" "}
+                  {presupuestoParaRecibo.cliente_nombre}
+                </p>
+                <p>
+                  <strong>Fecha de Evento</strong>{" "}
+                  {presupuestoParaRecibo.fecha_evento}
+                </p>
+                <p>
+                  <strong>Seña pagada:</strong> $
+                  {presupuestoParaRecibo.seña_pagada}
+                </p>
+                <p>
+                  <strong>Método de pago:</strong>{" "}
+                  {presupuestoParaRecibo.payment_method}
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => imprimirRecibo()}
+                >
+                  Imprimir Recibo
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setMostrarModalRecibo(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

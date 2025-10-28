@@ -1,0 +1,166 @@
+from pony.orm import db_session
+from fastapi import HTTPException
+from typing import Optional
+from pony.orm.core import TransactionIntegrityError, flush
+from src import models, schemas
+
+class PreclientServices:
+    def __init__(self):
+        pass
+
+    def crear_cliente(self, cliente: schemas.PreclientCreate) -> dict:
+        with db_session:
+            try:
+                nuevo_cliente = models.Precliente(
+                    nombre=cliente.nombre,
+                    apellido=cliente.apellido,
+                    celular=cliente.celular
+                )
+                return {
+                    "message": "Cliente creado exitosamente",
+                    "success": True,
+                    "data": {
+                        "id": nuevo_cliente.id,
+                        "nombre": nuevo_cliente.nombre,
+                        "apellido": nuevo_cliente.apellido,
+                        "celular": nuevo_cliente.celular
+                    }
+                }
+            except TransactionIntegrityError:
+                raise HTTPException(status_code=400, detail="El cliente ya existe")
+
+            
+    def get_todos_clientes(self):
+        with db_session:
+            try:
+                clientes = list(models.Precliente.select())
+
+                clientes_list = []
+                for cliente in clientes:
+                    clientes_dict = {
+                        "id": cliente.id,
+                        "nombre": cliente.nombre,
+                        "apellido": cliente.apellido,
+                        "celular": cliente.celular
+                    }
+                    clientes_list.append(clientes_dict)
+                
+                return clientes_list
+            except Exception as e:
+                raise HTTPException(status_code=500, detail="Error al obtener los clientes")
+            
+    def buscar_cliente_por_celular(self, cliente_celular: str) -> dict:
+        with db_session:
+            cliente = models.Precliente.get(id=cliente_celular)
+            if not cliente:
+                raise HTTPException(status_code=404, detail="Cliente no encontrado")
+            return {
+                "id": cliente.id,
+                "nombre": cliente.nombre,
+                "apellido": cliente.apellido,
+                "celular": cliente.celular,
+            }
+        
+    def actualizar_cliente(self, id: int, cliente_actualizar: schemas.PreclientCreate) -> dict:
+        with db_session:
+            try:
+                cliente = models.Precliente.get(id=id)
+                if not cliente:
+                    raise HTTPException(status_code=404, detail="Cliente no encontrado")
+                
+                #actualiza los atributos del cliente
+                cliente.nombre = cliente_actualizar.nombre
+                cliente.apellido = cliente_actualizar.apellido
+                cliente.celular = cliente_actualizar.celular
+                return {"message": "Cliente actualizado correctamente",
+                        "success" : True, 
+                        "data": {
+                            "id": cliente.id,
+                            "nombre": cliente.nombre,
+                            "apellido": cliente.apellido,
+                            "celular": cliente.celular,
+                        }
+                }
+            
+            except Exception as e:
+                print(f"Error al actualizar el cliente: {e}")
+                raise HTTPException(status_code=500, detail="Error inesperado al actualizar el cliente")
+
+    
+    def eliminar_cliente(self, id: int) -> dict:
+        with db_session:
+            try:
+                cliente = models.Precliente.get(id=id)
+                if not cliente:
+                    raise HTTPException(status_code=404, detail="Cliente no encontrado")
+                cliente.delete()
+                return {"message": "Cliente eliminado correctamente"}
+            
+            except Exception as e:
+                print(f"Error al eliminar el cliente: {e}")
+                raise HTTPException(status_code=500, detail="Error inesperado al eliminar el cliente")
+            
+
+    def convertir_a_cliente(self, precliente_id: int, direccion: str, dni: str) -> dict:
+        with db_session:
+            try:
+                print(f"🔍 Iniciando conversión de precliente ID: {precliente_id}")
+                precliente = models.Precliente.get(id=precliente_id)
+                if not precliente:
+                    print(f"❌ Precliente no encontrado con ID: {precliente_id}")
+                    raise HTTPException(status_code=404, detail="Precliente no encontrado")
+
+                print(f"✅ Precliente encontrado: {precliente.nombre} {precliente.apellido}")
+
+                # Validar duplicados por DNI (usar get con atributo directo)
+                print(f"🔍 Verificando duplicados para DNI: {dni}")
+                cliente_existente_dni = models.Cliente.get(dni=dni)
+                if cliente_existente_dni:
+                    print(f"❌ Ya existe un cliente con DNI {dni}")
+                    raise HTTPException(status_code=400, detail="Ya existe un cliente con ese DNI")
+
+                # Validar duplicados por celular (usar get con atributo directo)
+                print(f"🔍 Verificando duplicados para celular: {precliente.celular}")
+                cliente_existente_celular = models.Cliente.get(celular=precliente.celular)
+                if cliente_existente_celular:
+                    print(f"❌ Ya existe un cliente con celular {precliente.celular}")
+                    raise HTTPException(status_code=400, detail="Ya existe un cliente con ese celular")
+
+                print("✅ No hay duplicados, procediendo con la conversión")
+
+                # Crear cliente completo
+                cliente = models.Cliente(
+                    nombre=precliente.nombre,
+                    apellido=precliente.apellido,
+                    celular=precliente.celular,
+                    direccion=direccion,
+                    dni=dni,
+                    notas=""  # Campo opcional, inicializar como string vacío
+                )
+
+                print(f"✅ Cliente creado con ID: {cliente.id}")
+
+                # Eliminar el precliente
+                precliente.delete()
+                print("✅ Precliente eliminado")
+
+                return {
+                    "message": "Precliente convertido exitosamente",
+                    "success": True,
+                    "data": {
+                        "id": cliente.id,
+                        "nombre": cliente.nombre,
+                        "apellido": cliente.apellido,
+                        "dni": cliente.dni,
+                        "direccion": cliente.direccion,
+                        "celular": cliente.celular,
+                        "notas": cliente.notas or ""
+                    }
+                }
+            except HTTPException:
+                raise
+            except Exception as e:
+                print(f"❌ Error al convertir precliente: {e}")
+                import traceback
+                print(f"📋 Traceback: {traceback.format_exc()}")
+                raise HTTPException(status_code=500, detail="Error inesperado al convertir precliente")
