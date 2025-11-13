@@ -1,0 +1,10 @@
+#cache
+__pycache__/
+
+#dependencias
+/node_modules
+
+#Entornos virtuales ale
+venv/
+.env/
+.venv/
