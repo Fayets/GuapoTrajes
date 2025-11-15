@@ -35,10 +35,13 @@ body {
   color: #d1d5db;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  /* ANTES: justify-content: space-between; */
+  justify-content: flex-start;
   box-shadow: 6px 0 16px rgba(17, 24, 39, 0.25);
   transition: width 0.3s ease;
   z-index: 1040;
+  /* NUEVO: el overflow lo maneja el nav */
+  overflow: hidden;
 }
 
 .sidebar-modern-collapsed {
@@ -73,12 +76,15 @@ body {
   color: #f9fafb;
 }
 
+/* NAV: ahora es el área SCROLLEABLE */
 .sidebar-modern-nav {
   flex: 1;
   padding: 1.25rem 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  overflow-y: auto; /* <- scroll vertical */
+  overflow-x: hidden; /* <- evita scroll horizontal */
 }
 
 .sidebar-modern-link {
@@ -116,12 +122,14 @@ body {
   display: none;
 }
 
+/* FOOTER: se queda pegado abajo, sin scroll */
 .sidebar-modern-footer {
   border-top: 1px solid rgba(229, 231, 235, 0.1);
   padding: 1.1rem 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  flex-shrink: 0; /* <- evita que se achique cuando hay mucho contenido */
 }
 
 .sidebar-modern-user {
@@ -208,6 +216,20 @@ body {
   display: none;
 }
 
+/* (Opcional) estilo del scrollbar para que quede más prolijo */
+.sidebar-modern-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-modern-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-modern-nav::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 999px;
+}
+
 .content-wrapper {
   flex: 1;
   overflow: auto;
@@ -260,7 +282,7 @@ body {
   font-size: 0.7rem;
   margin: 0 4px;
   display: inline-block;
-  transition: background-color 0.2s ease; 
+  transition: background-color 0.2s ease;
 }
 
 .pagination .page-link {

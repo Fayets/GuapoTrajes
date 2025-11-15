@@ -63,7 +63,7 @@ type Presupuesto = {
   nombre_agasajado?: string;
   lugar_evento?: string;
   seña_pagada?: number;
-  payment_method?: string;  // Cambiado de metodo_pago
+  payment_method?: string; // Cambiado de metodo_pago
 };
 
 type PresupuestoResponse = {
@@ -82,7 +82,7 @@ type PresupuestoResponse = {
   estado: string;
   items: ItemPresupuesto[];
   seña_pagada?: number;
-  payment_method?: string;  // Cambiado de metodo_pago
+  payment_method?: string; // Cambiado de metodo_pago
 };
 
 export default function PresupuestosPage() {
@@ -100,6 +100,12 @@ export default function PresupuestosPage() {
   const [verModoLectura, setVerModoLectura] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [metodoPago, setMetodoPago] = useState("");
+  const [totalConDescuento, setTotalConDescuento] = useState<number | null>(
+    null
+  );
+  const [porcentajeDescuento, setPorcentajeDescuento] = useState<number | null>(
+    null
+  );
 
   // Métodos de pago consistentes con ventas
   const metodosPago = [
@@ -132,6 +138,7 @@ export default function PresupuestosPage() {
   const [nuevoItem, setNuevoItem] = useState({
     productoId: "",
     cantidad: 1,
+    porcentaje: "",
   });
 
   const [modalSeniaAbierto, setModalSeniaAbierto] = useState(false);
@@ -252,7 +259,7 @@ export default function PresupuestosPage() {
     };
 
     setItems([...items, newItem]);
-    setNuevoItem({ productoId: "", cantidad: 1 });
+    setNuevoItem({ productoId: "", cantidad: 1, porcentaje: "" });
   };
 
   const eliminarItem = (id: number) => {
@@ -277,6 +284,8 @@ export default function PresupuestosPage() {
       lugar: "",
     });
     setItems([]);
+    setTotalConDescuento(null);
+    setPorcentajeDescuento(null);
     setShowModal(true);
   };
 
@@ -291,7 +300,39 @@ export default function PresupuestosPage() {
       return;
     }
 
-    const total = calcularTotal();
+    const totalOriginal = calcularTotal();
+    const tieneDescuento =
+      totalConDescuento !== null && porcentajeDescuento !== null;
+    const totalFinal = tieneDescuento
+      ? (totalConDescuento as number)
+      : totalOriginal;
+
+    let itemsParaEnviar = [...items];
+
+    if (tieneDescuento && totalOriginal > 0) {
+      const factor = totalFinal / totalOriginal;
+
+      let acumulado = 0;
+      itemsParaEnviar = items.map((item, index) => {
+        let nuevoSubtotal = Math.round(item.subtotal * factor);
+
+        if (index === items.length - 1) {
+          const diferencia = totalFinal - (acumulado + nuevoSubtotal);
+          nuevoSubtotal += diferencia;
+        }
+
+        acumulado += nuevoSubtotal;
+
+        const nuevoPrecioUnitario = nuevoSubtotal / item.cantidad;
+
+        return {
+          ...item,
+          precioUnitario: nuevoPrecioUnitario,
+          subtotal: nuevoSubtotal,
+        };
+      });
+    }
+
     const payload = {
       cliente_id: parseInt(formData.clienteId),
       fecha_evento: formData.fechaEvento,
@@ -301,7 +342,7 @@ export default function PresupuestosPage() {
       nombre_agasajado: formData.agasajado,
       lugar_evento: formData.lugar,
       observaciones: formData.observaciones,
-      items: items.map((item) => ({
+      items: itemsParaEnviar.map((item) => ({
         producto_id: item.productoId,
         cantidad: item.cantidad,
         precio_unitario: item.precioUnitario,
@@ -310,7 +351,10 @@ export default function PresupuestosPage() {
     };
 
     console.log("Enviando payload:", payload);
-    console.log("Token:", localStorage.getItem("token") ? "Presente" : "Ausente");
+    console.log(
+      "Token:",
+      localStorage.getItem("token") ? "Presente" : "Ausente"
+    );
 
     try {
       const res = await fetch("http://127.0.0.1:8000/presupuestos/", {
@@ -325,21 +369,26 @@ export default function PresupuestosPage() {
       console.log("Status Code:", res.status);
       console.log("Response Headers:", res.headers);
       console.log("Response URL:", res.url);
-      console.log("URL esperada: http://127.0.0.1:8000/presupuestos/");
 
       if (res.ok) {
         const responseData = await res.json();
         console.log("Respuesta exitosa:", responseData);
         setShowModal(false);
+        setTotalConDescuento(null);
+        setPorcentajeDescuento(null);
         fetchPresupuestos();
         alert("Presupuesto guardado exitosamente");
       } else {
         const errorText = await res.text();
         console.error("Error al guardar presupuesto:", res.status, errorText);
-        
+
         try {
           const errorData = JSON.parse(errorText);
-          alert(`Error al guardar presupuesto: ${errorData.detail || errorData.message || 'Error desconocido'}`);
+          alert(
+            `Error al guardar presupuesto: ${
+              errorData.detail || errorData.message || "Error desconocido"
+            }`
+          );
         } catch {
           alert(`Error al guardar presupuesto: ${errorText}`);
         }
@@ -353,15 +402,12 @@ export default function PresupuestosPage() {
   const fetchPresupuestos = async () => {
     setCargando(true);
     try {
-      const res = await fetch(
-        "http://127.0.0.1:8000/presupuestos/",
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
+      const res = await fetch("http://127.0.0.1:8000/presupuestos/", {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
 
       if (!res.ok) {
         const errText = await res.text();
@@ -379,10 +425,7 @@ export default function PresupuestosPage() {
           ...p,
           items: (p.items ?? []).map((item: any) => {
             const productoId =
-              item.productoId ??
-              item.producto_id ??
-              item.producto?.id ??
-              0;
+              item.productoId ?? item.producto_id ?? item.producto?.id ?? 0;
 
             const precioUnitario =
               item.precioUnitario ??
@@ -391,9 +434,7 @@ export default function PresupuestosPage() {
               0;
 
             const cantidad = item.cantidad ?? 0;
-            const subtotal =
-              item.subtotal ??
-              cantidad * precioUnitario;
+            const subtotal = item.subtotal ?? cantidad * precioUnitario;
 
             return {
               id: item.id ?? `${productoId}-${cantidad}`,
@@ -451,21 +492,18 @@ export default function PresupuestosPage() {
     }
 
     try {
-      const res = await fetch(
-        "http://127.0.0.1:8000/ordenes/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({
-            presupuesto_id: presupuestoId,
-            seña_pagada: parseFloat(seña),
-            payment_method: metodoPago,  // Cambiado a payment_method
-          }),
-        }
-      );
+      const res = await fetch("http://127.0.0.1:8000/ordenes/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          presupuesto_id: presupuestoId,
+          seña_pagada: parseFloat(seña),
+          payment_method: metodoPago, // Cambiado a payment_method
+        }),
+      });
 
       if (res.ok) {
         alert("Orden de trabajo generada con éxito.");
@@ -494,6 +532,9 @@ export default function PresupuestosPage() {
     });
 
     setItems(presupuesto.items);
+    setTotalConDescuento(null);
+    setPorcentajeDescuento(null);
+    setVerModoLectura(true);
     setVerModoLectura(true);
     setShowModal(true);
   };
@@ -526,21 +567,18 @@ export default function PresupuestosPage() {
     }
 
     try {
-      const res = await fetch(
-        "http://127.0.0.1:8000/ordenes/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({
-            presupuesto_id: presupuestoAConvertir.id,
-            seña_pagada: monto,
-            payment_method: metodoPago,  // Cambiado a payment_method
-          }),
-        }
-      );
+      const res = await fetch("http://127.0.0.1:8000/ordenes/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          presupuesto_id: presupuestoAConvertir.id,
+          seña_pagada: monto,
+          payment_method: metodoPago, // Cambiado a payment_method
+        }),
+      });
 
       if (res.ok) {
         const data = await res.json();
@@ -565,15 +603,12 @@ export default function PresupuestosPage() {
     if (!confirmar) return;
 
     try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/presupuestos/${id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
+      const res = await fetch(`http://127.0.0.1:8000/presupuestos/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
 
       if (res.ok) {
         alert("Presupuesto eliminado.");
@@ -691,7 +726,8 @@ export default function PresupuestosPage() {
     if (fechaRetiro) detalles.push(`Fecha de retiro: ${fechaRetiro}`);
 
     const fechaDevolucion = formatearFecha(presupuesto.fecha_devolucion);
-    if (fechaDevolucion) detalles.push(`Fecha de devolución: ${fechaDevolucion}`);
+    if (fechaDevolucion)
+      detalles.push(`Fecha de devolución: ${fechaDevolucion}`);
 
     if (presupuesto.categoria_evento) {
       detalles.push(`Categoría: ${presupuesto.categoria_evento}`);
@@ -714,12 +750,18 @@ export default function PresupuestosPage() {
         ? presupuesto.items
             .map((item, index) => {
               const nombreProducto =
-                item.productoNombre || (item as any).producto_descripcion || "Producto";
-              const subtotal = (item.subtotal ?? item.cantidad * (item.precioUnitario ?? 0)).toLocaleString(
-                "es-AR",
-                { minimumFractionDigits: 2, maximumFractionDigits: 2 }
-              );
-              return `${index + 1}) ${item.cantidad} x ${nombreProducto} - $${subtotal}`;
+                item.productoNombre ||
+                (item as any).producto_descripcion ||
+                "Producto";
+              const subtotal = (
+                item.subtotal ?? item.cantidad * (item.precioUnitario ?? 0)
+              ).toLocaleString("es-AR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              });
+              return `${index + 1}) ${
+                item.cantidad
+              } x ${nombreProducto} - $${subtotal}`;
             })
             .join("\n")
         : "Sin productos asociados.";
@@ -727,7 +769,9 @@ export default function PresupuestosPage() {
     let mensaje = `Hola ${nombreCliente}, te envío el presupuesto N° ${presupuesto.numero} por un total de $${totalFormateado}.`;
 
     if (detalles.length > 0) {
-      mensaje += `\n\nDetalles:\n${detalles.map((detalle) => `- ${detalle}`).join("\n")}`;
+      mensaje += `\n\nDetalles:\n${detalles
+        .map((detalle) => `- ${detalle}`)
+        .join("\n")}`;
     }
 
     mensaje += `\n\nProductos incluidos:\n${detalleProductos}`;
@@ -737,6 +781,22 @@ export default function PresupuestosPage() {
     )}`;
 
     window.open(url, "_blank");
+  };
+
+  const aplicarDescuento = () => {
+    const porcentaje = Number(nuevoItem.porcentaje);
+    const total = calcularTotal();
+
+    if (!porcentaje || isNaN(porcentaje)) {
+      alert("Seleccioná un porcentaje de descuento válido.");
+      return;
+    }
+
+    const descuento = (total * porcentaje) / 100;
+    const totalFinal = total - descuento;
+
+    setTotalConDescuento(totalFinal);
+    setPorcentajeDescuento(porcentaje);
   };
 
   return (
@@ -887,11 +947,15 @@ export default function PresupuestosPage() {
         items={items}
         calcularTotal={calcularTotal}
         guardarPresupuesto={guardarPresupuesto}
+        totalConDescuento={totalConDescuento}
+        porcentajeDescuento={porcentajeDescuento}
+        aplicarDescuento={aplicarDescuento}
         onClose={() => {
           setShowModal(false);
           setVerModoLectura(false);
         }}
       />
+
       {/* Modal de Seña */}
       <Dialog open={modalSeniaAbierto} onOpenChange={setModalSeniaAbierto}>
         <DialogContent
@@ -900,9 +964,7 @@ export default function PresupuestosPage() {
           dialogStyle={{ maxWidth: "640px", width: "95%" }}
         >
           <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
-            <DialogTitle className="fw-semibold">
-              Ingrese seña
-            </DialogTitle>
+            <DialogTitle className="fw-semibold">Ingrese seña</DialogTitle>
             <DialogDescription className="mb-0">
               Seña recibida de {presupuestoAConvertir?.cliente}
             </DialogDescription>
@@ -1034,7 +1096,10 @@ export default function PresupuestosPage() {
           </div>
 
           <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
-            <button className="btn btn-primary" onClick={() => imprimirRecibo()}>
+            <button
+              className="btn btn-primary"
+              onClick={() => imprimirRecibo()}
+            >
               Imprimir Recibo
             </button>
             <button

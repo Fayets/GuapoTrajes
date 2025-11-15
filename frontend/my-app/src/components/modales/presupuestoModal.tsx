@@ -36,7 +36,7 @@ type Props = {
   productos: Producto[];
   productoFiltro: string;
   setProductoFiltro: (value: string) => void;
-  nuevoItem: { productoId: string; cantidad: number };
+  nuevoItem: { productoId: string; cantidad: number; porcentaje: string };
   handleItemChange: (campo: string, valor: any) => void;
   verificarDisponibilidad: () => Promise<boolean>;
   agregarItem: () => void;
@@ -44,6 +44,10 @@ type Props = {
   items: Item[];
   calcularTotal: () => number;
   guardarPresupuesto: () => void;
+  totalConDescuento?: number | null;
+  porcentajeDescuento?: number | null;
+  aplicarDescuento: () => void;
+  solicitarDescuento?: () => void;
   onClose: () => void;
 };
 
@@ -68,6 +72,9 @@ export default function PresupuestoModal({
   items,
   calcularTotal,
   guardarPresupuesto,
+  totalConDescuento,
+  porcentajeDescuento,
+  aplicarDescuento,
   onClose,
 }: Props) {
   {
@@ -192,9 +199,22 @@ export default function PresupuestoModal({
     setFormData(nuevaData);
   };
 
+  const totalMostrado =
+    typeof totalConDescuento === "number" ? totalConDescuento : calcularTotal();
+
+  const totalOriginal = calcularTotal();
+  const hayDescuento = typeof totalConDescuento === "number";
+  const totalMostrar = hayDescuento
+    ? (totalConDescuento as number)
+    : totalOriginal;
+
   return (
     <Dialog open={show} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-full border-0" dialogClassName="modal-xl" dialogStyle={{ maxWidth: "900px", width: "95%" }}>
+      <DialogContent
+        className="w-full border-0"
+        dialogClassName="modal-xl"
+        dialogStyle={{ maxWidth: "900px", width: "95%" }}
+      >
         <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
           <DialogTitle>
             {verModoLectura ? "Ver Presupuesto" : "Nuevo Presupuesto"}
@@ -343,7 +363,9 @@ export default function PresupuestoModal({
                   )}
                 </div>
                 <div className="col-12 col-md-6">
-                  <label className="form-label fw-bold">Nombre del agasajado</label>
+                  <label className="form-label fw-bold">
+                    Nombre del agasajado
+                  </label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext border rounded p-2 bg-light">
                       {formData.agasajado}
@@ -374,7 +396,10 @@ export default function PresupuestoModal({
                       className="form-control"
                       value={formData.lugar}
                       onChange={(e) =>
-                        setFormData((prev: any) => ({ ...prev, lugar: e.target.value }))
+                        setFormData((prev: any) => ({
+                          ...prev,
+                          lugar: e.target.value,
+                        }))
                       }
                     />
                   )}
@@ -424,9 +449,29 @@ export default function PresupuestoModal({
                   <span className="text-muted">Categoría:</span>
                   <strong>{formData.categoria || "-"}</strong>
                 </div>
-                <div className="d-flex justify-content-between">
+                <div className="d-flex justify-content-between align-items-center">
                   <span className="text-muted">Total estimado:</span>
-                  <strong>${calcularTotal().toLocaleString()}</strong>
+                  <div className="text-end">
+                    {hayDescuento && (
+                      <div
+                        className="text-muted"
+                        style={{
+                          textDecoration: "line-through",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        ${totalOriginal.toLocaleString()}
+                      </div>
+                    )}
+                    <div className="fw-bold">
+                      ${totalMostrar.toLocaleString()}
+                      {hayDescuento && porcentajeDescuento && (
+                        <span className="text-success ms-1">
+                          (-{porcentajeDescuento}%)
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -455,7 +500,10 @@ export default function PresupuestoModal({
                       const subtotal = (item as any).subtotal ?? 0;
                       return (
                         <li
-                          key={(item as any).id ?? `${(item as any).productoId || "producto"}-${index}`}
+                          key={
+                            (item as any).id ??
+                            `${(item as any).productoId || "producto"}-${index}`
+                          }
                           className="list-group-item d-flex justify-content-between align-items-center bg-transparent border-0 px-0"
                         >
                           <span className="fw-medium">
@@ -475,7 +523,9 @@ export default function PresupuestoModal({
                     <h6 className="mb-3">Agregar Producto</h6>
                     <div className="row align-items-end g-3">
                       <div className="col-md-4">
-                        <label className="form-label fw-bold">Buscar producto</label>
+                        <label className="form-label fw-bold">
+                          Buscar producto
+                        </label>
                         <input
                           type="text"
                           className="form-control"
@@ -516,7 +566,10 @@ export default function PresupuestoModal({
                           min={1}
                           value={nuevoItem.cantidad}
                           onChange={(e) =>
-                            handleItemChange("cantidad", parseInt(e.target.value))
+                            handleItemChange(
+                              "cantidad",
+                              parseInt(e.target.value)
+                            )
                           }
                         />
                       </div>
@@ -541,6 +594,61 @@ export default function PresupuestoModal({
                     </div>
                   </div>
 
+                  {/* Sección: Descuento */}
+                  <div className="border rounded p-3 mb-3 bg-light">
+                    <h6 className="mb-3">Agregar Descuento</h6>
+                    <div className="row align-items-end g-3">
+                      <div className="col-md-4">
+                        <label className="form-label fw-bold">
+                          Porcentaje de descuento
+                        </label>
+                        <select
+                          className="form-select"
+                          value={nuevoItem.porcentaje || ""}
+                          onChange={(e) =>
+                            handleItemChange("porcentaje", e.target.value)
+                          }
+                        >
+                          <option value="">Seleccionar descuento</option>
+                          <option value="5">5%</option>
+                          <option value="10">10%</option>
+                          <option value="15">15%</option>
+                          <option value="20">20%</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-2">
+                        <button
+                          onClick={async () => {
+                            aplicarDescuento();
+                          }}
+                          className="btn btn-success w-100"
+                          id="aplicarDescuento"
+                        >
+                          <i className="bi bi-plus-circle me-1"></i>
+                          Aplicar
+                        </button>
+                      </div>
+                      <div className="col-md-4">
+                        <button
+                          onClick={async () => {
+                            if (solicitarDescuento) {
+                              solicitarDescuento();
+                            } else {
+                              alert(
+                                "Función de solicitud de descuento no implementada."
+                              );
+                            }
+                          }}
+                          className="btn btn-success w-100"
+                        >
+                          <i className="bi bi-plus-circle me-1"></i>
+                          Solicitar Descuento
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                   {items.length > 0 && (
                     <div className="border rounded p-3 bg-light">
                       <h6 className="mb-3">Productos Seleccionados</h6>
@@ -550,9 +658,13 @@ export default function PresupuestoModal({
                             key={item.productoId}
                             className="list-group-item d-flex justify-content-between align-items-center bg-transparent border-0 px-0"
                           >
-                            <span className="fw-medium">{item.productoNombre} x{item.cantidad}</span>
+                            <span className="fw-medium">
+                              {item.productoNombre} x{item.cantidad}
+                            </span>
                             <div className="d-flex align-items-center">
-                              <span className="badge bg-primary rounded-pill me-2">${item.subtotal}</span>
+                              <span className="badge bg-primary rounded-pill me-2">
+                                ${item.subtotal}
+                              </span>
                               <button
                                 className="btn btn-sm btn-outline-danger"
                                 onClick={() => eliminarItem(item.productoId)}
@@ -564,12 +676,32 @@ export default function PresupuestoModal({
                           </li>
                         ))}
                       </ul>
-                      
+
                       <div className="border-top pt-3 mt-3">
                         <div className="d-flex justify-content-end">
-                          <h5 className="mb-0">
+                          <h5 className="mb-0 text-end">
                             <span className="text-muted me-2">Total:</span>
-                            <span className="text-primary fw-bold">${calcularTotal()}</span>
+                            <span className="d-block">
+                              {hayDescuento && (
+                                <span
+                                  className="text-muted d-block"
+                                  style={{
+                                    textDecoration: "line-through",
+                                    fontSize: "0.9rem",
+                                  }}
+                                >
+                                  ${totalOriginal.toLocaleString()}
+                                </span>
+                              )}
+                              <span className="text-primary fw-bold d-block">
+                                ${totalMostrar.toLocaleString()}
+                                {hayDescuento && porcentajeDescuento && (
+                                  <span className="text-success ms-1">
+                                    (-{porcentajeDescuento}%)
+                                  </span>
+                                )}
+                              </span>
+                            </span>
                           </h5>
                         </div>
                       </div>
