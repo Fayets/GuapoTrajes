@@ -4,6 +4,7 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+<<<<<<< HEAD
 import {
   Dialog,
   DialogContent,
@@ -13,6 +14,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 // Tipos
 
@@ -34,8 +37,12 @@ type OrdenTrabajo = {
   seña_pagada: number;
   saldo_pendiente: number;
   estado: string;
+<<<<<<< HEAD
   payment_method?: string | null;
   metodo_pago?: string | null;
+=======
+  payment_method: string;  // Cambiado de metodo_pago
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   productos_reservados: ProductoReservado[];
 };
 
@@ -97,6 +104,7 @@ export default function OrdenesTrabajoPage() {
       if (!res.ok) throw new Error("Error al obtener órdenes");
 
       const data = await res.json();
+<<<<<<< HEAD
       const normalizado = Array.isArray(data)
         ? data.map((orden: any) => ({
             ...orden,
@@ -109,6 +117,9 @@ export default function OrdenesTrabajoPage() {
           }))
         : [];
       setOrdenes(normalizado);
+=======
+      setOrdenes(data);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     } catch (error) {
       console.error("Error al cargar órdenes:", error);
     } finally {
@@ -159,14 +170,20 @@ export default function OrdenesTrabajoPage() {
       orden.estado.toLowerCase().includes(busqueda.toLowerCase())
     );
 
+<<<<<<< HEAD
     const metodoOrden = orden.payment_method ?? orden.metodo_pago ?? "";
     const matchesFiltroMetodoPago =
       filtroMetodoPago === "" || metodoOrden === filtroMetodoPago;
+=======
+    const matchesFiltroMetodoPago =
+      filtroMetodoPago === "" || orden.payment_method === filtroMetodoPago;
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
     return matchesBusqueda && matchesFiltroMetodoPago;
   });
 
   return (
+<<<<<<< HEAD
     <div className="container-fluid px-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
@@ -201,6 +218,21 @@ export default function OrdenesTrabajoPage() {
           </div>
         </div>
         <div className="col-12 col-md-4 col-lg-3 ms-md-auto">
+=======
+    <div className="container py-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 className="h3 mb-0">Órdenes de Trabajo</h1>
+        </div>
+        <div className="d-flex gap-2">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Buscar por orden, presupuesto o estado..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
           <select
             className="form-select"
             value={filtroMetodoPago}
@@ -215,7 +247,11 @@ export default function OrdenesTrabajoPage() {
           </select>
         </div>
       </div>
+<<<<<<< HEAD
 
+=======
+      <p className="text-muted">Gestión y seguimiento de Ordenes de Trabajo de Guapo Trajes</p>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       {/* Tabla */}
       {cargando ? (
         <div className="d-flex justify-content-center my-5">
@@ -224,6 +260,7 @@ export default function OrdenesTrabajoPage() {
           </div>
         </div>
       ) : (
+<<<<<<< HEAD
         <div className="card shadow-sm">
           <div className="table-responsive">
             <table className="table table-striped table-hover align-middle mb-0">
@@ -238,26 +275,53 @@ export default function OrdenesTrabajoPage() {
                   <th className="text-nowrap">Estado</th>
                   <th className="text-center text-nowrap">Método de Pago</th>
                   <th className="text-center text-nowrap">Acciones</th>
+=======
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Orden N°</th>
+                  <th>Presupuesto</th>
+                  <th>Cliente</th>
+                  <th>Fecha Evento</th>
+                  <th>Seña Pagada</th>
+                  <th>Saldo Pendiente</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 </tr>
               </thead>
               <tbody>
                 {ordenesFiltradas.length > 0 ? (
                   ordenesFiltradas.map((orden) => (
                     <tr key={orden.id}>
+<<<<<<< HEAD
                       <td className="fw-semibold text-nowrap">{orden.id}</td>
                       <td className="text-muted text-uppercase">{orden.presupuesto_numero}</td>
                       <td>{orden.cliente_nombre}</td>
                       <td className="text-nowrap">
+=======
+                      <td>{orden.id}</td>
+                      <td>{orden.presupuesto_numero}</td>
+                      <td>{orden.cliente_nombre}</td>
+                      <td>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                         {format(new Date(orden.fecha_evento), "dd/MM/yyyy", {
                           locale: es,
                         })}
                       </td>
+<<<<<<< HEAD
                       <td className="text-end">
                         ${orden.seña_pagada.toLocaleString()}
                       </td>
                       <td className="text-end fw-semibold">
                         ${orden.saldo_pendiente.toLocaleString()}
                       </td>
+=======
+                      <td>${orden.seña_pagada.toLocaleString()}</td>
+                      <td>${orden.saldo_pendiente.toLocaleString()}</td>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                       <td>
                         <span
                           className={`badge ${getEstadoClass(orden.estado)}`}
@@ -265,6 +329,7 @@ export default function OrdenesTrabajoPage() {
                           {orden.estado}
                         </span>
                       </td>
+<<<<<<< HEAD
                       <td className="text-center text-muted">
                         {metodosPago.find((m) => m.value === orden.payment_method)?.label ||
                           metodosPago.find((m) => m.value === orden.metodo_pago)?.label ||
@@ -276,6 +341,14 @@ export default function OrdenesTrabajoPage() {
                         <div className="d-flex justify-content-center gap-2 flex-wrap">
                           <button
                             className="btn btn-sm btn-outline-primary"
+=======
+                      <td className="text-center">
+                        {metodosPago.find(m => m.value === orden.payment_method)?.label || orden.payment_method}
+                      </td>
+                      <td className="d-flex gap-2">
+                        <button
+                          className="btn btn-sm btn-outline-secondary"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                           onClick={() => {
                             setOrdenSeleccionada(orden);
                             setShowViewModal(true);
@@ -283,8 +356,13 @@ export default function OrdenesTrabajoPage() {
                         >
                           Ver
                         </button>
+<<<<<<< HEAD
                           <button
                             className="btn btn-sm btn-outline-success"
+=======
+                        <button
+                          className="btn btn-sm btn-outline-success"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                           onClick={() => {
                             setOrdenSeleccionada(orden);
                             setShowPagoModal(true);
@@ -292,7 +370,10 @@ export default function OrdenesTrabajoPage() {
                         >
                           Pago
                         </button>
+<<<<<<< HEAD
                         </div>
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                       </td>
                     </tr>
                   ))
@@ -309,6 +390,7 @@ export default function OrdenesTrabajoPage() {
         </div>
       )}
 
+<<<<<<< HEAD
       {ordenSeleccionada && (
         <Dialog open={showPagoModal} onOpenChange={(open) => setShowPagoModal(open)}>
           <DialogContent
@@ -560,10 +642,83 @@ export default function OrdenesTrabajoPage() {
                           )}
                         </div>
                       ))}
+=======
+      {showPagoModal && ordenSeleccionada && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Registrar Pago Adicional</h5>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowPagoModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  <strong>Orden:</strong> #{ordenSeleccionada.id}
+                </p>
+                <p>
+                  <strong>Saldo pendiente actual:</strong> $
+                  {ordenSeleccionada.saldo_pendiente.toLocaleString()}
+                </p>
+                <div className="mb-3">
+                  <label className="form-label">Monto</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={montoPago}
+                    onChange={(e) => setMontoPago(e.target.value)}
+                    min="0.01"
+                    max={ordenSeleccionada.saldo_pendiente}
+                    step="0.01"
+                    placeholder={`Máximo: $${ordenSeleccionada.saldo_pendiente.toLocaleString()}`}
+                  />
+                  {montoPago && parseFloat(montoPago) > ordenSeleccionada.saldo_pendiente && (
+                    <div className="text-sm text-red-500 mt-1">
+                      El monto no puede exceder el saldo pendiente
+                    </div>
+                  )}
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Método de pago</label>
+                  <div className="space-y-2">
+                    {metodosPago.map((metodo) => (
+                      <div
+                        key={metodo.value}
+                        className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                          metodoPago === metodo.value
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                        onClick={() => setMetodoPago(metodo.value)}
+                      >
+                        <div className="flex items-center">
+                          <input
+                            type="radio"
+                            name="metodoPago"
+                            value={metodo.value}
+                            checked={metodoPago === metodo.value}
+                            onChange={() => setMetodoPago(metodo.value)}
+                            className="mr-3"
+                          />
+                          <span className="font-medium">{metodo.label}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {!metodoPago && (
+                    <div className="text-sm text-red-500 mt-2">
+                      Debes seleccionar un método de pago
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                     </div>
                   )}
                 </div>
               </div>
+<<<<<<< HEAD
             </div>
 
             <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
@@ -576,6 +731,100 @@ export default function OrdenesTrabajoPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+=======
+              <div className="modal-footer">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowPagoModal(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="btn btn-primary"
+                  disabled={loadingPago || !montoPago || !metodoPago || parseFloat(montoPago) <= 0}
+                  onClick={registrarPago}
+                >
+                  {loadingPago ? "Guardando..." : "Guardar Pago"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showViewModal && ordenSeleccionada && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  Detalle Orden #{ordenSeleccionada.id}
+                </h5>
+                <button
+                  className="btn-close"
+                  onClick={() => setShowViewModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  <strong>Presupuesto:</strong>{" "}
+                  {ordenSeleccionada.presupuesto_numero}
+                </p>
+                <p>
+                  <strong>Cliente:</strong>{" "}
+                  {ordenSeleccionada.cliente_nombre}
+                </p>
+                <p>
+                  <strong>Evento:</strong>{" "}
+                  {format(
+                    new Date(ordenSeleccionada.fecha_evento),
+                    "dd/MM/yyyy",
+                    { locale: es }
+                  )}
+                </p>
+                <p>
+                  <strong>Seña pagada:</strong> $
+                  {ordenSeleccionada.seña_pagada.toLocaleString()}
+                </p>
+                <p>
+                  <strong>Saldo pendiente:</strong> $
+                  {ordenSeleccionada.saldo_pendiente.toLocaleString()}
+                </p>
+                <hr />
+                <h6>Productos reservados:</h6>
+                <ul>
+                  {ordenSeleccionada.productos_reservados.map((prod, index) => (
+                    <li
+                      key={index}
+                      className={
+                        prod.estado === "no disponible" ? "text-danger" : ""
+                      }
+                    >
+                      {prod.producto_descripcion} - Estado: {prod.estado} -
+                      Bloqueo:{" "}
+                      {format(new Date(prod.fecha_bloqueo), "dd/MM/yyyy", {
+                        locale: es,
+                      })}{" "}
+                      {prod.observaciones && ` - Obs: ${prod.observaciones}`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowViewModal(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
+<<<<<<< HEAD
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 type Lavanderia = {
   id: string
@@ -186,6 +189,7 @@ export default function LavanderiaPage() {
   )
 
   return (
+<<<<<<< HEAD
     <div className="container-fluid px-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
@@ -317,6 +321,193 @@ export default function LavanderiaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+=======
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 className="fw-bold">Modistas</h1>
+          <p className="text-muted">Gestión de lavanderias de Guapo Trajes</p>
+        </div>
+        <button className="btn btn-primary" onClick={nuevoLavanderia}>
+          <i className="bi bi-plus me-2"></i>
+          Nuevo Lavanderia
+        </button>
+      </div>
+
+      <div className="mb-4">
+        <div className="input-group">
+          <span className="input-group-text">
+            <i className="bi bi-search"></i>
+          </span>
+          <input
+            type="search"
+            className="form-control"
+            placeholder="Buscar lavanderias..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Dirección</th>
+                <th>Celular</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lavanderiaFiltrados.length > 0 ? (
+                lavanderiaFiltrados.map((lavanderia, index) => (
+                  // Usar una combinación del índice y el ID para garantizar unicidad
+                  <tr key={lavanderia.id || `lavanderia-${index}`}>
+                    <td className="fw-medium">{lavanderia.nombre}</td>
+                    <td>{lavanderia.telefono}</td>
+                    <td>{lavanderia.direccion}</td>
+                    <td>
+                      <div className="btn-group">
+                        <button
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => editarLavanderia(lavanderia)}
+                          title="Editar"
+                        >
+                          <i className="bi bi-pencil"></i>
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => confirmarEliminar(lavanderia)}
+                          title="Eliminar"
+                        >
+                          <i className="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="text-center">
+                    No se encontraron lavanderias.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal para crear/editar lavanderias */}
+      <div
+        className={`modal fade ${showModal ? "show" : ""}`}
+        style={{ display: showModal ? "block" : "none" }}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">{lavanderiaActual ? "Editar Lavanderia" : "Nuevo Lavanderia"}</h5>
+              <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
+            </div>
+            <div className="modal-body">
+              <form>
+                <div className="mb-3">
+                  <label htmlFor="nombre" className="form-label">
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="nombre"
+                    name="nombre"
+                    value={formData.nombre}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="telefono" className="form-label">
+                    Telefono
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="telefono"
+                    name="telefono"
+                    value={formData.telefono}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="direccion" className="form-label">
+                    Direccion
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="direccion"
+                    name="direccion"
+                    value={formData.direccion}
+                    onChange={handleChange}
+                  />
+                </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-primary" onClick={guardarLavanderia}>
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        className={`modal-backdrop fade ${showModal ? "show" : ""}`}
+        style={{ display: showModal ? "block" : "none" }}
+      ></div>
+
+      {/* Modal para confirmar eliminación */}
+      <div
+        className={`modal fade ${showDeleteModal ? "show" : ""}`}
+        style={{ display: showDeleteModal ? "block" : "none" }}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Confirmar eliminación</h5>
+              <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
+            </div>
+            <div className="modal-body">
+              <p>
+                ¿Está seguro que desea eliminar al cliente {lavanderiaActual?.nombre}? Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-danger" onClick={eliminarLavanderia}>
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        className={`modal-backdrop fade ${showDeleteModal ? "show" : ""}`}
+        style={{ display: showDeleteModal ? "block" : "none" }}
+      ></div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     </div>
   )
 }

@@ -2,7 +2,11 @@ from pony.orm import db_session, select, sum, flush, commit
 from fastapi import HTTPException
 from pony.orm.core import TransactionIntegrityError, ConstraintError
 from src import models, schemas
+<<<<<<< HEAD
 from src.models import Producto, EstadoProducto, Sucursal, Roles
+=======
+from src.models import Producto, EstadoProducto, Sucursal
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 from datetime import datetime
 from typing import Optional, Tuple, List, Dict
 import traceback
@@ -198,6 +202,7 @@ class ProductoServices:
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al actualizar el producto: {str(e)}")
 
+<<<<<<< HEAD
     def update_estado_producto(self, id: int, nuevo_estado: str, user) -> dict:
         with db_session:
             try:
@@ -236,6 +241,8 @@ class ProductoServices:
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al actualizar el estado: {str(e)}")
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     # Eliminar producto por código de barras
     def delete_product(self, codigo_barra: str):
         with db_session:

@@ -4,8 +4,11 @@ import React, { useEffect, useState } from "react";
 import ReactPaginate from "react-paginate";
 import ClienteModal from "@/components/modales/clienteModal";
 import { RoleGate } from "@/components/RoleGate";
+<<<<<<< HEAD
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 type Cliente = {
   id: number;
@@ -369,6 +372,7 @@ export default function ClientesPage({
   const pageCount = Math.ceil(clientesFiltrados.length / clientesPorPagina);
 
   return (
+<<<<<<< HEAD
     <div className="container-fluid px-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
@@ -397,6 +401,34 @@ export default function ClientesPage({
         </div>
       </div>
 
+=======
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 className="fw-bold">Clientes</h1>
+          <p className="text-muted">Gestión de clientes de Guapo Trajes</p>
+        </div>
+        <button className="btn btn-primary" onClick={nuevoCliente}>
+          <i className="bi bi-plus me-2"></i>
+          Nuevo Cliente
+        </button>
+      </div>
+
+      <div className="mb-4">
+        <div className="input-group">
+          <span className="input-group-text">
+            <i className="bi bi-search"></i>
+          </span>
+          <input
+            type="search"
+            className="form-control"
+            placeholder="Buscar clientes..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
+      </div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       {cargando ? (
         <div className="d-flex justify-content-center my-5">
           <div className="spinner-border text-primary" role="status">
@@ -404,6 +436,7 @@ export default function ClientesPage({
           </div>
         </div>
       ) : (
+<<<<<<< HEAD
         <div className="card shadow-sm">
           <div className="table-responsive">
             <Table className="align-middle mb-0">
@@ -434,6 +467,36 @@ export default function ClientesPage({
                         <div className="d-flex justify-content-center gap-2">
                           <button
                             className="btn btn-sm btn-outline-primary"
+=======
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Apellido</th>
+                  <th>DNI</th>
+                  <th>Dirección</th>
+                  <th>Celular</th>
+                  <th>Notas</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientesPaginados.length > 0 ? (
+                  clientesPaginados.map((cliente, index) => (
+                    <tr key={cliente.id || index}>
+                      <td className="fw-medium">{cliente.nombre}</td>
+                      <td>{cliente.apellido}</td>
+                      <td>{cliente.dni}</td>
+                      <td>{cliente.direccion}</td>
+                      <td>{cliente.celular}</td>
+                      <td>{cliente.notas}</td>
+                      <td>
+                        <div className="btn-group">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                             onClick={() => editarCliente(cliente)}
                             title="Editar"
                           >
@@ -461,6 +524,7 @@ export default function ClientesPage({
                             </button>
                           </RoleGate>
                         </div>
+<<<<<<< HEAD
                       </TableCell>
                     </TableRow>
                   ))
@@ -473,6 +537,20 @@ export default function ClientesPage({
                 )}
               </TableBody>
             </Table>
+=======
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center">
+                      No se encontraron clientes
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             <div className="d-flex justify-content-center mt-3">
               <ReactPaginate
                 previousLabel={"←"}

@@ -41,6 +41,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
   open?: boolean
   onOpenChange?: (open: boolean) => void
+<<<<<<< HEAD
   dialogClassName?: string
   dialogStyle?: React.CSSProperties
 }
@@ -60,6 +61,12 @@ export const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps
       return
     }, [open])
 
+=======
+}
+
+export const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
+  ({ className, children, open, onOpenChange, ...props }, ref) => {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     const handleClose = () => {
       onOpenChange?.(false)
     }
@@ -77,7 +84,11 @@ export const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps
           ref={ref}
           {...props}
         >
+<<<<<<< HEAD
           <div className={cn("modal-dialog", dialogClassName)} style={dialogStyle}>
+=======
+          <div className="modal-dialog">
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             <div className="modal-content">{children}</div>
           </div>
         </div>

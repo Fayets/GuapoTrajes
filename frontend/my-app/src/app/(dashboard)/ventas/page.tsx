@@ -14,8 +14,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+<<<<<<< HEAD
   DialogDescription,
   DialogFooter,
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -567,6 +570,7 @@ export default function VentasPage() {
 
       {/* Modal de Método de Pago */}
       <Dialog open={showMetodoPagoModal} onOpenChange={setShowMetodoPagoModal}>
+<<<<<<< HEAD
         <DialogContent
           className="w-full border-0"
           dialogClassName="modal-dialog-centered modal-lg"
@@ -636,6 +640,61 @@ export default function VentasPage() {
             </button>
             <button
               className="btn btn-primary"
+=======
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">
+              Método de Pago
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="text-center text-gray-600 mb-4">
+              Selecciona el método de pago para completar la venta
+            </div>
+
+            <div className="space-y-3">
+              {metodosPago.map((metodo) => (
+                <div
+                  key={metodo.value}
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                    metodoPago === metodo.value
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => setMetodoPago(metodo.value)}
+                >
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      name="metodoPago"
+                      value={metodo.value}
+                      checked={metodoPago === metodo.value}
+                      onChange={() => setMetodoPago(metodo.value)}
+                      className="mr-3"
+                    />
+                    <span className="font-medium">{metodo.label}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {!metodoPago && (
+              <div className="text-sm text-red-500 text-center">
+                Debes seleccionar un método de pago
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setShowMetodoPagoModal(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
               onClick={() => {
                 if (metodoPago) {
                   setShowMetodoPagoModal(false);
@@ -643,15 +702,24 @@ export default function VentasPage() {
                 }
               }}
               disabled={!metodoPago}
+<<<<<<< HEAD
             >
               Continuar
             </button>
           </DialogFooter>
+=======
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Continuar
+            </Button>
+          </div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         </DialogContent>
       </Dialog>
 
       {isModalOpen && ventaActual && (
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+<<<<<<< HEAD
           <DialogContent
             className="w-full border-0"
             dialogClassName="modal-dialog-centered modal-xl"
@@ -913,16 +981,298 @@ export default function VentasPage() {
                             <div className="text-danger small mt-2 text-center">
                               No se puede agregar: producto en estado "
                               {producto.estado}"
+=======
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold mb-4">
+                Nueva Venta
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6">
+              {/* Sección: Información del Cliente */}
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <h6 className="font-semibold text-gray-700 mb-3 flex items-center">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                  Información del Cliente
+                </h6>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Buscar Cliente
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full p-2 border border-gray-300 rounded-md mb-2"
+                      placeholder="Buscar por nombre, apellido o DNI..."
+                      value={clienteFiltro}
+                      onChange={(e) => setClienteFiltro(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Seleccionar Cliente
+                    </label>
+                    <select
+                      className={`w-full p-2 border rounded-md ${
+                        touched["cliente_id"] && !ventaActual.cliente_id
+                          ? "border-red-500"
+                          : "border-gray-300"
+                      }`}
+                      value={ventaActual.cliente_id || ""}
+                      onChange={(e) =>
+                        setVentaActual({
+                          ...ventaActual,
+                          cliente_id: Number(e.target.value),
+                        })
+                      }
+                      onBlur={() => handleBlur("cliente_id")}
+                    >
+                      <option value="">Seleccionar cliente</option>
+                      {clientes
+                        .filter((c) =>
+                          `${c.nombre} ${c.apellido} ${c.dni || ""}`
+                            .toLowerCase()
+                            .includes(clienteFiltro.toLowerCase())
+                        )
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.nombre} {c.apellido}{" "}
+                            {c.dni ? `(DNI: ${c.dni})` : ""}
+                          </option>
+                        ))}
+                    </select>
+                    {touched["cliente_id"] && !ventaActual.cliente_id && (
+                      <span className="text-xs text-red-500">
+                        Selecciona un cliente
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Fecha de Venta
+                  </label>
+                  <Input
+                    type="date"
+                    value={ventaActual.fecha_hora || ""}
+                    onChange={(e) =>
+                      setVentaActual({
+                        ...ventaActual,
+                        fecha_hora: e.target.value,
+                      })
+                    }
+                    onBlur={() => handleBlur("fecha_hora")}
+                    className={
+                      touched["fecha_hora"] && !ventaActual.fecha_hora
+                        ? "border-red-500"
+                        : ""
+                    }
+                  />
+                  {touched["fecha_hora"] && !ventaActual.fecha_hora && (
+                    <span className="text-xs text-red-500">
+                      Selecciona una fecha
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Sección: Agregar Productos */}
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <h6 className="font-semibold text-gray-700 mb-3 flex items-center">
+                  <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                  Agregar Producto
+                </h6>
+
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Buscar producto
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Buscar por código o descripción"
+                      value={productoFiltro}
+                      onChange={(e) => setProductoFiltro(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Producto
+                    </label>
+                    <select
+                      className="w-full p-2 border border-gray-300 rounded-md"
+                      value={nuevoItem.productoId}
+                      onChange={(e) =>
+                        handleItemChange("productoId", e.target.value)
+                      }
+                    >
+                      <option value="">Seleccionar producto</option>
+                      {productos
+                        .filter((p) =>
+                          `${p.descripcion}${p.codigo || ""}`
+                            .toLowerCase()
+                            .includes(productoFiltro.toLowerCase())
+                        )
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.descripcion} - Código: {p.codigo || "Sin código"}{" "}
+                            - $
+                            {getPrecioUnitario(
+                              p.id,
+                              nuevoItem.tipo_precio || "Lista"
+                            ).toLocaleString()}
+                          </option>
+                        ))}
+                    </select>
+
+                    {/* Mostrar estado del producto seleccionado */}
+                    {nuevoItem.productoId &&
+                      (() => {
+                        const producto = productos.find(
+                          (p) => p.id === Number(nuevoItem.productoId)
+                        );
+                        if (producto && producto.estado) {
+                          const puedeVender = producto.estado === "SALON";
+                          return (
+                            <div
+                              className={`mt-2 p-2 rounded-md text-sm ${
+                                puedeVender
+                                  ? "bg-green-100 text-green-800 border border-green-200"
+                                  : "bg-red-100 text-red-800 border border-red-200"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-2 h-2 rounded-full ${
+                                    puedeVender ? "bg-green-500" : "bg-red-500"
+                                  }`}
+                                ></span>
+                                <span className="font-medium">
+                                  Estado: {producto.estado}
+                                </span>
+                              </div>
+                              {!puedeVender && (
+                                <div className="text-xs mt-1">
+                                  ❌ Este producto no se puede vender. Solo se
+                                  pueden vender productos en estado "SALON".
+                                </div>
+                              )}
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                             </div>
                           );
                         }
                         return null;
                       })()}
+<<<<<<< HEAD
                     </div>
+=======
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Cantidad
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={nuevoItem.cantidad}
+                      onChange={(e) =>
+                        handleItemChange("cantidad", parseInt(e.target.value))
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Tipo de Precio
+                      {items.length > 0 && (
+                        <span className="text-xs text-blue-600 ml-2">
+                          (Usando: {getTipoPrecioLabel(items[0].tipo_precio)})
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      className="w-full p-2 border border-gray-300 rounded-md"
+                      value={
+                        items.length > 0
+                          ? items[0].tipo_precio
+                          : nuevoItem.tipo_precio
+                      }
+                      onChange={(e) =>
+                        handleItemChange("tipo_precio", e.target.value)
+                      }
+                      disabled={items.length > 0}
+                    >
+                      <option value="">Seleccionar tipo</option>
+                      {tiposPrecios.map((tipo) => (
+                        <option key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </option>
+                      ))}
+                    </select>
+                    {items.length > 0 && (
+                      <span className="text-xs text-gray-500">
+                        El tipo de precio se establece con el primer producto
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <Button
+                      onClick={agregarItem}
+                      disabled={
+                        !nuevoItem.productoId ||
+                        !nuevoItem.cantidad ||
+                        !nuevoItem.tipo_precio ||
+                        (() => {
+                          const producto = productos.find(
+                            (p) => p.id === Number(nuevoItem.productoId)
+                          );
+                          return !!(
+                            producto &&
+                            producto.estado &&
+                            producto.estado !== "SALON"
+                          );
+                        })()
+                      }
+                      className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Plus className="w-4 h-4" />
+                        Agregar
+                      </span>
+                    </Button>
+
+                    {/* Mensaje de ayuda cuando el botón está deshabilitado */}
+                    {(() => {
+                      const producto = productos.find(
+                        (p) => p.id === Number(nuevoItem.productoId)
+                      );
+                      if (
+                        producto &&
+                        producto.estado &&
+                        producto.estado !== "SALON"
+                      ) {
+                        return (
+                          <div className="text-xs text-red-600 mt-1 text-center">
+                            No se puede agregar: producto en estado "
+                            {producto.estado}"
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                   </div>
                 </div>
               </div>
 
+<<<<<<< HEAD
               {items.length > 0 && (
                 <div className="card shadow-sm mb-4">
                   <div className="card-body p-4">
@@ -966,6 +1316,58 @@ export default function VentasPage() {
                         <span className="fw-bold fs-5">
                           Total: ${calcularTotal().toLocaleString()}
                         </span>
+=======
+              {/* Sección: Productos Seleccionados */}
+              {items.length > 0 && (
+                <div className="border rounded-lg p-4 bg-gray-50">
+                  <h6 className="font-semibold text-gray-700 mb-3 flex items-center">
+                    <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                    Productos Seleccionados ({items.length})
+                  </h6>
+
+                  <div className="space-y-2">
+                    {items.map((item, index) => (
+                      <div
+                        key={index}
+                        className="flex justify-between items-center p-3 bg-white border rounded-md"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {item.productoNombre}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            Código: {item.productoCodigo || "Sin código"} |
+                            Tipo: {getTipoPrecioLabel(item.tipo_precio)} |
+                            Cantidad: {item.cantidad}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-gray-600">
+                            ${item.precio_unitario.toLocaleString()}
+                          </span>
+                          <span className="font-semibold text-blue-600">
+                            ${item.subtotal.toLocaleString()}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => eliminarItem(item.productoId)}
+                            className="text-red-600 border-red-300 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="border-t pt-4 mt-4">
+                      <div className="flex justify-end">
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-gray-900">
+                            Total: ${calcularTotal().toLocaleString()}
+                          </div>
+                        </div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                       </div>
                     </div>
                   </div>
@@ -973,6 +1375,7 @@ export default function VentasPage() {
               )}
             </div>
 
+<<<<<<< HEAD
             <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
               <button
                 className="btn btn-light border"
@@ -982,26 +1385,47 @@ export default function VentasPage() {
               </button>
               <button
                 className="btn btn-primary"
+=======
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+              <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 onClick={guardarVenta}
                 disabled={
                   !ventaActual.cliente_id || items.length === 0 || isSaving
                 }
+<<<<<<< HEAD
               >
                 {isSaving ? (
                   <span className="d-flex align-items-center gap-2">
                     <Loader2 className="animate-spin" size={16} /> Guardando...
+=======
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {isSaving ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="animate-spin w-4 h-4" /> Guardando...
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                   </span>
                 ) : (
                   "Guardar Venta"
                 )}
+<<<<<<< HEAD
               </button>
             </DialogFooter>
+=======
+              </Button>
+            </div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
           </DialogContent>
         </Dialog>
       )}
 
       {/* Modal para ver detalle de venta */}
       <Dialog open={!!ventaParaVer} onOpenChange={() => setVentaParaVer(null)}>
+<<<<<<< HEAD
         <DialogContent
           className="w-full border-0"
           dialogClassName="modal-xl"
@@ -1131,6 +1555,101 @@ export default function VentasPage() {
                 </button>
               </div>
             </>
+=======
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detalle de Venta</DialogTitle>
+          </DialogHeader>
+          {ventaParaVer && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+              <div className="bg-muted border rounded p-4">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  Fecha
+                </div>
+                <div className="text-sm font-medium text-gray-900">
+                  {parseFecha(ventaParaVer.fecha_hora).toLocaleDateString()}
+                </div>
+              </div>
+              <div className="bg-muted border rounded p-4">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  Cliente
+                </div>
+                <div className="text-sm font-medium text-gray-900">
+                  {ventaParaVer.cliente_nombre}
+                </div>
+              </div>
+              <div className="bg-muted border rounded p-4">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  Sucursal
+                </div>
+                <div className="text-sm font-medium text-gray-900">
+                  {ventaParaVer.sucursal_nombre}
+                </div>
+              </div>
+              <div className="bg-muted border rounded p-4">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  Tipo de Precio
+                </div>
+                <div className="text-sm font-medium text-gray-900">
+                  {getTipoPrecioLabel(ventaParaVer.tipo_precio)}
+                </div>
+              </div>
+              <div className="bg-muted border rounded p-4 md:col-span-2">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                  Productos
+                </div>
+                <div className="text-sm font-medium text-gray-900">
+                  {ventaParaVer.productos.map((p) => (
+                    <div
+                      key={`${ventaParaVer.id}-${p.producto_id}`}
+                      className="border-b py-2"
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {p.descripcion ||
+                              productos.find(
+                                (prod) => prod.id === p.producto_id
+                              )?.descripcion ||
+                              p.producto_id}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Código:{" "}
+                            {p.codigo ||
+                              productos.find(
+                                (prod) => prod.id === p.producto_id
+                              )?.codigo ||
+                              "N/A"}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-600">
+                            Cantidad: {p.cantidad}
+                          </div>
+                          <div className="text-sm">
+                            ${p.precio_unitario?.toLocaleString()}
+                          </div>
+                          <div className="font-semibold text-blue-600">
+                            Subtotal: ${p.subtotal?.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-muted border rounded p-4 md:col-span-2 flex justify-end">
+                <span className="font-bold text-lg">
+                  Total: ${ventaParaVer.total.toLocaleString()}
+                </span>
+              </div>
+              <div className="md:col-span-2 flex justify-end mt-4">
+                <Button variant="outline" onClick={() => setVentaParaVer(null)}>
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
           )}
         </DialogContent>
       </Dialog>

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+=======
+from pydantic import BaseModel, Field, field_validator, model_validator
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 from typing import List, Optional, Dict, Literal
 from datetime import date, datetime
 from src.models import Roles, Sucursal, MetodoPago
@@ -9,10 +13,16 @@ class UsuarioOut(BaseModel):
     id: int
     email: str
     rol: Role
+<<<<<<< HEAD
     sucursal_nombre: Optional[str] = None
     sucursal_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+=======
+
+    class Config:
+        orm_mode = True
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 #SUCURSALES
 class SucursalCreate(BaseModel):
@@ -38,7 +48,13 @@ class BaseUser(BaseModel):
     role: Roles
     sucursal: int
 
+<<<<<<< HEAD
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
+=======
+    class Config:
+        from_attributes = True
+        use_enum_values = True
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 class UserCreate(BaseUser):
     password: str
@@ -214,7 +230,12 @@ class ItemPresupuestoOut(BaseModel):
     precio_unitario: float
     subtotal: float
 
+<<<<<<< HEAD
     model_config = ConfigDict(from_attributes=True)
+=======
+    class Config:
+        from_attributes = True
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 class ItemPresupuestoResponse(BaseModel):
     id: int
@@ -269,15 +290,23 @@ class OrdenTrabajoCreateSchema(BaseModel):
             raise ValueError('Debe proporcionar payment_method o metodo_pago')
         return self
 
+<<<<<<< HEAD
     model_config = ConfigDict(
         json_schema_extra={
+=======
+    class Config:
+        json_schema_extra = {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             "example": {
                 "presupuesto_id": 1,
                 "seña_pagada": 100.0,
                 "payment_method": "EFECTIVO"
             }
         }
+<<<<<<< HEAD
     )
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 class OrdenTrabajoResponseSchema(BaseModel):
     message: str
@@ -297,14 +326,22 @@ class PagoSaldoPendienteSchema(BaseModel):
     monto_pagado: float = Field(..., gt=0, description="Monto a pagar del saldo pendiente")
     payment_method: str = Field(..., description="Método de pago: EFECTIVO, DEBITO, CREDITO, BILLETERA_VIRTUAL, TRANSFERENCIA")
 
+<<<<<<< HEAD
     model_config = ConfigDict(
         json_schema_extra={
+=======
+    class Config:
+        json_schema_extra = {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             "example": {
                 "monto_pagado": 50.0,
                 "payment_method": "DEBITO"
             }
         }
+<<<<<<< HEAD
     )
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 class VentaDetalleCreate(BaseModel):
     producto_id: int
@@ -380,6 +417,7 @@ class CajaReporteResponse(BaseModel):
     total_general: float
     movimientos: List[CajaMovimientoOut]
 
+<<<<<<< HEAD
 class CajaChicaMovimientoBase(BaseModel):
     sucursal_id: Optional[int] = None
     monto: float
@@ -425,6 +463,8 @@ class TransferenciaCajaChicaRequest(BaseModel):
     monto: float
     descripcion: Optional[str] = None
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 class CajaReporteEgresosResponse(BaseModel):
     resumen_por_categoria: Dict[str, float]
     total_general: float

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+<<<<<<< HEAD
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 type Evento = {
   id: string;
@@ -184,6 +187,7 @@ export default function EventoPage() {
   );
 
   return (
+<<<<<<< HEAD
     <div className="container-fluid px-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
@@ -192,10 +196,21 @@ export default function EventoPage() {
         </div>
         <button className="btn btn-primary d-flex align-items-center gap-2" onClick={nuevoEvento}>
           <i className="bi bi-plus-lg"></i>
+=======
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 className="fw-bold">Eventos</h1>
+          <p className="text-muted">Gestión de eventos de Guapo Trajes</p>
+        </div>
+        <button className="btn btn-primary" onClick={nuevoEvento}>
+          <i className="bi bi-plus me-2"></i>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
           Nuevo Evento
         </button>
       </div>
 
+<<<<<<< HEAD
       <div className="row g-3 align-items-center mb-4">
         <div className="col-12 col-md-6 col-lg-4">
           <div className="input-group">
@@ -209,6 +224,20 @@ export default function EventoPage() {
               onChange={(e) => setBusqueda(e.target.value)}
             />
           </div>
+=======
+      <div className="mb-4">
+        <div className="input-group">
+          <span className="input-group-text">
+            <i className="bi bi-search"></i>
+          </span>
+          <input
+            type="search"
+            className="form-control"
+            placeholder="Buscar lavanderias..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         </div>
       </div>
       {/* Tabla */}
@@ -219,6 +248,7 @@ export default function EventoPage() {
           </div>
         </div>
       ) : (
+<<<<<<< HEAD
         <div className="card shadow-sm">
           <div className="table-responsive">
             <table className="table table-striped table-hover align-middle mb-0">
@@ -226,6 +256,15 @@ export default function EventoPage() {
                 <tr>
                   <th>Nombre</th>
                   <th className="text-center">Acciones</th>
+=======
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Acciones</th>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 </tr>
               </thead>
               <tbody>
@@ -234,10 +273,17 @@ export default function EventoPage() {
                     // Usar una combinación del índice y el ID para garantizar unicidad
                     <tr key={evento.id || `lavanderia-${index}`}>
                       <td className="fw-medium">{evento.nombre}</td>
+<<<<<<< HEAD
                       <td className="text-center">
                         <div className="d-flex justify-content-center gap-2">
                           <button
                             className="btn btn-sm btn-outline-primary"
+=======
+                      <td>
+                        <div className="btn-group">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                             onClick={() => editarEvento(evento)}
                             title="Editar"
                           >
@@ -256,7 +302,11 @@ export default function EventoPage() {
                   ))
                 ) : (
                   <tr>
+<<<<<<< HEAD
                     <td colSpan={2} className="text-center text-muted py-4">
+=======
+                    <td colSpan={6} className="text-center">
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                       No se encontraron eventos.
                     </td>
                   </tr>
@@ -267,6 +317,7 @@ export default function EventoPage() {
         </div>
       )}
 
+<<<<<<< HEAD
       <Dialog open={showModal} onOpenChange={(open) => !open && setShowModal(false)}>
         <DialogContent
           className="w-full border-0"
@@ -341,6 +392,116 @@ export default function EventoPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+=======
+      {/* Modal para crear/editar eventos */}
+      <div
+        className={`modal fade ${showModal ? "show" : ""}`}
+        style={{ display: showModal ? "block" : "none" }}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">
+                {eventoActual ? "Editar Evento" : "Nuevo Evento"}
+              </h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <form>
+                <div className="mb-3">
+                  <label htmlFor="nombre" className="form-label">
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="nombre"
+                    name="nombre"
+                    value={formData.nombre}
+                    onChange={handleChange}
+                  />
+                </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowModal(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={guardarEvento}
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        className={`modal-backdrop fade ${showModal ? "show" : ""}`}
+        style={{ display: showModal ? "block" : "none" }}
+      ></div>
+
+      {/* Modal para confirmar eliminación */}
+      <div
+        className={`modal fade ${showDeleteModal ? "show" : ""}`}
+        style={{ display: showDeleteModal ? "block" : "none" }}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Confirmar eliminación</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowDeleteModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <p>
+                ¿Está seguro que desea eliminar el evento {eventoActual?.nombre}
+                ? Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={eliminarEvento}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        className={`modal-backdrop fade ${showDeleteModal ? "show" : ""}`}
+        style={{ display: showDeleteModal ? "block" : "none" }}
+      ></div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     </div>
   );
 }

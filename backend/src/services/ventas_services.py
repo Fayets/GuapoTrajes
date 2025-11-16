@@ -9,6 +9,7 @@ class VentasServices:
     def __init__(self):
         pass
 
+<<<<<<< HEAD
     def create_venta(self, venta_data: schemas.VentaCreate, current_user) -> dict:
         with db_session:
             try:
@@ -16,6 +17,11 @@ class VentasServices:
                 if not usuario:
                     raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+=======
+    def create_venta(self, venta_data: schemas.VentaCreate) -> dict:
+        with db_session:
+            try:
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 # 1) Validaciones base
                 cliente = models.Cliente.get(id=venta_data.cliente_id)
                 if not cliente:
@@ -25,9 +31,12 @@ class VentasServices:
                 if not sucursal:
                     raise HTTPException(status_code=404, detail="Sucursal no encontrada")
 
+<<<<<<< HEAD
                 if usuario.rol == models.Roles.EMPLEADO and usuario.sucursal.id != sucursal.id:
                     raise HTTPException(status_code=403, detail="No puedes registrar ventas en otra sucursal")
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 # 2) Crear cabecera de la venta
                 venta = models.Venta(
                     cliente=cliente,
@@ -35,8 +44,13 @@ class VentasServices:
                     fecha_hora=datetime.now(),
                     total=0.0,
                     tipo_precio=venta_data.tipo_precio,
+<<<<<<< HEAD
                     payment_method=venta_data.payment_method,
                     usuario=usuario
+=======
+                    payment_method=venta_data.payment_method,  # Ya es string, no necesita conversión
+                    usuario=models.Usuario.get(id=1)  # TODO: Obtener del usuario autenticado
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 )
 
                 total_venta = 0.0
@@ -115,7 +129,11 @@ class VentasServices:
                     "sucursal_id": sucursal.id
                 }
                 
+<<<<<<< HEAD
                 caja_service.create_movimiento(movimiento_data, usuario.id)
+=======
+                caja_service.create_movimiento(movimiento_data, 1)  # TODO: Obtener usuario_id del contexto
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 
                 return {
                     "id": venta_id,

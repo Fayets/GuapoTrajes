@@ -1,6 +1,9 @@
 from pony.orm import *
 from enum import Enum
+<<<<<<< HEAD
 from decimal import Decimal
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 from .db import db
 from datetime import date, datetime 
 
@@ -18,8 +21,11 @@ class Sucursal(db.Entity):
     productos = Set("Producto")
     ventas = Set("Venta")  # UNA SUCURSAL TIENE VARIAS VENTAS
     movimientos_caja = Set("CajaMovimiento")  # UNA SUCURSAL TIENE VARIOS MOVIMIENTOS DE CAJA
+<<<<<<< HEAD
     caja_chica_movimientos = Set("CajaChica")
     caja_concentradora_movimientos = Set("CajaConcentradora")
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     _table_ = "Sucursales"
 
 class EstadoProducto(str, Enum):
@@ -40,10 +46,13 @@ class Usuario(db.Entity):
     sucursal = Required(Sucursal) #UN USUARIO PERTENECE A UNA SUCURSAL
     ventas = Set("Venta")  # UN USUARIO PUEDE TENER VARIAS VENTAS
     movimientos_caja = Set("CajaMovimiento")  # UN USUARIO PUEDE TENER VARIOS MOVIMIENTOS DE CAJA
+<<<<<<< HEAD
     caja_chica_movimientos = Set("CajaChica")
     caja_concentradora_envios = Set("CajaConcentradora", reverse="usuario_envio")
     caja_concentradora_movimientos = Set("CajaConcentradora", reverse="usuario")
     caja_concentradora_vaciados = Set("CajaConcentradora", reverse="vaciado_por")
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     _table_ = "Usuarios"
 
 class Producto(db.Entity):
@@ -230,6 +239,7 @@ class CategoriaEgreso(str, Enum):
     COMERCIALES = "COMERCIALES"
     OTROS_EGRESOS = "OTROS_EGRESOS"
 
+<<<<<<< HEAD
 class TipoMovimientoCajaChica(str, Enum):
     INGRESO = "INGRESO"
     EGRESO = "EGRESO"
@@ -252,6 +262,8 @@ class EstadoMovimientoCajaChica(str, Enum):
     APROBADO = "APROBADO"
     RECHAZADO = "RECHAZADO"
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 class Venta(db.Entity):
     id = PrimaryKey(int, auto=True)
     fecha = Required(date, default=lambda: date.today())  # Columna que existe en la BD
@@ -283,6 +295,7 @@ class CajaMovimiento(db.Entity):
     payment_method = Optional(MetodoPago)
     origen = Required(str)  # Ej: "VENTA:123", "AJUSTE", etc.
     categoria = Optional(str, column="categoria")  # Categoría del movimiento (ingreso o egreso)
+<<<<<<< HEAD
     destino = Optional(str, column="destino")
     venta = Optional(Venta, column="venta_id")  # FK nullable
     usuario = Required(Usuario, column="usuario_id")  # Relación con Usuario
@@ -346,3 +359,9 @@ class CajaConcentradora(db.Entity):
     movimiento_origen = Optional(CajaChica)
     caja_movimiento_id = Optional(int, column="caja_movimiento_id")  # Referencia al movimiento de caja diaria
     _table_ = "CajaConcentradora"
+=======
+    venta = Optional(Venta, column="venta_id")  # FK nullable
+    usuario = Required(Usuario, column="usuario_id")  # Relación con Usuario
+    sucursal = Required(Sucursal, column="sucursal_id")  # Relación con Sucursal
+    _table_ = "CajaMovimientos"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8

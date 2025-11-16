@@ -1,7 +1,42 @@
 "use client";
 import { useEffect, useState } from "react";
+<<<<<<< HEAD
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth-context";
+=======
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { Loader2, Download, Calendar, Filter, Plus, DollarSign, Minus, Search, BarChart3, Users, TrendingUp } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 interface CajaMovimiento {
   id: number;
@@ -51,6 +86,7 @@ const metodosPago = [
 ];
 
 export default function CajaPage() {
+<<<<<<< HEAD
   const { me } = useAuth();
 
   const getLocalDateString = () => {
@@ -59,15 +95,23 @@ export default function CajaPage() {
     return now.toISOString().split("T")[0];
   };
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   const [movimientos, setMovimientos] = useState<CajaMovimiento[]>([]);
   const [totales, setTotales] = useState<CajaTotales>({
     totales_por_metodo: {},
     total_general: 0,
   });
   const [isLoading, setIsLoading] = useState(false);
+<<<<<<< HEAD
   const [fecha, setFecha] = useState(getLocalDateString());
   const [metodoFiltro, setMetodoFiltro] = useState<string>("");
   const [sucursalId, setSucursalId] = useState<number>(1);
+=======
+  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [metodoFiltro, setMetodoFiltro] = useState<string>("");
+  const [sucursalId, setSucursalId] = useState(1); // TODO: Obtener del contexto
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   
   // Estados para búsqueda por texto
   const [textoBusqueda, setTextoBusqueda] = useState("");
@@ -75,22 +119,32 @@ export default function CajaPage() {
   const [isSearching, setIsSearching] = useState(false);
   
   // Estados para reportes
+<<<<<<< HEAD
   const [fechaDesde, setFechaDesde] = useState(getLocalDateString());
   const [fechaHasta, setFechaHasta] = useState(getLocalDateString());
+=======
+  const [fechaDesde, setFechaDesde] = useState(new Date().toISOString().split("T")[0]);
+  const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split("T")[0]);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   const [balanceFinanciero, setBalanceFinanciero] = useState<BalanceFinanciero | null>(null);
   const [saldosPendientes, setSaldosPendientes] = useState<SaldoPendiente[]>([]);
   const [isLoadingReports, setIsLoadingReports] = useState(false);
   
   // Estados para los modales de ingreso y egreso
   const [showIngresoModal, setShowIngresoModal] = useState(false);
+<<<<<<< HEAD
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showTransferConcentradoraModal, setShowTransferConcentradoraModal] = useState(false);
+=======
+  const [showEgresoModal, setShowEgresoModal] = useState(false);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   const [nuevoIngreso, setNuevoIngreso] = useState({
     monto: "",
     concepto: "",
     metodoPago: "EFECTIVO", // Valor por defecto
     categoria: "OTROS_INGRESOS", // Valor por defecto
   });
+<<<<<<< HEAD
   const [nuevaTransferencia, setNuevaTransferencia] = useState({
     monto: "",
     descripcion: "",
@@ -98,6 +152,13 @@ export default function CajaPage() {
   const [nuevaTransferenciaConcentradora, setNuevaTransferenciaConcentradora] = useState({
     monto: "",
     descripcion: "",
+=======
+  const [nuevoEgreso, setNuevoEgreso] = useState({
+    monto: "",
+    concepto: "",
+    metodoPago: "EFECTIVO", // Valor por defecto
+    categoria: "ADMINISTRATIVOS", // Valor por defecto
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   });
   const [isSaving, setIsSaving] = useState(false);
   
@@ -105,7 +166,11 @@ export default function CajaPage() {
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
   // Función de validación para formularios
+<<<<<<< HEAD
   const isIngresoValid = (formData: { monto: string; concepto: string; metodoPago: string; categoria: string }) => {
+=======
+  const isFormValid = (formData: { monto: string; concepto: string; metodoPago: string; categoria: string }) => {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     return (
       formData.monto.trim() !== "" &&
       formData.concepto.trim() !== "" &&
@@ -115,6 +180,7 @@ export default function CajaPage() {
     );
   };
 
+<<<<<<< HEAD
   const isTransferValid = (formData: { monto: string; descripcion: string }) => {
     return (
       formData.monto.trim() !== "" &&
@@ -124,6 +190,9 @@ export default function CajaPage() {
 
   const API_BASE =
     process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://127.0.0.1:8000";
+=======
+  const API_URL = "http://127.0.0.1:8000/caja";
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem("token");
@@ -135,6 +204,7 @@ export default function CajaPage() {
 
   const checkBackendConnection = async () => {
     try {
+<<<<<<< HEAD
       const response = await fetch(
         `${API_BASE}/caja/diaria?fecha=${new Date()
           .toISOString()
@@ -143,6 +213,11 @@ export default function CajaPage() {
           headers: getAuthHeaders(),
         }
       );
+=======
+      const response = await fetch(`${API_URL}/diaria?fecha=${new Date().toISOString().split("T")[0]}&sucursal_id=1`, {
+        headers: getAuthHeaders(),
+      });
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       
       if (response.ok) {
         setBackendStatus('connected');
@@ -162,8 +237,19 @@ export default function CajaPage() {
     { value: "OTROS_INGRESOS", label: "Otros Ingresos" },
   ];
 
+<<<<<<< HEAD
   const fetchCajaDiaria = async () => {
     if (!sucursalId) return;
+=======
+  const categoriasEgreso = [
+    { value: "ADMINISTRATIVOS", label: "Administrativos" },
+    { value: "OPERATIVOS", label: "Operativos" },
+    { value: "COMERCIALES", label: "Comerciales" },
+    { value: "OTROS_EGRESOS", label: "Otros Egresos" },
+  ];
+
+  const fetchCajaDiaria = async () => {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -175,12 +261,18 @@ export default function CajaPage() {
         params.append("payment_method", metodoFiltro);
       }
 
+<<<<<<< HEAD
       const response = await fetch(
         `${API_BASE}/caja/diaria?${params}`,
         {
           headers: getAuthHeaders(),
         }
       );
+=======
+      const response = await fetch(`${API_URL}/diaria?${params}`, {
+        headers: getAuthHeaders(),
+      });
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -213,8 +305,11 @@ export default function CajaPage() {
 
     setIsSearching(true);
     try {
+<<<<<<< HEAD
       if (!sucursalId) return;
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       const params = new URLSearchParams({
         texto: textoBusqueda,
         sucursal_id: sucursalId.toString(),
@@ -227,12 +322,18 @@ export default function CajaPage() {
         params.append("fecha_hasta", fechaHasta);
       }
 
+<<<<<<< HEAD
       const response = await fetch(
         `${API_BASE}/caja/buscar?${params}`,
         {
           headers: getAuthHeaders(),
         }
       );
+=======
+      const response = await fetch(`${API_URL}/buscar?${params}`, {
+        headers: getAuthHeaders(),
+      });
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -252,7 +353,11 @@ export default function CajaPage() {
   const obtenerBalanceFinanciero = async () => {
     setIsLoadingReports(true);
     try {
+<<<<<<< HEAD
       const response = await fetch(`${API_BASE}/caja/balance-financiero`, {
+=======
+      const response = await fetch(`${API_URL}/balance-financiero`, {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -280,7 +385,11 @@ export default function CajaPage() {
   const obtenerSaldosPendientes = async () => {
     setIsLoadingReports(true);
     try {
+<<<<<<< HEAD
       const response = await fetch(`${API_BASE}/caja/saldos-pendientes`, {
+=======
+      const response = await fetch(`${API_URL}/saldos-pendientes`, {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -313,14 +422,20 @@ export default function CajaPage() {
     }
 
     // Validar que el monto sea un número válido y positivo
+<<<<<<< HEAD
     const montoNumber = parseFloat(nuevoIngreso.monto);
     if (isNaN(montoNumber) || montoNumber <= 0) {
+=======
+    const monto = parseFloat(nuevoIngreso.monto);
+    if (isNaN(monto) || monto <= 0) {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       toast.error("El monto debe ser un número positivo");
       return;
     }
 
     setIsSaving(true);
     try {
+<<<<<<< HEAD
       if (!sucursalId) {
         toast.error("Seleccioná una sucursal antes de registrar el movimiento");
         setIsSaving(false);
@@ -330,12 +445,22 @@ export default function CajaPage() {
         tipo: "INGRESO",
         monto: montoNumber,
         origen: nuevoIngreso.concepto,
+=======
+      const payload = {
+        monto: monto,
+        origen: nuevoIngreso.concepto,
+        tipo: "INGRESO",
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         payment_method: nuevoIngreso.metodoPago,
         categoria: nuevoIngreso.categoria,
         sucursal_id: sucursalId,
       };
 
+<<<<<<< HEAD
       const response = await fetch(`${API_BASE}/caja/registrar-movimiento`, {
+=======
+      const response = await fetch(`${API_URL}/registrar-movimiento`, {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
@@ -364,12 +489,23 @@ export default function CajaPage() {
   };
 
   const registrarEgreso = async () => {
+<<<<<<< HEAD
     if (!isTransferValid(nuevaTransferencia)) {
       toast.error("Ingresá un monto válido para transferir a Caja Chica");
       return;
     }
 
     const monto = parseFloat(nuevaTransferencia.monto);
+=======
+    // Validar que todos los campos estén completos
+    if (!nuevoEgreso.monto || !nuevoEgreso.concepto || !nuevoEgreso.metodoPago || !nuevoEgreso.categoria) {
+      toast.error("Por favor complete todos los campos");
+      return;
+    }
+
+    // Validar que el monto sea un número válido y positivo
+    const monto = parseFloat(nuevoEgreso.monto);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     if (isNaN(monto) || monto <= 0) {
       toast.error("El monto debe ser un número positivo");
       return;
@@ -377,6 +513,7 @@ export default function CajaPage() {
 
     setIsSaving(true);
     try {
+<<<<<<< HEAD
       if (!sucursalId) {
         toast.error("Seleccioná una sucursal antes de registrar el movimiento");
         return;
@@ -389,11 +526,24 @@ export default function CajaPage() {
       };
 
       const response = await fetch(`${API_BASE}/caja/diaria/transferir-caja-chica`, {
+=======
+      const payload = {
+        monto: monto,
+        origen: nuevoEgreso.concepto,
+        tipo: "EGRESO",
+        payment_method: nuevoEgreso.metodoPago,
+        categoria: nuevoEgreso.categoria,
+        sucursal_id: sucursalId,
+      };
+
+      const response = await fetch(`${API_URL}/registrar-movimiento`, {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
       });
 
+<<<<<<< HEAD
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result?.success === false) {
         const message = result?.message || result?.detail || `Error ${response.status}: ${response.statusText}`;
@@ -468,6 +618,25 @@ export default function CajaPage() {
     } catch (error: any) {
       console.error("Error al enviar a caja concentradora:", error);
       toast.error(error.message || "No se pudo enviar a Caja Concentradora");
+=======
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success("Egreso registrado correctamente");
+        setShowEgresoModal(false);
+        setNuevoEgreso({ monto: "", concepto: "", metodoPago: "", categoria: "" });
+        await fetchCajaDiaria(); // Recargar datos
+      } else {
+        throw new Error(result.message || "Error al registrar egreso");
+      }
+    } catch (error: any) {
+      console.error("Error al registrar egreso:", error);
+      toast.error("Error al registrar egreso: " + error.message);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     } finally {
       setIsSaving(false);
     }
@@ -478,14 +647,22 @@ export default function CajaPage() {
       const params = new URLSearchParams({
         fecha_desde: fecha,
         fecha_hasta: fecha,
+<<<<<<< HEAD
         sucursal_id: sucursalId?.toString() || "1",
+=======
+        sucursal_id: sucursalId.toString(),
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       });
       
       if (metodoFiltro) {
         params.append("payment_method", metodoFiltro);
       }
 
+<<<<<<< HEAD
       const response = await fetch(`${API_BASE}/caja/exportar-csv?${params}`, {
+=======
+      const response = await fetch(`${API_URL}/exportar-csv?${params}`, {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         headers: getAuthHeaders(),
       });
       
@@ -514,14 +691,22 @@ export default function CajaPage() {
       const params = new URLSearchParams({
         fecha_desde: fecha,
         fecha_hasta: fecha,
+<<<<<<< HEAD
         sucursal_id: sucursalId?.toString() || "1",
+=======
+        sucursal_id: sucursalId.toString(),
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       });
       
       if (metodoFiltro) {
         params.append("payment_method", metodoFiltro);
       }
 
+<<<<<<< HEAD
       const response = await fetch(`${API_BASE}/caja/exportar-excel?${params}`, {
+=======
+      const response = await fetch(`${API_URL}/exportar-excel?${params}`, {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         headers: getAuthHeaders(),
       });
       
@@ -547,7 +732,11 @@ export default function CajaPage() {
 
   useEffect(() => {
     fetchCajaDiaria();
+<<<<<<< HEAD
   }, [fecha, sucursalId, metodoFiltro]);
+=======
+  }, [fecha, metodoFiltro]);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
   // Cargar movimientos al montar el componente
   useEffect(() => {
@@ -555,6 +744,7 @@ export default function CajaPage() {
     fetchCajaDiaria();
   }, []);
 
+<<<<<<< HEAD
   useEffect(() => {
     if (me?.sucursalId) {
       setSucursalId(me.sucursalId);
@@ -580,6 +770,19 @@ export default function CajaPage() {
       });
     }
   }, [showTransferConcentradoraModal]);
+=======
+  // Limpiar estado cuando se cierre el modal de egreso
+  useEffect(() => {
+    if (!showEgresoModal) {
+      setNuevoEgreso({
+        monto: "",
+        concepto: "",
+        metodoPago: "EFECTIVO", // Valor por defecto
+        categoria: "ADMINISTRATIVOS", // Valor por defecto
+      });
+    }
+  }, [showEgresoModal]);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
   // Limpiar estado cuando se cierre el modal de ingreso
   useEffect(() => {
@@ -656,6 +859,7 @@ export default function CajaPage() {
             Nuevo Ingreso
           </button>
           <button 
+<<<<<<< HEAD
             onClick={() => setShowTransferModal(true)}
             className="btn btn-primary"
           >
@@ -668,6 +872,13 @@ export default function CajaPage() {
           >
             <i className="bi bi-bank me-2"></i>
             Enviar a Caja Concentradora
+=======
+            onClick={() => setShowEgresoModal(true)}
+            className="btn btn-danger"
+          >
+            <i className="bi bi-dash me-2"></i>
+            Nuevo Egreso
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
           </button>
           <button onClick={exportarCSV} className="btn btn-outline-secondary">
             <i className="bi bi-download me-2"></i>
@@ -1301,7 +1512,11 @@ export default function CajaPage() {
             <div className="modal-footer">
               <button
                 onClick={registrarIngreso}
+<<<<<<< HEAD
                 disabled={isSaving || !isIngresoValid(nuevoIngreso)}
+=======
+                disabled={isSaving || !isFormValid(nuevoIngreso)}
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 className="btn btn-success"
               >
                 {isSaving ? <i className="bi bi-arrow-clockwise spin me-2"></i> : null}
@@ -1320,16 +1535,28 @@ export default function CajaPage() {
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Modal Transferir a Caja Chica */}
       <div className={`modal fade ${showTransferModal ? 'show' : ''}`} style={{ display: showTransferModal ? 'block' : 'none' }}>
+=======
+      {/* Modal de Nuevo Egreso */}
+      <div className={`modal fade ${showEgresoModal ? 'show' : ''}`} style={{ display: showEgresoModal ? 'block' : 'none' }}>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">
+<<<<<<< HEAD
                 <i className="bi bi-arrow-left-right text-primary me-2"></i>
                 Transferir a Caja Chica
               </h5>
               <button type="button" className="btn-close" onClick={() => setShowTransferModal(false)}></button>
+=======
+                <i className="bi bi-dash-circle text-danger me-2"></i>
+                Nuevo Egreso
+              </h5>
+              <button type="button" className="btn-close" onClick={() => setShowEgresoModal(false)}></button>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             </div>
             <div className="modal-body">
               <div className="mb-3">
@@ -1338,14 +1565,20 @@ export default function CajaPage() {
                   type="number"
                   className="form-control"
                   placeholder="0.00"
+<<<<<<< HEAD
                   value={nuevaTransferencia.monto}
                   onChange={(e) => setNuevaTransferencia(prev => ({ ...prev, monto: e.target.value }))}
+=======
+                  value={nuevoEgreso.monto}
+                  onChange={(e) => setNuevoEgreso(prev => ({ ...prev, monto: e.target.value }))}
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                   min="0.01"
                   step="0.01"
                 />
                 <div className="form-text">Ingrese un monto mayor a 0</div>
               </div>
               <div className="mb-3">
+<<<<<<< HEAD
                 <label className="form-label">Método de Pago</label>
                 <input
                   type="text"
@@ -1376,20 +1609,70 @@ export default function CajaPage() {
                   value={nuevaTransferencia.descripcion}
                   onChange={(e) => setNuevaTransferencia(prev => ({ ...prev, descripcion: e.target.value }))}
                 />
+=======
+                <label className="form-label">Concepto *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Descripción del egreso"
+                  value={nuevoEgreso.concepto}
+                  onChange={(e) => setNuevoEgreso(prev => ({ ...prev, concepto: e.target.value }))}
+                />
+                <div className="form-text">Describa brevemente el motivo del egreso</div>
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Método de Pago *</label>
+                <select 
+                  className="form-select" 
+                  value={nuevoEgreso.metodoPago} 
+                  onChange={(e) => setNuevoEgreso(prev => ({ ...prev, metodoPago: e.target.value }))}
+                >
+                  {metodosPago.map((metodo) => (
+                    <option key={metodo.value} value={metodo.value}>
+                      {metodo.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="form-text">Seleccione cómo se realizó el pago</div>
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Categoría *</label>
+                <select 
+                  className="form-select" 
+                  value={nuevoEgreso.categoria} 
+                  onChange={(e) => setNuevoEgreso(prev => ({ ...prev, categoria: e.target.value }))}
+                >
+                  {categoriasEgreso.map((categoria) => (
+                    <option key={categoria.value} value={categoria.value}>
+                      {categoria.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="form-text">Clasifique el tipo de egreso</div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
               </div>
             </div>
             <div className="modal-footer">
               <button
                 onClick={registrarEgreso}
+<<<<<<< HEAD
                 disabled={isSaving || !isTransferValid(nuevaTransferencia)}
                 className="btn btn-primary"
               >
                 {isSaving ? <i className="bi bi-arrow-clockwise spin me-2"></i> : null}
                 Transferir
+=======
+                disabled={isSaving || !isFormValid(nuevoEgreso)}
+                className="btn btn-danger"
+              >
+                {isSaving ? <i className="bi bi-arrow-clockwise spin me-2"></i> : null}
+                Registrar Egreso
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
               </button>
               <button
                 type="button"
                 className="btn btn-secondary"
+<<<<<<< HEAD
                 onClick={() => setShowTransferModal(false)}
                 disabled={isSaving}
               >
@@ -1471,6 +1754,9 @@ export default function CajaPage() {
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => setShowTransferConcentradoraModal(false)}
+=======
+                onClick={() => setShowEgresoModal(false)}
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 disabled={isSaving}
               >
                 Cancelar
@@ -1481,8 +1767,16 @@ export default function CajaPage() {
       </div>
 
       {/* Overlay para modales */}
+<<<<<<< HEAD
       {(showIngresoModal || showTransferModal || showTransferConcentradoraModal) && (
         <div className="modal-backdrop fade show" style={{ display: "block" }}></div>
+=======
+      {(showIngresoModal || showEgresoModal) && (
+        <div className="modal-backdrop fade show" onClick={() => {
+          setShowIngresoModal(false);
+          setShowEgresoModal(false);
+        }}></div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       )}
 
       <style jsx>{`

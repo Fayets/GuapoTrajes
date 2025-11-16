@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import PresupuestoModal from "@/components/modales/presupuestoModal";
+<<<<<<< HEAD
 import { useAuth } from "@/context/auth-context";
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 import {
   Dialog,
@@ -21,8 +24,11 @@ type Cliente = {
   id: number;
   nombre: string;
   apellido: string;
+<<<<<<< HEAD
   celular?: string;
   telefono?: string;
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 };
 
 type Producto = {
@@ -64,7 +70,11 @@ type Presupuesto = {
   nombre_agasajado?: string;
   lugar_evento?: string;
   seña_pagada?: number;
+<<<<<<< HEAD
   payment_method?: string; // Cambiado de metodo_pago
+=======
+  payment_method?: string;  // Cambiado de metodo_pago
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 };
 
 type PresupuestoResponse = {
@@ -83,7 +93,11 @@ type PresupuestoResponse = {
   estado: string;
   items: ItemPresupuesto[];
   seña_pagada?: number;
+<<<<<<< HEAD
   payment_method?: string; // Cambiado de metodo_pago
+=======
+  payment_method?: string;  // Cambiado de metodo_pago
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 };
 
 export default function PresupuestosPage() {
@@ -101,6 +115,7 @@ export default function PresupuestosPage() {
   const [verModoLectura, setVerModoLectura] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [metodoPago, setMetodoPago] = useState("");
+<<<<<<< HEAD
   const [totalConDescuento, setTotalConDescuento] = useState<number | null>(
     null
   );
@@ -111,6 +126,8 @@ export default function PresupuestosPage() {
   const { me, loading } = useAuth();
   const esAdmin = me?.role === "ADMIN";
   if (loading) return null;
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
   // Métodos de pago consistentes con ventas
   const metodosPago = [
@@ -143,7 +160,10 @@ export default function PresupuestosPage() {
   const [nuevoItem, setNuevoItem] = useState({
     productoId: "",
     cantidad: 1,
+<<<<<<< HEAD
     porcentaje: "",
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   });
 
   const [modalSeniaAbierto, setModalSeniaAbierto] = useState(false);
@@ -264,7 +284,11 @@ export default function PresupuestosPage() {
     };
 
     setItems([...items, newItem]);
+<<<<<<< HEAD
     setNuevoItem({ productoId: "", cantidad: 1, porcentaje: "" });
+=======
+    setNuevoItem({ productoId: "", cantidad: 1 });
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   };
 
   const eliminarItem = (id: number) => {
@@ -277,7 +301,10 @@ export default function PresupuestosPage() {
 
   const nuevoPresupuesto = () => {
     setPresupuestoActual(null);
+<<<<<<< HEAD
     setVerModoLectura(false);
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     setFormData({
       clienteId: "",
       observaciones: "",
@@ -289,8 +316,11 @@ export default function PresupuestosPage() {
       lugar: "",
     });
     setItems([]);
+<<<<<<< HEAD
     setTotalConDescuento(null);
     setPorcentajeDescuento(null);
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     setShowModal(true);
   };
 
@@ -305,6 +335,7 @@ export default function PresupuestosPage() {
       return;
     }
 
+<<<<<<< HEAD
     const totalOriginal = calcularTotal();
     const tieneDescuento =
       totalConDescuento !== null && porcentajeDescuento !== null;
@@ -338,6 +369,9 @@ export default function PresupuestosPage() {
       });
     }
 
+=======
+    const total = calcularTotal();
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     const payload = {
       cliente_id: parseInt(formData.clienteId),
       fecha_evento: formData.fechaEvento,
@@ -347,7 +381,11 @@ export default function PresupuestosPage() {
       nombre_agasajado: formData.agasajado,
       lugar_evento: formData.lugar,
       observaciones: formData.observaciones,
+<<<<<<< HEAD
       items: itemsParaEnviar.map((item) => ({
+=======
+      items: items.map((item) => ({
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         producto_id: item.productoId,
         cantidad: item.cantidad,
         precio_unitario: item.precioUnitario,
@@ -356,10 +394,14 @@ export default function PresupuestosPage() {
     };
 
     console.log("Enviando payload:", payload);
+<<<<<<< HEAD
     console.log(
       "Token:",
       localStorage.getItem("token") ? "Presente" : "Ausente"
     );
+=======
+    console.log("Token:", localStorage.getItem("token") ? "Presente" : "Ausente");
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
     try {
       const res = await fetch("http://127.0.0.1:8000/presupuestos/", {
@@ -374,18 +416,26 @@ export default function PresupuestosPage() {
       console.log("Status Code:", res.status);
       console.log("Response Headers:", res.headers);
       console.log("Response URL:", res.url);
+<<<<<<< HEAD
+=======
+      console.log("URL esperada: http://127.0.0.1:8000/presupuestos/");
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
       if (res.ok) {
         const responseData = await res.json();
         console.log("Respuesta exitosa:", responseData);
         setShowModal(false);
+<<<<<<< HEAD
         setTotalConDescuento(null);
         setPorcentajeDescuento(null);
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         fetchPresupuestos();
         alert("Presupuesto guardado exitosamente");
       } else {
         const errorText = await res.text();
         console.error("Error al guardar presupuesto:", res.status, errorText);
+<<<<<<< HEAD
 
         try {
           const errorData = JSON.parse(errorText);
@@ -394,6 +444,12 @@ export default function PresupuestosPage() {
               errorData.detail || errorData.message || "Error desconocido"
             }`
           );
+=======
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          alert(`Error al guardar presupuesto: ${errorData.detail || errorData.message || 'Error desconocido'}`);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         } catch {
           alert(`Error al guardar presupuesto: ${errorText}`);
         }
@@ -407,12 +463,24 @@ export default function PresupuestosPage() {
   const fetchPresupuestos = async () => {
     setCargando(true);
     try {
+<<<<<<< HEAD
       const res = await fetch("http://127.0.0.1:8000/presupuestos/", {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
       });
+=======
+      const res = await fetch(
+        "http://127.0.0.1:8000/presupuestos/",
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
       if (!res.ok) {
         const errText = await res.text();
@@ -428,6 +496,7 @@ export default function PresupuestosPage() {
       } else {
         const presupuestosAdaptados = data.map((p: any) => ({
           ...p,
+<<<<<<< HEAD
           items: (p.items ?? []).map((item: any) => {
             const productoId =
               item.productoId ?? item.producto_id ?? item.producto?.id ?? 0;
@@ -456,6 +525,12 @@ export default function PresupuestosPage() {
               subtotal,
             };
           }),
+=======
+          items: p.items.map((item: any) => ({
+            ...item,
+            productoNombre: item.producto_nombre,
+          })),
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         }));
 
         setPresupuestos(presupuestosAdaptados);
@@ -497,6 +572,7 @@ export default function PresupuestosPage() {
     }
 
     try {
+<<<<<<< HEAD
       const res = await fetch("http://127.0.0.1:8000/ordenes/", {
         method: "POST",
         headers: {
@@ -509,6 +585,23 @@ export default function PresupuestosPage() {
           payment_method: metodoPago, // Cambiado a payment_method
         }),
       });
+=======
+      const res = await fetch(
+        "http://127.0.0.1:8000/ordenes/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            presupuesto_id: presupuestoId,
+            seña_pagada: parseFloat(seña),
+            payment_method: metodoPago,  // Cambiado a payment_method
+          }),
+        }
+      );
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
       if (res.ok) {
         alert("Orden de trabajo generada con éxito.");
@@ -537,9 +630,12 @@ export default function PresupuestosPage() {
     });
 
     setItems(presupuesto.items);
+<<<<<<< HEAD
     setTotalConDescuento(null);
     setPorcentajeDescuento(null);
     setVerModoLectura(true);
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     setVerModoLectura(true);
     setShowModal(true);
   };
@@ -572,6 +668,7 @@ export default function PresupuestosPage() {
     }
 
     try {
+<<<<<<< HEAD
       const res = await fetch("http://127.0.0.1:8000/ordenes/", {
         method: "POST",
         headers: {
@@ -584,6 +681,23 @@ export default function PresupuestosPage() {
           payment_method: metodoPago, // Cambiado a payment_method
         }),
       });
+=======
+      const res = await fetch(
+        "http://127.0.0.1:8000/ordenes/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            presupuesto_id: presupuestoAConvertir.id,
+            seña_pagada: monto,
+            payment_method: metodoPago,  // Cambiado a payment_method
+          }),
+        }
+      );
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
       if (res.ok) {
         const data = await res.json();
@@ -608,12 +722,24 @@ export default function PresupuestosPage() {
     if (!confirmar) return;
 
     try {
+<<<<<<< HEAD
       const res = await fetch(`http://127.0.0.1:8000/presupuestos/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
       });
+=======
+      const res = await fetch(
+        `http://127.0.0.1:8000/presupuestos/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
       if (res.ok) {
         alert("Presupuesto eliminado.");
@@ -665,6 +791,7 @@ export default function PresupuestosPage() {
     }, 500);
   };
 
+<<<<<<< HEAD
   const normalizarTelefono = (telefono?: string): string | null => {
     if (!telefono) return null;
     let limpio = telefono.replace(/\D/g, "");
@@ -804,6 +931,8 @@ export default function PresupuestosPage() {
     setPorcentajeDescuento(porcentaje);
   };
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   return (
     <div className="container py-4 p-2">
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -868,6 +997,7 @@ export default function PresupuestosPage() {
                       <td className="text-center">
                         <div className="btn-group">
                           <button
+<<<<<<< HEAD
                             className="btn btn-sm btn-success"
                             title="Enviar por WhatsApp"
                             onClick={() => handleEnviarWhatsapp(p)}
@@ -876,6 +1006,8 @@ export default function PresupuestosPage() {
                             WhatsApp
                           </button>
                           <button
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                             className="btn btn-sm btn-outline-secondary"
                             title="Ver presupuesto"
                             onClick={() =>
@@ -932,7 +1064,10 @@ export default function PresupuestosPage() {
       )}
       {/* Modal */}
       <PresupuestoModal
+<<<<<<< HEAD
         esAdmin={esAdmin}
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         show={showModal}
         verModoLectura={verModoLectura}
         presupuestoSeleccionado={presupuestoSeleccionado}
@@ -953,14 +1088,18 @@ export default function PresupuestosPage() {
         items={items}
         calcularTotal={calcularTotal}
         guardarPresupuesto={guardarPresupuesto}
+<<<<<<< HEAD
         totalConDescuento={totalConDescuento}
         porcentajeDescuento={porcentajeDescuento}
         aplicarDescuento={aplicarDescuento}
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         onClose={() => {
           setShowModal(false);
           setVerModoLectura(false);
         }}
       />
+<<<<<<< HEAD
 
       {/* Modal de Seña */}
       <Dialog open={modalSeniaAbierto} onOpenChange={setModalSeniaAbierto}>
@@ -972,10 +1111,19 @@ export default function PresupuestosPage() {
           <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
             <DialogTitle className="fw-semibold">Ingrese seña</DialogTitle>
             <DialogDescription className="mb-0">
+=======
+      {/* Modal de Seña */}
+      <Dialog open={modalSeniaAbierto} onOpenChange={setModalSeniaAbierto}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ingrese seña</DialogTitle>
+            <DialogDescription>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
               Seña recibida de {presupuestoAConvertir?.cliente}
             </DialogDescription>
           </DialogHeader>
 
+<<<<<<< HEAD
           <div className="modal-body px-3 px-md-4">
             <div className="card shadow-sm mb-4">
               <div className="card-body p-4">
@@ -1040,12 +1188,63 @@ export default function PresupuestosPage() {
           <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
             <button
               className="btn btn-light border"
+=======
+          <input
+            type="number"
+            className="form-control my-3"
+            placeholder="Monto de seña"
+            value={senia}
+            onChange={(e) => setSenia(e.target.value)}
+          />
+          <div className="mb-3">
+            <label className="form-label">Método de pago</label>
+            <div className="space-y-2">
+              {metodosPago.map((metodo) => (
+                <div
+                  key={metodo.value}
+                  className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                    metodoPago === metodo.value
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => setMetodoPago(metodo.value)}
+                >
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      name="metodoPago"
+                      value={metodo.value}
+                      checked={metodoPago === metodo.value}
+                      onChange={() => setMetodoPago(metodo.value)}
+                      className="mr-3"
+                    />
+                    <span className="font-medium">{metodo.label}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {!metodoPago && (
+              <div className="text-sm text-red-500 mt-2">
+                Debes seleccionar un método de pago
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <button
+              className="btn btn-secondary"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
               onClick={() => setModalSeniaAbierto(false)}
             >
               Cancelar
             </button>
+<<<<<<< HEAD
             <button
               className="btn btn-primary"
+=======
+            <button 
+              className="btn btn-primary" 
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
               onClick={confirmarSenia}
               disabled={!metodoPago}
             >
@@ -1055,6 +1254,7 @@ export default function PresupuestosPage() {
         </DialogContent>
       </Dialog>
 
+<<<<<<< HEAD
       <Dialog
         open={mostrarModalRecibo && !!presupuestoParaRecibo}
         onOpenChange={(open) => !open && setMostrarModalRecibo(false)}
@@ -1117,6 +1317,62 @@ export default function PresupuestosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+=======
+      {/* Modal de Recibo Seña */}
+      {mostrarModalRecibo && presupuestoParaRecibo && (
+        <div
+          className="modal fade show d-block"
+          tabIndex={-1}
+          role="dialog"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+        >
+          <div className="modal-dialog" id="recibo-impresion">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Recibo de Seña</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setMostrarModalRecibo(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  <strong>Cliente:</strong>{" "}
+                  {presupuestoParaRecibo.cliente_nombre}
+                </p>
+                <p>
+                  <strong>Fecha de Evento</strong>{" "}
+                  {presupuestoParaRecibo.fecha_evento}
+                </p>
+                <p>
+                  <strong>Seña pagada:</strong> $
+                  {presupuestoParaRecibo.seña_pagada}
+                </p>
+                <p>
+                  <strong>Método de pago:</strong>{" "}
+                  {presupuestoParaRecibo.payment_method}
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => imprimirRecibo()}
+                >
+                  Imprimir Recibo
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setMostrarModalRecibo(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     </div>
   );
 }

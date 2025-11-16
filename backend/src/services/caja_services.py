@@ -1,9 +1,14 @@
+<<<<<<< HEAD
 from decimal import Decimal, InvalidOperation
 from pony.orm import db_session, select, sum, count, flush
+=======
+from pony.orm import db_session, select, sum, count
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 from datetime import date, datetime
 from src.models import CajaMovimiento, Venta, Usuario, Sucursal, TipoMovimiento, MetodoPago
 from fastapi import HTTPException
 from typing import List, Dict, Optional
+<<<<<<< HEAD
 from src.services.caja_chica_services import CajaChicaService
 from src.services.caja_concentradora_services import CajaConcentradoraServices
 
@@ -244,6 +249,55 @@ class CajaServices:
                 },
             },
         }
+=======
+
+class CajaServices:
+    
+    @db_session
+    def create_movimiento(self, movimiento_data: dict, usuario_id: int) -> CajaMovimiento:
+        """Crear un movimiento de caja"""
+        try:
+            # Obtener usuario y sucursal
+            usuario = Usuario.get(id=usuario_id)
+            if not usuario:
+                raise HTTPException(status_code=404, detail="Usuario no encontrado")
+            
+            sucursal = Sucursal.get(id=movimiento_data["sucursal_id"])
+            if not sucursal:
+                raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+            
+            # Crear el movimiento
+            venta = None
+            if movimiento_data.get("venta_id"):
+                venta = Venta.get(id=movimiento_data["venta_id"])
+            
+            # Usar la categoría proporcionada o determinar automáticamente
+            categoria = movimiento_data.get("categoria")
+            if not categoria:
+                categoria = self._determinar_categoria_automatica(
+                    movimiento_data["tipo"], 
+                    movimiento_data["origen"]
+                )
+            
+            # Crear el movimiento con los tipos correctos
+            movimiento = CajaMovimiento(
+                fecha_hora=datetime.now(),
+                tipo=movimiento_data["tipo"],
+                monto=float(movimiento_data["monto"]),
+                payment_method=movimiento_data["payment_method"],
+                origen=movimiento_data["origen"],
+                categoria=categoria,
+                venta=venta,
+                usuario=usuario,
+                sucursal=sucursal
+            )
+            
+            return movimiento
+            
+        except Exception as e:
+            print(f"❌ Error al crear movimiento de caja: {e}")
+            raise HTTPException(status_code=500, detail=f"Error al crear movimiento de caja: {str(e)}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
     def _determinar_categoria_automatica(self, tipo: str, origen: str) -> str:
         """Determinar categoría automáticamente basada en el tipo y origen"""

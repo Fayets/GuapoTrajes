@@ -11,10 +11,17 @@ class PresupuestosServices:
     def crear_presupuesto(self, data: PresupuestoCreate) -> dict:
         with db_session:
             try:
+<<<<<<< HEAD
+=======
+                print(f"🔍 Iniciando creación de presupuesto...")
+                print(f"   Cliente ID: {data.cliente_id}")
+                print(f"   Items: {len(data.items)}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 
                 # Verificar que el cliente existe
                 cliente = Cliente.get(id=data.cliente_id)
                 if not cliente:
+<<<<<<< HEAD
                     raise HTTPException(status_code=404, detail="Cliente no encontrado")
                 
 
@@ -26,10 +33,33 @@ class PresupuestosServices:
 
                 # Calcular total
                 total = sum(item.subtotal for item in data.items)
+=======
+                    print(f"❌ Cliente no encontrado: {data.cliente_id}")
+                    raise HTTPException(status_code=404, detail="Cliente no encontrado")
+                
+                print(f"✅ Cliente encontrado: {cliente.nombre} {cliente.apellido}")
+
+                # Verificar que todos los productos existen
+                for i, item in enumerate(data.items):
+                    print(f"🔍 Verificando producto {i+1}: ID={item.producto_id}")
+                    producto = Producto.get(id=item.producto_id)
+                    if not producto:
+                        print(f"❌ Producto no encontrado: {item.producto_id}")
+                        raise HTTPException(status_code=404, detail=f"Producto ID {item.producto_id} no encontrado")
+                    print(f"✅ Producto {i+1} encontrado: {producto.descripcion}")
+
+                # Calcular total
+                total = sum(item.subtotal for item in data.items)
+                print(f"💰 Total calculado: {total}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
                 # Generar número
                 cantidad_presupuestos = Presupuesto.select().count()
                 numero = f"PRES-{cantidad_presupuestos + 1:03d}"
+<<<<<<< HEAD
+=======
+                print(f"📋 Número generado: {numero}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
                 # Crear presupuesto
                 presupuesto = Presupuesto(
@@ -47,9 +77,17 @@ class PresupuestosServices:
                     fecha_creacion=datetime.now(),
                 )
                 
+<<<<<<< HEAD
 
                 # Crear items
                 for i, item in enumerate(data.items):
+=======
+                print(f"✅ Presupuesto creado con ID: {presupuesto.id}")
+
+                # Crear items
+                for i, item in enumerate(data.items):
+                    print(f"🔍 Creando item {i+1}...")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                     producto = Producto.get(id=item.producto_id)
                     
                     ItemPresupuesto(
@@ -59,9 +97,18 @@ class PresupuestosServices:
                         precio_unitario=item.precio_unitario,
                         subtotal=item.subtotal,
                     )
+<<<<<<< HEAD
                 
                 flush()
                 commit()
+=======
+                    print(f"✅ Item {i+1} creado: {producto.descripcion} x{item.cantidad}")
+                
+                print("💾 Guardando en base de datos...")
+                flush()
+                commit()
+                print(f"✅ Presupuesto guardado exitosamente con ID: {presupuesto.id}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 
                 return {
                     "message": "Presupuesto creado exitosamente",

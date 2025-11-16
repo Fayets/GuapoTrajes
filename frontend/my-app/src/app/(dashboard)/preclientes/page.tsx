@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+<<<<<<< HEAD
 import ReactPaginate from "react-paginate";
 import ClienteModal from "@/components/modales/clienteModal";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+=======
+import ClientesPage from "../clientes/page";
+import ReactPaginate from "react-paginate";
+import ClienteModal from "@/components/modales/clienteModal";
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 type Precliente = {
   id: string;
@@ -302,6 +308,7 @@ export default function PreclientesPage() {
   };
 
   return (
+<<<<<<< HEAD
     <div className="container-fluid px-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
@@ -330,6 +337,34 @@ export default function PreclientesPage() {
         </div>
       </div>
 
+=======
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 className="fw-bold">Preclientes</h1>
+          <p className="text-muted">Gestión de preclientes de Guapo Trajes</p>
+        </div>
+        <button className="btn btn-primary" onClick={nuevoCliente}>
+          <i className="bi bi-plus me-2"></i>
+          Nuevo Precliente
+        </button>
+      </div>
+
+      <div className="mb-4">
+        <div className="input-group">
+          <span className="input-group-text">
+            <i className="bi bi-search"></i>
+          </span>
+          <input
+            type="search"
+            className="form-control"
+            placeholder="Buscar clientes..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
+      </div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       {cargando ? (
         <div className="d-flex justify-content-center my-5">
           <div className="spinner-border text-primary" role="status">
@@ -337,6 +372,7 @@ export default function PreclientesPage() {
           </div>
         </div>
       ) : (
+<<<<<<< HEAD
         <div className="card shadow-sm">
           <div className="table-responsive">
             <Table className="align-middle mb-0">
@@ -366,6 +402,37 @@ export default function PreclientesPage() {
                           </button>
                           <button
                             className="btn btn-sm btn-outline-primary"
+=======
+        <div className="card">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Apellido</th>
+                  <th>Celular</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientesPaginados.length > 0 ? (
+                  clientesPaginados.map((cliente, index) => (
+                    <tr key={cliente.id || `cliente-${index}`}>
+                      <td className="fw-medium">{cliente.nombre}</td>
+                      <td>{cliente.apellido}</td>
+                      <td>{cliente.celular}</td>
+                      <td>
+                        <div className="btn-group">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => iniciarConversionPrecliente(cliente)}
+                            title="Convertir"
+                          >
+                            <i className="bi bi-person"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                             onClick={() => editarCliente(cliente)}
                             title="Editar"
                           >
@@ -379,6 +446,7 @@ export default function PreclientesPage() {
                             <i className="bi bi-trash"></i>
                           </button>
                         </div>
+<<<<<<< HEAD
                       </TableCell>
                     </TableRow>
                   ))
@@ -391,6 +459,20 @@ export default function PreclientesPage() {
                 )}
               </TableBody>
             </Table>
+=======
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center">
+                      No se encontraron clientes
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             <div className="d-flex justify-content-center mt-3">
                 <ReactPaginate
                   previousLabel={"←"}
@@ -428,6 +510,7 @@ export default function PreclientesPage() {
         modoEdicion={false}
       />
 
+<<<<<<< HEAD
       <Dialog open={showModal} onOpenChange={(open) => !open && setShowModal(false)}>
         <DialogContent className="w-full border-0" dialogClassName="modal-dialog-centered modal-lg" dialogStyle={{ maxWidth: "540px", width: "95%" }}>
           <DialogHeader className="border-bottom pb-3">
@@ -496,6 +579,143 @@ export default function PreclientesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+=======
+      {/* Modal para crear/editar cliente */}
+      <div
+        className={`modal fade ${showModal ? "show" : ""}`}
+        style={{ display: showModal ? "block" : "none" }}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">
+                {clienteActual ? "Editar Cliente" : "Nuevo Cliente"}
+              </h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <form>
+                <div className="mb-3">
+                  <label htmlFor="nombre" className="form-label">
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="nombre"
+                    name="nombre"
+                    value={formData.nombre}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="apellido" className="form-label">
+                    Apellido
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="apellido"
+                    name="apellido"
+                    value={formData.apellido}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="celular" className="form-label">
+                    Celular
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="celular"
+                    name="celular"
+                    value={formData.celular}
+                    onChange={handleChange}
+                  />
+                </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowModal(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={guardarCliente}
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        className={`modal-backdrop fade ${showModal ? "show" : ""}`}
+        style={{ display: showModal ? "block" : "none" }}
+      ></div>
+
+      {/* Modal para confirmar eliminación */}
+      <div
+        className={`modal fade ${showDeleteModal ? "show" : ""}`}
+        style={{ display: showDeleteModal ? "block" : "none" }}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Confirmar eliminación</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowDeleteModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <p>
+                ¿Está seguro que desea eliminar al cliente{" "}
+                {clienteActual?.nombre} {clienteActual?.apellido}? Esta acción
+                no se puede deshacer.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={eliminarCliente}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        className={`modal-backdrop fade ${showDeleteModal ? "show" : ""}`}
+        style={{ display: showDeleteModal ? "block" : "none" }}
+      ></div>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     </div>
   );
 }

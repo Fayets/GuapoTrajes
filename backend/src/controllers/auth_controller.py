@@ -8,8 +8,11 @@ from datetime import datetime, timedelta
 from ..security import SECRET_KEY, ALGORITHM, secret_fingerprint, decode_token
 from ..schemas import UsuarioOut
 from ..deps import get_current_user
+<<<<<<< HEAD
 from src import models
 from pony.orm import db_session
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 #Auth Controller
 
@@ -23,6 +26,10 @@ class RegisterMessage(BaseModel):
     message: str
     success: bool
 
+<<<<<<< HEAD
+=======
+print("[LOGIN] key.fp=", secret_fingerprint(), "alg=", ALGORITHM)
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 
 @router.get("/_debug/header")
@@ -34,6 +41,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     """ Verifica el token y obtiene el usuario actual """
     try:
         payload = decode_token(token)
+<<<<<<< HEAD
+=======
+        print("[ME] payload:", payload)
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         user_id = payload.get("sub")
 
@@ -123,6 +134,7 @@ async def login(request: schemas.LoginRequest):
     }
 
 @router.get("/me", response_model=UsuarioOut)
+<<<<<<< HEAD
 @db_session
 def read_me(user = Depends(get_current_user)):
     usuario = models.Usuario.get(id=user.id)
@@ -142,4 +154,12 @@ def read_me(user = Depends(get_current_user)):
         "rol": usuario.rol,
         "sucursal_nombre": sucursal_nombre,
         "sucursal_id": sucursal_id,
+=======
+def read_me(user = Depends(get_current_user)):  
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "rol": user.rol, 
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     }

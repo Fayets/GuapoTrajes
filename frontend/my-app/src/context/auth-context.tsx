@@ -5,6 +5,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 type Rol = "ADMIN" | "EMPLEADO";
+<<<<<<< HEAD
 type Me = {
   id: number;
   email: string;
@@ -12,6 +13,9 @@ type Me = {
   sucursalNombre?: string | null;
   sucursalId?: number | null;
 };
+=======
+type Me = { id: number; email: string; role: Rol };
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 interface AuthContextType {
   token: string | null;
@@ -43,12 +47,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       id: raw.id,
       email: raw.email,
       role: (raw.role ?? raw.rol) as Rol,
+<<<<<<< HEAD
       sucursalNombre:
         raw.sucursal?.nombre ??
         raw.sucursal_nombre ??
         raw.sucursalName ??
         null,
       sucursalId: raw.sucursal?.id ?? raw.sucursal_id ?? null,
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     };
     setMe(normalized);
   };

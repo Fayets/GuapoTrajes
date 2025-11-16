@@ -13,11 +13,23 @@ servicio = PresupuestosServices()
 @router.post("/")
 def crear(data: PresupuestoCreate, current_user=Depends(get_current_user)):
     try:
+<<<<<<< HEAD
         resultado = servicio.crear_presupuesto(data)
+=======
+        print(f"🔍 Recibiendo presupuesto: cliente_id={data.cliente_id}, items={len(data.items)}")
+        resultado = servicio.crear_presupuesto(data)
+        print(f"✅ Presupuesto creado con ID: {resultado['data']['id']}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         return resultado
     except HTTPException as e:
         raise e
     except Exception as e:
+<<<<<<< HEAD
+=======
+        print(f"❌ Error inesperado: {e}")
+        import traceback
+        traceback.print_exc()
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 @router.get("/")

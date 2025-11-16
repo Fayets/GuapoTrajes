@@ -1,5 +1,9 @@
 "use client";
+<<<<<<< HEAD
 import { useEffect, useState, useRef, useCallback } from "react";
+=======
+import { useEffect, useState, useRef } from "react";
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -52,8 +56,12 @@ export default function ProductosPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoActual, setProductoActual] =
     useState<Partial<Producto> | null>(null);
+<<<<<<< HEAD
   const [isFormularioOpen, setIsFormularioOpen] = useState(false);
   const [isDetalleOpen, setIsDetalleOpen] = useState(false);
+=======
+  const [isModalOpen, setIsModalOpen] = useState(false);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   const [productoEtiqueta, setProductoEtiqueta] = useState<Producto | null>(
     null
   );
@@ -95,6 +103,7 @@ export default function ProductosPage() {
       .catch(() => setStats({}));
   }, [token]);
 
+<<<<<<< HEAD
   const computeStats = useCallback((items: Producto[]) => {
     const statsLocales: Record<string, number> = { Todos: items.length } as any;
     ESTADOS.forEach((estado) => {
@@ -103,6 +112,8 @@ export default function ProductosPage() {
     setStats(statsLocales);
   }, []);
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   // Carga de productos con paginación y filtro remoto
   const loadProductos = () => {
     if (!token) return;
@@ -127,11 +138,17 @@ export default function ProductosPage() {
       .then((data) => {
         if (Array.isArray(data)) {
           setProductos(data);
+<<<<<<< HEAD
           computeStats(data);
         } else {
           console.error("Formato de datos inesperado:", data);
           setProductos([]);
           computeStats([]);
+=======
+        } else {
+          console.error("Formato de datos inesperado:", data);
+          setProductos([]);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         }
       })
       .catch((error) => {
@@ -218,7 +235,11 @@ export default function ProductosPage() {
         );
       }
 
+<<<<<<< HEAD
       setIsFormularioOpen(false);
+=======
+      setIsModalOpen(false);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       toast.success(
         isEditing
           ? "Producto actualizado correctamente"
@@ -226,6 +247,16 @@ export default function ProductosPage() {
       );
       // recargar la página actual para coherencia con paginación
       loadProductos();
+<<<<<<< HEAD
+=======
+      // refrescar stats
+      fetch(`${API_URL}/stats/estado`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.json())
+        .then((d) => setStats(d || {}))
+        .catch(() => {});
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     } catch (error: any) {
       console.error("❌ Error al guardar el producto", error);
       toast.error(error.message || "Error desconocido al guardar el producto.");
@@ -251,6 +282,16 @@ export default function ProductosPage() {
       if (quedaUno) setPage((p) => p - 1);
       else loadProductos();
 
+<<<<<<< HEAD
+=======
+      // refrescar stats
+      fetch(`${API_URL}/stats/estado`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.json())
+        .then((d) => setStats(d || {}))
+        .catch(() => {});
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
     } catch (error) {
       toast.error("Error al eliminar el producto");
       console.error(error);
@@ -304,20 +345,30 @@ export default function ProductosPage() {
   }) => (
     <button
       onClick={onClick}
+<<<<<<< HEAD
       className={`inline-flex align-items-center gap-2 px-4 py-2 rounded-pill border text-sm transition-all ${
         active
           ? "bg-dark text-white border-dark"
           : "bg-white text-secondary border-secondary"
+=======
+      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-sm ${
+        active ? "bg-black text-white" : "bg-white"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       }`}
       title={`Filtrar por ${label}`}
     >
       <span>{label}</span>
+<<<<<<< HEAD
       <span className="badge rounded-pill bg-light text-dark border border-secondary px-2">
+=======
+      <span className="inline-flex items-center justify-center min-w-6 h-6 rounded-full border px-2 text-xs">
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         {value ?? 0}
       </span>
     </button>
   );
 
+<<<<<<< HEAD
   const productoBase = () => ({
     codigo_barra: "",
     descripcion: "",
@@ -358,13 +409,57 @@ export default function ProductosPage() {
             }}
           >
             <i className="bi bi-plus"></i>
+=======
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="font-bold text-2xl">Productos</h1>
+          <p className="text-muted-foreground">
+            Gestión de productos de Guapo Trajes
+          </p>
+        </div>
+        <RoleGate allow={["ADMIN"]}>
+          <Button
+            onClick={() => {
+              setProductoActual({
+                codigo_barra: "",
+                descripcion: "",
+                linea: "",
+                tela: "",
+                talle: "",
+                color: "",
+                costo: 0,
+                precio_alquiler_lista: 0,
+                precio_alquiler_efectivo: 0,
+                precio_venta_nuevo_lista: 0,
+                precio_venta_nuevo_efectivo: 0,
+                precio_de_venta_medio_uso: 0,
+                precio_venta: 0,
+                precio_liquidacion: 0,
+                stock: 0,
+                stock_minimo: 0,
+                fecha_alta: new Date().toISOString().split("T")[0],
+                estado: "SALON",
+                sucursal_id: 1,
+                inmovilizado: false,
+              });
+              setIsModalOpen(true);
+            }}
+          >
+            <i className="bi bi-plus me-2"></i>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             Nuevo Producto
           </Button>
         </RoleGate>
       </div>
 
       {/* Chips de estados */}
+<<<<<<< HEAD
       <div className="d-flex flex-wrap gap-2 mb-3">
+=======
+      <div className="flex flex-wrap gap-2">
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         <Chip
           label="Todos"
           value={total}
@@ -389,19 +484,32 @@ export default function ProductosPage() {
       </div>
 
       {/* Buscador */}
+<<<<<<< HEAD
       <div className="row g-2 mb-4">
         <div className="col-12 col-md-6 col-lg-5 col-xl-4">
           <input
             type="search"
             className="form-control w-100"
+=======
+      <div className="mb-2">
+        <div className="input-group flex gap-2">
+          <input
+            type="search"
+            className="form-control flex-1 border rounded px-3 py-2"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             placeholder="Buscar por línea, código o descripción..."
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
           />
+<<<<<<< HEAD
         </div>
         <div className="col-12 col-md-3 col-lg-2">
           <select
             className="form-select"
+=======
+          <select
+            className="border rounded px-2 py-2"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             value={size}
             onChange={(e) => {
               setSize(parseInt(e.target.value));
@@ -421,8 +529,13 @@ export default function ProductosPage() {
       {/* Tabla */}
       <div className="card">
         <div className="table-responsive">
+<<<<<<< HEAD
           <table className="table table-striped table-hover align-middle mb-0">
             <thead className="table-light">
+=======
+          <table className="table table-hover mb-0 w-full">
+            <thead>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
               <tr>
                 <th>Código de Barra</th>
                 <th>Descripción</th>
@@ -452,6 +565,7 @@ export default function ProductosPage() {
                       <select
                         value={producto.estado}
                         onChange={async (e) => {
+<<<<<<< HEAD
                           if (!token) return;
                           const nuevoEstado = e.target.value;
                           const estadoAnterior = producto.estado;
@@ -461,6 +575,15 @@ export default function ProductosPage() {
                               `${API_URL}/estado/${producto.id}`,
                               {
                                 method: "PATCH",
+=======
+                          const nuevoEstado = e.target.value;
+                          const payload = { estado: nuevoEstado };
+                          try {
+                            const response = await fetch(
+                              `${API_URL}/update/${producto.id}`,
+                              {
+                                method: "PUT",
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                                 headers: {
                                   "Content-Type": "application/json",
                                   Authorization: `Bearer ${token}`,
@@ -468,6 +591,7 @@ export default function ProductosPage() {
                                 body: JSON.stringify(payload),
                               }
                             );
+<<<<<<< HEAD
                             const result = await response.json().catch(() => ({}));
                             if (!response.ok || result?.success === false) {
                               const message =
@@ -484,6 +608,26 @@ export default function ProductosPage() {
                             console.error(error);
                             toast.error(error?.message || "Error al actualizar el estado.");
                             e.target.value = estadoAnterior;
+=======
+                            const result = await response.json();
+                            if (!response.ok || result.success === false) {
+                              throw new Error(
+                                result.message ||
+                                  "Error al actualizar el estado."
+                              );
+                            }
+                            toast.success("Estado actualizado correctamente");
+                            loadProductos();
+                            // refrescar chips
+                            fetch(`${API_URL}/stats/estado`, {
+                              headers: { Authorization: `Bearer ${token}` },
+                            })
+                              .then((r) => r.json())
+                              .then((d) => setStats(d || {}))
+                              .catch(() => {});
+                          } catch (error) {
+                            console.error(error);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                           }
                         }}
                         className="border border-gray-300 rounded px-2 py-1 text-sm"
@@ -498,21 +642,40 @@ export default function ProductosPage() {
                     <td>{producto.fecha_alta}</td>
                     <td>{producto.inmovilizado ? "Sí" : "No"}</td>
                     <td>
+<<<<<<< HEAD
                       <div className="d-flex flex-wrap gap-2">
                         <Button
                           className="btn btn-sm btn-light border"
+=======
+                      <div className="flex gap-2">
+                        <Button
+                          className="btn btn-sm btn-outline-info bg-white"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                           title="Ver"
                           onClick={() => {
                             setProductoEtiqueta(null);
                             setProductoActual(producto);
+<<<<<<< HEAD
                             setIsDetalleOpen(true);
                           }}
                         >
                           <i className="bi bi-eye text-dark"></i>
+=======
+                            // abrimos el modal de ver detalle abajo
+                            (
+                              document.getElementById(
+                                "btn-ver-detalle"
+                              ) as HTMLButtonElement
+                            )?.click();
+                          }}
+                        >
+                          <i className="bi bi-eye"></i>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                         </Button>
                         <Button
                           onClick={() => generarEtiqueta(producto)}
                           title="Etiquetado"
+<<<<<<< HEAD
                           className="btn btn-sm btn-light border"
                         >
                           <i className="bi bi-code text-dark"></i>
@@ -524,13 +687,30 @@ export default function ProductosPage() {
                               setProductoActual(producto);
                               setIsDetalleOpen(false);
                               setIsFormularioOpen(true);
+=======
+                          className="btn btn-sm btn-outline-secondary bg-white"
+                        >
+                          <i className="bi bi-code"></i>
+                        </Button>
+                        <RoleGate allow={["ADMIN"]}>
+                          <Button
+                            className="btn btn-sm btn-outline-secondary bg-white"
+                            onClick={() => {
+                              setProductoActual(producto);
+                              setIsModalOpen(true);
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                             }}
                             title="Editar"
                           >
                             <i className="bi bi-pencil"></i>
                           </Button>
                           <Button
+<<<<<<< HEAD
                             className="btn btn-sm btn-danger text-white"
+=======
+                            className="btn btn-sm btn-outline-danger bg-white"
+                            variant="warning"
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                             onClick={() =>
                               eliminarProducto(producto.codigo_barra)
                             }
@@ -556,8 +736,13 @@ export default function ProductosPage() {
       </div>
 
       {/* Paginación */}
+<<<<<<< HEAD
       <div className="d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 mt-4">
         <div className="text-muted small text-center text-md-start">
+=======
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm text-gray-500">
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
           Mostrando <b>{productos.length}</b> de <b>{total}</b> resultados
           {estadoFiltro ? (
             <>
@@ -566,7 +751,11 @@ export default function ProductosPage() {
             </>
           ) : null}
         </div>
+<<<<<<< HEAD
         <div className="d-flex align-items-center gap-2">
+=======
+        <div className="flex items-center gap-2">
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
           <Button
             variant="secondary"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -624,6 +813,7 @@ export default function ProductosPage() {
       </Dialog>
 
       {/* Modal Crear/Editar */}
+<<<<<<< HEAD
       <Dialog
         open={isFormularioOpen}
         onOpenChange={(open) => {
@@ -635,11 +825,17 @@ export default function ProductosPage() {
           dialogStyle={{ maxWidth: "900px", width: "90%" }}
         >
           <DialogHeader className="pb-3 px-3 px-md-4">
+=======
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             <DialogTitle>
               {productoActual?.id ? "Editar Producto" : "Agregar Producto"}
             </DialogTitle>
           </DialogHeader>
 
+<<<<<<< HEAD
           <div className="px-3 px-md-4 pb-1">
             <div className="row g-4">
               <div className="col-12 col-md-6">
@@ -977,12 +1173,260 @@ export default function ProductosPage() {
             <Button
               className="btn btn-secondary"
               onClick={() => setIsFormularioOpen(false)}
+=======
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label>Código de Barra</label>
+              <Input
+                value={productoActual?.codigo_barra || ""}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    codigo_barra: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Descripción</label>
+              <Input
+                value={productoActual?.descripcion || ""}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    descripcion: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Línea</label>
+              <Input
+                value={productoActual?.linea || ""}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    linea: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Talle</label>
+              <Input
+                value={productoActual?.talle || ""}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    talle: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Tela</label>
+              <Input
+                value={productoActual?.tela || ""}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    tela: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Color</label>
+              <Input
+                value={productoActual?.color || ""}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    color: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Costo</label>
+              <Input
+                type="number"
+                value={productoActual?.costo ?? 0}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    costo: parseFloat(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Precio Alquiler Lista</label>
+              <Input
+                type="number"
+                value={productoActual?.precio_alquiler_lista ?? 0}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    precio_alquiler_lista: parseFloat(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Precio Alquiler Efectivo</label>
+              <Input
+                type="number"
+                value={productoActual?.precio_alquiler_efectivo ?? 0}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    precio_alquiler_efectivo: parseFloat(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Precio Venta Nuevo Lista</label>
+              <Input
+                type="number"
+                value={productoActual?.precio_venta_nuevo_lista ?? 0}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    precio_venta_nuevo_lista: parseFloat(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Precio Venta Nuevo Efectivo</label>
+              <Input
+                type="number"
+                value={productoActual?.precio_venta_nuevo_efectivo ?? 0}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    precio_venta_nuevo_efectivo: parseFloat(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Precio Medio Uso</label>
+              <Input
+                type="number"
+                value={productoActual?.precio_de_venta_medio_uso ?? 0}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    precio_de_venta_medio_uso: parseFloat(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Precio Venta</label>
+              <Input
+                type="number"
+                value={productoActual?.precio_venta ?? 0}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    precio_venta: parseFloat(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Precio Liquidación</label>
+              <Input
+                type="number"
+                value={productoActual?.precio_liquidacion ?? 0}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    precio_liquidacion: parseFloat(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Stock</label>
+              <Input
+                type="number"
+                value={productoActual?.stock ?? 0}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    stock: parseInt(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>Estado</label>
+              <select
+                className="border rounded px-2 py-2 w-full"
+                value={productoActual?.estado || ""}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    estado: e.target.value,
+                  })
+                }
+              >
+                <option value="">Seleccione un estado</option>
+                {ESTADOS.map((e) => (
+                  <option key={e} value={e}>
+                    {e}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label>Fecha Alta</label>
+              <Input
+                type="date"
+                value={
+                  productoActual?.fecha_alta ||
+                  new Date().toISOString().slice(0, 10)
+                }
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    fecha_alta: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label>¿Inmovilizado?</label>
+              <input
+                type="checkbox"
+                checked={productoActual?.inmovilizado || false}
+                onChange={(e) =>
+                  setProductoActual({
+                    ...productoActual!,
+                    inmovilizado: e.target.checked,
+                  })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              className="btn btn-secondary"
+              onClick={() => setIsModalOpen(false)}
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
             >
               Cancelar
             </Button>
             <Button className="btn btn-primary" onClick={guardarProducto}>
               {productoActual?.id ? "Actualizar" : "Guardar"}
             </Button>
+<<<<<<< HEAD
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -990,6 +1434,20 @@ export default function ProductosPage() {
       {/* Modal ver detalle */}
       <Dialog open={isDetalleOpen} onOpenChange={setIsDetalleOpen}>
         <DialogContent className="w-full max-w-3xl">
+=======
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal ver detalle (reutilizo Dialog launcher oculto) */}
+      <button
+        id="btn-ver-detalle"
+        className="hidden"
+        onClick={() => setIsModalOpen(true)}
+      />
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-3xl">
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
           <DialogHeader>
             <DialogTitle>Detalle del Producto</DialogTitle>
           </DialogHeader>
@@ -1044,7 +1502,11 @@ export default function ProductosPage() {
           )}
 
           <DialogFooter className="mt-6">
+<<<<<<< HEAD
             <Button onClick={() => setIsDetalleOpen(false)}>Cerrar</Button>
+=======
+            <Button onClick={() => setIsModalOpen(false)}>Cerrar</Button>
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1053,9 +1515,13 @@ export default function ProductosPage() {
 }
 
 // helper
+<<<<<<< HEAD
 function imprimirEtiqueta(
   barcodeRef: React.RefObject<SVGSVGElement | null>
 ) {
+=======
+function imprimirEtiqueta(barcodeRef: React.RefObject<SVGSVGElement>) {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
   const etiqueta = document.getElementById("etiqueta-impresion");
   const svg = (etiqueta ? etiqueta : barcodeRef.current) as HTMLElement | null;
   if (!svg) return;

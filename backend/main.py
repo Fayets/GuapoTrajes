@@ -15,6 +15,7 @@ from src.controllers.presupuestos_controller import router as presupuestos_route
 from src.controllers.orden_trabajo_controller import router as orden_trabajo_router
 from src.controllers.ventas_controller import router as ventas_router
 from src.controllers.caja_controller import router as caja_router
+<<<<<<< HEAD
 from src.controllers.caja_chica_controller import router as caja_chica_router
 from src.controllers.caja_concentradora_controller import router as caja_concentradora_router
 from src.controllers.pagos_controller import router as pagos_router
@@ -29,6 +30,17 @@ apply_schema_migrations()
 
 # Generar mapeo - las migraciones ya agregaron las columnas necesarias
 db.generate_mapping(create_tables=True, check_tables=False)
+=======
+from src.controllers.pagos_controller import router as pagos_router
+from src.controllers.eventos_controller import router as eventos_router
+
+app = FastAPI()
+
+# Mapeando las entidades a tablas (si no existe la tabla, la crea)
+# db.generate_mapping(create_tables=True)  # Comentado temporalmente para evitar errores
+# db.generate_mapping(create_tables=False, check_tables=False)  # Solo mapear, no verificar tablas
+db.generate_mapping(create_tables=False, check_tables=True)  # Mapear y verificar tablas existentes
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 
 app.add_middleware(
@@ -72,8 +84,11 @@ app.include_router(ventas_router, prefix="/ventas", tags=["Ventas"])
 
 #Caja
 app.include_router(caja_router, prefix="/caja", tags=["Caja"])
+<<<<<<< HEAD
 app.include_router(caja_chica_router)
 app.include_router(caja_concentradora_router)
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 #Pagos
 app.include_router(pagos_router, tags=["Pagos"])

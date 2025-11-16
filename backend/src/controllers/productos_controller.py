@@ -62,6 +62,7 @@ def update_product(id: int, product_update: schemas.ProductUpdate, current_user=
         return {"message": "Error inesperado al actualizar el producto.", "success": False}
 
 
+<<<<<<< HEAD
 @router.patch("/estado/{id}")
 def actualizar_estado_producto(id: int, payload: Dict[str, str], current_user=Depends(get_current_user)):
     try:
@@ -78,6 +79,8 @@ def actualizar_estado_producto(id: int, payload: Dict[str, str], current_user=De
         return {"message": "Error inesperado al actualizar el estado.", "success": False}
 
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 @router.get("/get/{codigo}", response_model=schemas.ProductResponse)
 def get_product(codigo: str, current_user=Depends(get_current_user)):
     try:
@@ -199,6 +202,10 @@ def disponibilidad(
     fecha_devolucion: date = Query(..., description="Fecha de devolución")
 ):
     try:
+<<<<<<< HEAD
+=======
+        print("Verificando disponibilidad para:", producto_id, fecha_retiro, fecha_devolucion)
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         disponible = verificar_disponibilidad(producto_id, fecha_retiro, fecha_devolucion)
         return {
             "producto_id": producto_id,

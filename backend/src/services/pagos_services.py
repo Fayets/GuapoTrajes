@@ -11,6 +11,7 @@ class PagosServices:
     def registrar_pago_adicional(self, data: PagoAdicionalRequest) -> dict:
         with db_session:
             try:
+<<<<<<< HEAD
                 
                 presupuesto = Presupuesto.get(id=data.presupuesto_id)
                 if not presupuesto:
@@ -19,10 +20,34 @@ class PagosServices:
                 if not presupuesto.orden_trabajo:
                     raise HTTPException(status_code=404, detail="Presupuesto no tiene orden de trabajo")
                 
+=======
+                print(f"🔍 Iniciando registro de pago adicional...")
+                print(f"   Presupuesto ID: {data.presupuesto_id}")
+                print(f"   Monto: {data.monto}")
+                print(f"   Método: {data.metodo_pago}")
+                print(f"   Concepto: {data.concepto}")
+                
+                presupuesto = Presupuesto.get(id=data.presupuesto_id)
+                if not presupuesto:
+                    print(f"❌ Presupuesto no encontrado: {data.presupuesto_id}")
+                    raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+                
+                if not presupuesto.orden_trabajo:
+                    print(f"❌ Presupuesto no tiene orden de trabajo: {data.presupuesto_id}")
+                    raise HTTPException(status_code=404, detail="Presupuesto no tiene orden de trabajo")
+                
+                print(f"✅ Presupuesto encontrado: {presupuesto.numero}")
+                print(f"✅ Orden de trabajo encontrada: {presupuesto.orden_trabajo.id}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
                 orden = presupuesto.orden_trabajo
                 cliente = presupuesto.cliente
 
+<<<<<<< HEAD
+=======
+                print(f"💰 Seña actual: {orden.seña_pagada}")
+                print(f"💰 Saldo pendiente actual: {orden.saldo_pendiente}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
                 # Actualizamos seña y saldo
                 orden.seña_pagada += data.monto
@@ -30,12 +55,24 @@ class PagosServices:
                 if orden.saldo_pendiente == 0:
                     orden.estado = "Pagado"
 
+<<<<<<< HEAD
+=======
+                print(f"💰 Nueva seña: {orden.seña_pagada}")
+                print(f"💰 Nuevo saldo pendiente: {orden.saldo_pendiente}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
                 # Obtenemos último saldo registrado
                 ultimo_mov = CuentaCorriente.select(lambda m: m.cliente.id == cliente.id).order_by(desc(CuentaCorriente.fecha)).first()
                 saldo_anterior = ultimo_mov.saldo_post if ultimo_mov else 0
+<<<<<<< HEAD
 
                 # Creamos movimiento
+=======
+                print(f"💰 Saldo anterior en cuenta corriente: {saldo_anterior}")
+
+                # Creamos movimiento
+                print(f"📝 Creando movimiento en cuenta corriente...")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 movimiento = CuentaCorriente(
                     cliente=cliente,
                     concepto=data.concepto,
@@ -45,6 +82,10 @@ class PagosServices:
                     referencia_orden=orden.id,
                     fecha=datetime.now()
                 )
+<<<<<<< HEAD
+=======
+                print(f"✅ Movimiento creado con ID: {movimiento.id}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
                 return {
                     "mensaje": "Pago registrado correctamente",

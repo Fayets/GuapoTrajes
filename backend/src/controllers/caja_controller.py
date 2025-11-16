@@ -4,7 +4,11 @@ from typing import List, Optional
 from datetime import date
 from src.services.caja_services import CajaServices
 from src.controllers.auth_controller import get_current_user
+<<<<<<< HEAD
 from src.schemas import CajaReporteRequest, CajaReporteResponse, TransferenciaCajaChicaRequest
+=======
+from src.schemas import CajaReporteRequest, CajaReporteResponse
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
 router = APIRouter()
 service = CajaServices()
@@ -82,6 +86,7 @@ def registrar_movimiento(
         tipos_validos = ["INGRESO", "EGRESO", "AJUSTE_POSITIVO", "AJUSTE_NEGATIVO"]
         if movimiento_data["tipo"] not in tipos_validos:
             raise HTTPException(status_code=400, detail=f"Tipo de movimiento inválido. Debe ser uno de: {tipos_validos}")
+<<<<<<< HEAD
 
         if movimiento_data["tipo"] in ("EGRESO", "AJUSTE_NEGATIVO"):
             raise HTTPException(
@@ -89,6 +94,9 @@ def registrar_movimiento(
                 detail="Los egresos solo pueden registrarse como transferencias a Caja Chica. Utilizá el endpoint dedicado."
             )
 
+=======
+        
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         # Validar que el método de pago sea válido
         metodos_validos = ["EFECTIVO", "DEBITO", "CREDITO", "BILLETERA_VIRTUAL", "TRANSFERENCIA"]
         if movimiento_data["payment_method"] not in metodos_validos:
@@ -119,6 +127,7 @@ def registrar_movimiento(
         print(f"❌ Error al registrar movimiento: {e}")
         raise HTTPException(status_code=500, detail="Error inesperado al registrar movimiento")
 
+<<<<<<< HEAD
 
 @router.post("/diaria/transferir-caja-chica")
 def transferir_a_caja_chica(
@@ -149,6 +158,8 @@ def transferir_a_caja_concentradora(
         print(f"❌ Error al transferir efectivo a caja concentradora: {e}")
         raise HTTPException(status_code=500, detail="Error inesperado al transferir efectivo a Caja Concentradora")
 
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 @router.get("/exportar-csv")
 def exportar_caja_csv(
     fecha_desde: date = Query(..., description="Fecha desde"),

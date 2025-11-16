@@ -76,6 +76,7 @@ export default function Dashboard() {
       color: "bg-info bg-opacity-10 text-info",
     },
     {
+<<<<<<< HEAD
       title: "Caja chica",
       description: "Gestioná movimientos de caja chica",
       icon: "bi-wallet2",
@@ -91,6 +92,8 @@ export default function Dashboard() {
       allow: ["ADMIN"],
     },
     {
+=======
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       title: "Sucursales",
       description: "Carga de sucursales",
       icon: "bi-building",
@@ -99,6 +102,16 @@ export default function Dashboard() {
       allow: ["ADMIN"],
     },
     {
+<<<<<<< HEAD
+=======
+      title: "Stock",
+      description: "Control de inventario",
+      icon: "bi-cart",
+      href: "/stock",
+      color: "bg-secondary bg-opacity-10 text-secondary",
+    },
+    {
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
       title: "Reportes",
       description: "Generación de reportes",
       icon: "bi-bar-chart",

@@ -17,7 +17,11 @@ class VentaRegisterMessage(BaseModel):
 @router.post("/register", response_model=VentaRegisterMessage, status_code=201)
 def register_venta(venta: schemas.VentaCreate, current_user=Depends(get_current_user)):
     try:
+<<<<<<< HEAD
         venta_creada = service.create_venta(venta, current_user)
+=======
+        venta_creada = service.create_venta(venta)
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         return {
             "message": "Venta registrada con éxito.",
             "success": True,

@@ -104,6 +104,7 @@ class PreclientServices:
     def convertir_a_cliente(self, precliente_id: int, direccion: str, dni: str) -> dict:
         with db_session:
             try:
+<<<<<<< HEAD
                 precliente = models.Precliente.get(id=precliente_id)
                 if not precliente:
                     raise HTTPException(status_code=404, detail="Precliente no encontrado")
@@ -119,6 +120,31 @@ class PreclientServices:
                 if cliente_existente_celular:
                     raise HTTPException(status_code=400, detail="Ya existe un cliente con ese celular")
 
+=======
+                print(f"🔍 Iniciando conversión de precliente ID: {precliente_id}")
+                precliente = models.Precliente.get(id=precliente_id)
+                if not precliente:
+                    print(f"❌ Precliente no encontrado con ID: {precliente_id}")
+                    raise HTTPException(status_code=404, detail="Precliente no encontrado")
+
+                print(f"✅ Precliente encontrado: {precliente.nombre} {precliente.apellido}")
+
+                # Validar duplicados por DNI (usar get con atributo directo)
+                print(f"🔍 Verificando duplicados para DNI: {dni}")
+                cliente_existente_dni = models.Cliente.get(dni=dni)
+                if cliente_existente_dni:
+                    print(f"❌ Ya existe un cliente con DNI {dni}")
+                    raise HTTPException(status_code=400, detail="Ya existe un cliente con ese DNI")
+
+                # Validar duplicados por celular (usar get con atributo directo)
+                print(f"🔍 Verificando duplicados para celular: {precliente.celular}")
+                cliente_existente_celular = models.Cliente.get(celular=precliente.celular)
+                if cliente_existente_celular:
+                    print(f"❌ Ya existe un cliente con celular {precliente.celular}")
+                    raise HTTPException(status_code=400, detail="Ya existe un cliente con ese celular")
+
+                print("✅ No hay duplicados, procediendo con la conversión")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
                 # Crear cliente completo
                 cliente = models.Cliente(
@@ -130,9 +156,17 @@ class PreclientServices:
                     notas=""  # Campo opcional, inicializar como string vacío
                 )
 
+<<<<<<< HEAD
 
                 # Eliminar el precliente
                 precliente.delete()
+=======
+                print(f"✅ Cliente creado con ID: {cliente.id}")
+
+                # Eliminar el precliente
+                precliente.delete()
+                print("✅ Precliente eliminado")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
 
                 return {
                     "message": "Precliente convertido exitosamente",
@@ -150,4 +184,10 @@ class PreclientServices:
             except HTTPException:
                 raise
             except Exception as e:
+<<<<<<< HEAD
+=======
+                print(f"❌ Error al convertir precliente: {e}")
+                import traceback
+                print(f"📋 Traceback: {traceback.format_exc()}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 raise HTTPException(status_code=500, detail="Error inesperado al convertir precliente")

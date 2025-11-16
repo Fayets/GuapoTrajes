@@ -10,15 +10,29 @@ class OrdenTrabajoServices:
     def crear_orden_trabajo(self, presupuesto_id: int, seña_pagada: float, payment_method: str, usuario_id: int) -> dict:
         with db_session:
             try:
+<<<<<<< HEAD
+=======
+                print(f"🔍 DEBUG: Recibiendo método de pago: '{payment_method}' (tipo: {type(payment_method)})")
+                print(f"🔍 DEBUG: Métodos válidos: {[mp.value for mp in MetodoPago]}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 
                 # Validar método de pago
                 if payment_method not in [mp.value for mp in MetodoPago]:
                     metodos_validos = [mp.value for mp in MetodoPago]
+<<<<<<< HEAD
+=======
+                    print(f"❌ ERROR: Método de pago '{payment_method}' no es válido")
+                    print(f"❌ ERROR: Métodos válidos: {metodos_validos}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                     raise HTTPException(
                         status_code=400, 
                         detail=f"Método de pago inválido. Métodos válidos: {', '.join(metodos_validos)}"
                     )
                 
+<<<<<<< HEAD
+=======
+                print(f"✅ Método de pago válido: {payment_method}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
                 
                 # Convertir a enum para uso interno
                 payment_method_enum = MetodoPago(payment_method)

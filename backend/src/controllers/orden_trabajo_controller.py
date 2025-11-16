@@ -25,6 +25,10 @@ def obtener_metodos_pago():
             for metodo in MetodoPago
         ]
         
+<<<<<<< HEAD
+=======
+        print(f"🔍 Métodos de pago disponibles: {[m['value'] for m in metodos]}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         
         return {
             "message": "Métodos de pago obtenidos exitosamente",
@@ -45,6 +49,13 @@ async def debug_raw_data(request: Request):
     try:
         # Obtener datos raw
         raw_data = await request.json()
+<<<<<<< HEAD
+=======
+        print(f"🔍 DEBUG RAW: Datos recibidos:")
+        print(f"  - Tipo de request: {type(raw_data)}")
+        print(f"  - Contenido: {raw_data}")
+        print(f"  - Keys disponibles: {list(raw_data.keys()) if isinstance(raw_data, dict) else 'No es dict'}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         
         if isinstance(raw_data, dict):
             for key, value in raw_data.items():
@@ -60,6 +71,10 @@ async def debug_raw_data(request: Request):
             }
         }
     except Exception as e:
+<<<<<<< HEAD
+=======
+        print(f"❌ ERROR en debug raw: {e}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         return {
             "message": f"Error al procesar datos raw: {str(e)}",
             "success": False,
@@ -70,6 +85,15 @@ async def debug_raw_data(request: Request):
 def test_schema_flexible(data: OrdenTrabajoCreateSchemaTest):
     """Endpoint de prueba con schema más permisivo"""
     try:
+<<<<<<< HEAD
+=======
+        print(f"🧪 TEST SCHEMA FLEXIBLE:")
+        print(f"  - presupuesto_id: {data.presupuesto_id}")
+        print(f"  - seña_pagada: {data.seña_pagada}")
+        print(f"  - payment_method: '{data.payment_method}'")
+        print(f"  - metodo_pago (antiguo): '{data.metodo_pago}'")
+        print(f"  - debug_info: {data.debug_info}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         
         return {
             "message": "Schema flexible validado correctamente",
@@ -83,12 +107,23 @@ def test_schema_flexible(data: OrdenTrabajoCreateSchemaTest):
             }
         }
     except Exception as e:
+<<<<<<< HEAD
+=======
+        print(f"❌ ERROR en schema flexible: {e}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         raise HTTPException(status_code=500, detail=f"Error en validación flexible: {str(e)}")
 
 @router.post("/test-validacion")
 def test_validacion_metodo_pago(data: OrdenTrabajoCreateSchema):
     """Endpoint de prueba para validar el schema"""
     try:
+<<<<<<< HEAD
+=======
+        print(f"🧪 TEST: Datos recibidos en endpoint de prueba:")
+        print(f"  - presupuesto_id: {data.presupuesto_id}")
+        print(f"  - seña_pagada: {data.seña_pagada}")
+        print(f"  - payment_method: '{data.payment_method}' (tipo: {type(data.payment_method)})")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         
         return {
             "message": "Validación exitosa",
@@ -101,11 +136,24 @@ def test_validacion_metodo_pago(data: OrdenTrabajoCreateSchema):
             }
         }
     except Exception as e:
+<<<<<<< HEAD
+=======
+        print(f"❌ ERROR en endpoint de prueba: {e}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         raise HTTPException(status_code=500, detail=f"Error en validación: {str(e)}")
 
 @router.post("/", response_model=OrdenTrabajoResponseSchema)
 def convertir_presupuesto_orden(data: OrdenTrabajoCreateSchema, current_user=Depends(get_current_user)):
     try:
+<<<<<<< HEAD
+=======
+        print(f"🔍 DEBUG: Datos recibidos en controlador:")
+        print(f"  - presupuesto_id: {data.presupuesto_id}")
+        print(f"  - seña_pagada: {data.seña_pagada}")
+        print(f"  - payment_method: '{data.payment_method}' (tipo: {type(data.payment_method)})")
+        print(f"  - metodo_pago: '{data.metodo_pago}' (tipo: {type(data.metodo_pago)})")
+        print(f"🔍 DEBUG: Datos completos recibidos: {data}")
+>>>>>>> 318d0fdc263c511777b700c984c840d345f502b8
         
         # Usar payment_method si está presente, sino metodo_pago
         metodo_pago_final = data.payment_method if data.payment_method else data.metodo_pago
