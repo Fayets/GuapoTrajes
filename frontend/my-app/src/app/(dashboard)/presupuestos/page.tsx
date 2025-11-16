@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import PresupuestoModal from "@/components/modales/presupuestoModal";
+import { useAuth } from "@/context/auth-context";
 
 import {
   Dialog,
@@ -106,6 +107,10 @@ export default function PresupuestosPage() {
   const [porcentajeDescuento, setPorcentajeDescuento] = useState<number | null>(
     null
   );
+
+  const { me, loading } = useAuth();
+  const esAdmin = me?.role === "ADMIN";
+  if (loading) return null;
 
   // Métodos de pago consistentes con ventas
   const metodosPago = [
@@ -927,6 +932,7 @@ export default function PresupuestosPage() {
       )}
       {/* Modal */}
       <PresupuestoModal
+        esAdmin={esAdmin}
         show={showModal}
         verModoLectura={verModoLectura}
         presupuestoSeleccionado={presupuestoSeleccionado}

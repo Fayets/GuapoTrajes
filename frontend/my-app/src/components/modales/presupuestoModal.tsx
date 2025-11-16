@@ -1,4 +1,5 @@
 import React from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,7 @@ type Item = {
 };
 
 type Props = {
+  esAdmin: boolean;
   show: boolean;
   verModoLectura: boolean;
   presupuestoSeleccionado?: any;
@@ -53,6 +55,7 @@ type Props = {
 
 export default function PresupuestoModal({
   show,
+  esAdmin,
   verModoLectura,
   presupuestoSeleccionado,
   formData,
@@ -207,6 +210,23 @@ export default function PresupuestoModal({
   const totalMostrar = hayDescuento
     ? (totalConDescuento as number)
     : totalOriginal;
+
+  const [mostrarCodigoDescuento, setMostrarCodigoDescuento] = useState(false);
+  const [codigoAutorizacion, setCodigoAutorizacion] = useState("");
+  const [descuentoLibreHabilitado, setDescuentoLibreHabilitado] =
+    useState(false);
+  const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
+
+  const validarCodigo = () => {
+    const CODIGO = "GUAPO2025"; // ajustable
+    if (codigoAutorizacion === CODIGO) {
+      setDescuentoLibreHabilitado(true);
+      setMostrarCodigoDescuento(false);
+      setErrorCodigo(null);
+    } else {
+      setErrorCodigo("Código incorrecto");
+    }
+  };
 
   return (
     <Dialog open={show} onOpenChange={(open) => !open && onClose()}>
@@ -602,19 +622,61 @@ export default function PresupuestoModal({
                         <label className="form-label fw-bold">
                           Porcentaje de descuento
                         </label>
-                        <select
-                          className="form-select"
-                          value={nuevoItem.porcentaje || ""}
-                          onChange={(e) =>
-                            handleItemChange("porcentaje", e.target.value)
-                          }
-                        >
-                          <option value="">Seleccionar descuento</option>
-                          <option value="5">5%</option>
-                          <option value="10">10%</option>
-                          <option value="15">15%</option>
-                          <option value="20">20%</option>
-                        </select>
+                        {/* ADMIN — Selector 5–50 */}
+                        {esAdmin && !descuentoLibreHabilitado && (
+                          <select
+                            className="form-select"
+                            value={nuevoItem.porcentaje || ""}
+                            onChange={(e) =>
+                              handleItemChange("porcentaje", e.target.value)
+                            }
+                          >
+                            <option value="">Seleccionar descuento</option>
+                            {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map(
+                              (p) => (
+                                <option key={p} value={p}>
+                                  {p}%
+                                </option>
+                              )
+                            )}
+                          </select>
+                        )}
+
+                        {/* EMPLEADO — selector 5–20 */}
+                        {!esAdmin && !descuentoLibreHabilitado && (
+                          <select
+                            className="form-select"
+                            value={nuevoItem.porcentaje || ""}
+                            onChange={(e) =>
+                              handleItemChange("porcentaje", e.target.value)
+                            }
+                          >
+                            <option value="">Seleccionar descuento</option>
+                            {[5, 10, 15, 20].map((p) => (
+                              <option key={p} value={p}>
+                                {p}%
+                              </option>
+                            ))}
+                          </select>
+                        )}
+
+                        {/* EMPLEADO autorizado — input libre */}
+                        {!esAdmin && descuentoLibreHabilitado && (
+                          <>
+                            <input
+                              type="number"
+                              className="form-control"
+                              placeholder="Ej: 27"
+                              value={nuevoItem.porcentaje}
+                              min={1}
+                              max={80}
+                              onChange={(e) =>
+                                handleItemChange("porcentaje", e.target.value)
+                              }
+                            />
+                            <small className="text-success">Autorizado</small>
+                          </>
+                        )}
                       </div>
 
                       <div className="col-md-2">
@@ -630,22 +692,43 @@ export default function PresupuestoModal({
                         </button>
                       </div>
                       <div className="col-md-4">
-                        <button
-                          onClick={async () => {
-                            if (solicitarDescuento) {
-                              solicitarDescuento();
-                            } else {
-                              alert(
-                                "Función de solicitud de descuento no implementada."
-                              );
-                            }
-                          }}
-                          className="btn btn-success w-100"
-                        >
-                          <i className="bi bi-plus-circle me-1"></i>
-                          Solicitar Descuento
-                        </button>
+                        {!esAdmin && !descuentoLibreHabilitado && (
+                          <button
+                            onClick={() => setMostrarCodigoDescuento(true)}
+                            className="btn btn-outline-primary w-100"
+                          >
+                            <i className="bi bi-key me-1"></i>
+                            Solicitar Descuento
+                          </button>
+                        )}
                       </div>
+                      {!esAdmin && mostrarCodigoDescuento && (
+                        <div className="mt-3">
+                          <label className="form-label fw-bold">
+                            Código de autorización
+                          </label>
+                          <input
+                            type="password"
+                            className="form-control"
+                            value={codigoAutorizacion}
+                            onChange={(e) =>
+                              setCodigoAutorizacion(e.target.value)
+                            }
+                          />
+                          {errorCodigo && (
+                            <div className="text-danger small">
+                              {errorCodigo}
+                            </div>
+                          )}
+
+                          <button
+                            className="btn btn-primary mt-2"
+                            onClick={validarCodigo}
+                          >
+                            Validar
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
