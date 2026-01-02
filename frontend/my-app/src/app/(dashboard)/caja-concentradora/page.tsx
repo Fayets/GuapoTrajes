@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { useAuth } from "@/context/auth-context";
 import { useSucursal } from "@/context/sucursal-context";
 
@@ -534,7 +536,7 @@ export default function CajaConcentradoraPage() {
                   {movimientosFiltrados.map((movimiento) => (
                     <tr key={movimiento.id}>
                       <td className="fw-medium">
-                        {new Date(movimiento.fecha).toLocaleString("es-AR")}
+                        {format(new Date(movimiento.fecha), "dd/MM/yyyy HH:mm", { locale: es })}
                       </td>
                       <td className="small text-muted">
                         {movimiento.usuario_nombre ?? "—"}
@@ -949,7 +951,7 @@ export default function CajaConcentradoraPage() {
                   <div className="list-group-item px-0">
                     <span className="fw-semibold d-block">Fecha</span>
                     <span className="text-muted">
-                      {new Date(detalleSeleccionado.fecha).toLocaleString("es-AR")}
+                      {format(new Date(detalleSeleccionado.fecha), "dd/MM/yyyy HH:mm", { locale: es })}
                     </span>
                   </div>
                   <div className="list-group-item px-0">

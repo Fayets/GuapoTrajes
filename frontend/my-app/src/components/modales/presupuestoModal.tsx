@@ -1,5 +1,7 @@
 import React from "react";
 import { useState } from "react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import {
   Dialog,
   DialogContent,
@@ -790,7 +792,7 @@ export default function PresupuestoModal({
                               )}
                               {presupuestoSeleccionado.extra_discount_created_at && (
                                 <div className="mb-0">
-                                  <strong>Fecha:</strong> {new Date(presupuestoSeleccionado.extra_discount_created_at).toLocaleString("es-AR")}
+                                  <strong>Fecha:</strong> {format(new Date(presupuestoSeleccionado.extra_discount_created_at), "dd/MM/yyyy HH:mm", { locale: es })}
                                 </div>
                               )}
                             </div>

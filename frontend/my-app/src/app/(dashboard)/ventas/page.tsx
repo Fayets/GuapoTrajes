@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { getApiBaseUrl } from "@/lib/api-config";
 import {
@@ -1047,7 +1049,7 @@ export default function VentasPage() {
                       <div className="col-12 col-md-6">
                         <p className="text-muted text-uppercase small mb-1">Fecha</p>
                         <p className="fw-semibold text-dark mb-0">
-                          {parseFecha(ventaParaVer.fecha_hora).toLocaleString()}
+                          {format(parseFecha(ventaParaVer.fecha_hora), "dd/MM/yyyy HH:mm", { locale: es })}
                         </p>
                       </div>
                       <div className="col-12 col-md-6">

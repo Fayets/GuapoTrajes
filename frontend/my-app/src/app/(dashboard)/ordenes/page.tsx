@@ -63,6 +63,8 @@ export default function OrdenesTrabajoPage() {
   const [metodoPago, setMetodoPago] = useState("");
   const [loadingPago, setLoadingPago] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [historialSeñas, setHistorialSeñas] = useState<any[]>([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
   const { me } = useAuth();
   const esAdmin = me?.role === "ADMIN";
@@ -160,10 +162,44 @@ export default function OrdenesTrabajoPage() {
       setShowPagoModal(false);
       setMontoPago("");
       setMetodoPago("");
+      
+      // Actualizar historial si el modal de detalle está abierto
+      if (ordenSeleccionada && showViewModal) {
+        await fetchHistorialSeñas(ordenSeleccionada.id);
+      }
     } catch (err) {
       alert(`Error al guardar el pago: ${err instanceof Error ? err.message : 'Error desconocido'}`);
     } finally {
       setLoadingPago(false);
+    }
+  };
+
+  const fetchHistorialSeñas = async (ordenId: number) => {
+    setCargandoHistorial(true);
+    try {
+      const res = await fetch(
+        `${getApiBaseUrl()}/ordenes/${ordenId}/historial-pagos`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data && data.data.pagos) {
+          setHistorialSeñas(data.data.pagos);
+        } else {
+          setHistorialSeñas([]);
+        }
+      } else {
+        setHistorialSeñas([]);
+      }
+    } catch (error) {
+      console.error("Error al obtener historial de señas:", error);
+      setHistorialSeñas([]);
+    } finally {
+      setCargandoHistorial(false);
     }
   };
 
@@ -305,16 +341,20 @@ export default function OrdenesTrabajoPage() {
                                 const ordenCompleta = await res.json();
                                 setOrdenSeleccionada(ordenCompleta);
                                 setShowViewModal(true);
+                                // Cargar historial de señas
+                                fetchHistorialSeñas(orden.id);
                               } else {
                                 // Si falla, usar los datos de la lista como fallback
                                 setOrdenSeleccionada(orden);
                                 setShowViewModal(true);
+                                fetchHistorialSeñas(orden.id);
                               }
                             } catch (error) {
                               console.error("Error al obtener orden completa:", error);
                               // Si falla, usar los datos de la lista como fallback
                               setOrdenSeleccionada(orden);
                               setShowViewModal(true);
+                              fetchHistorialSeñas(orden.id);
                             }
                           }}
                         >
@@ -602,6 +642,117 @@ export default function OrdenesTrabajoPage() {
                 </div>
               </div>
 
+              {/* Sección de historial de señas */}
+              <div className="card shadow-sm mb-4">
+                <div className="card-body p-4">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h6 className="fw-semibold mb-0">
+                      <i className="bi bi-clock-history me-2 text-primary"></i>
+                      Historial de Señas
+                    </h6>
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => ordenSeleccionada && fetchHistorialSeñas(ordenSeleccionada.id)}
+                      disabled={cargandoHistorial}
+                    >
+                      {cargandoHistorial ? (
+                        <>
+                          <i className="bi bi-arrow-clockwise spin me-1"></i>
+                          Cargando...
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-arrow-clockwise me-1"></i>
+                          Actualizar
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {cargandoHistorial ? (
+                    <div className="text-center text-muted py-3">
+                      <i className="bi bi-arrow-clockwise spin d-block mb-2" style={{ fontSize: "1.5rem" }}></i>
+                      Cargando historial...
+                    </div>
+                  ) : historialSeñas.length === 0 ? (
+                    <div className="text-muted text-center py-3">
+                      <i className="bi bi-inbox d-block mb-2" style={{ fontSize: "1.5rem" }}></i>
+                      No hay señas registradas
+                    </div>
+                  ) : (
+                    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover mb-0">
+                          <thead className="table-light sticky-top">
+                            <tr>
+                              <th>Fecha</th>
+                              <th>Tipo</th>
+                              <th className="text-end">Monto</th>
+                              <th>Método de Pago</th>
+                              <th>Usuario</th>
+                              <th>Sucursal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {historialSeñas.map((seña, index) => (
+                              <tr key={index}>
+                                <td className="small">
+                                  {seña.fecha_hora
+                                    ? format(new Date(seña.fecha_hora), "dd/MM/yyyy HH:mm", { locale: es })
+                                    : seña.fecha
+                                    ? format(new Date(seña.fecha), "dd/MM/yyyy HH:mm", { locale: es })
+                                    : "N/A"}
+                                </td>
+                                <td>
+                                  <span className={`badge ${
+                                    seña.tipo === "Seña inicial" ? "bg-primary" : "bg-success"
+                                  }`}>
+                                    {seña.tipo}
+                                  </span>
+                                </td>
+                                <td className="text-end fw-semibold text-success">
+                                  ${seña.monto.toLocaleString("es-AR", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </td>
+                                <td className="small">
+                                  {metodosPago.find((m) => m.value === seña.metodo_pago)?.label ||
+                                    seña.metodo_pago ||
+                                    "N/A"}
+                                </td>
+                                <td className="small text-muted">
+                                  {seña.usuario_nombre || "N/A"}
+                                </td>
+                                <td className="small text-muted">
+                                  {seña.sucursal_nombre || "N/A"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="table-light">
+                            <tr>
+                              <td colSpan={2} className="fw-bold">
+                                Total:
+                              </td>
+                              <td className="text-end fw-bold text-success">
+                                $
+                                {historialSeñas
+                                  .reduce((sum, seña) => sum + seña.monto, 0)
+                                  .toLocaleString("es-AR", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                              </td>
+                              <td colSpan={3}></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Sección de descuento extra para ADMIN */}
               {esAdmin && ordenSeleccionada.extra_discount_percentage && ordenSeleccionada.extra_discount_percentage > 15 && (
                 <div className="card shadow-sm mb-4">
@@ -668,7 +819,7 @@ export default function OrdenesTrabajoPage() {
                         )}
                         {ordenSeleccionada.extra_discount_created_at && (
                           <div className="mb-0">
-                            <strong>Fecha:</strong> {new Date(ordenSeleccionada.extra_discount_created_at).toLocaleString("es-AR")}
+                            <strong>Fecha:</strong> {format(new Date(ordenSeleccionada.extra_discount_created_at), "dd/MM/yyyy HH:mm", { locale: es })}
                           </div>
                         )}
                       </div>
@@ -681,7 +832,10 @@ export default function OrdenesTrabajoPage() {
             <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
               <button
                 className="btn btn-light border"
-                onClick={() => setShowViewModal(false)}
+                onClick={() => {
+                  setShowViewModal(false);
+                  setHistorialSeñas([]);
+                }}
               >
                 Cerrar
               </button>
@@ -689,6 +843,20 @@ export default function OrdenesTrabajoPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      <style jsx>{`
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -391,10 +391,30 @@ class OrdenTrabajoServices:
 
                 # Obtener movimientos de caja relacionados con esta orden
                 from src.models import CajaMovimiento
-                movimientos_caja = list(CajaMovimiento.select(
-                    lambda cm: cm.origen.startswith(f"SEÑA_PRESUPUESTO:{orden.presupuesto.numero}") or 
-                              cm.origen.startswith(f"PAGO_ADICIONAL_ORDEN:{orden.presupuesto.numero}")
-                ).order_by(CajaMovimiento.fecha_hora))
+                presupuesto_numero = orden.presupuesto.numero
+                
+                # Obtener todos los movimientos y filtrar en Python
+                # Buscar cualquier movimiento que contenga el número de presupuesto en el origen
+                todos_movimientos = list(CajaMovimiento.select().order_by(CajaMovimiento.fecha_hora))
+                
+                # Filtrar movimientos relacionados con esta orden
+                # Buscar por número de presupuesto en el origen (sin importar el formato)
+                movimientos_caja = []
+                for cm in todos_movimientos:
+                    try:
+                        if cm.origen and presupuesto_numero in str(cm.origen):
+                            movimientos_caja.append(cm)
+                    except Exception as e:
+                        print(f"⚠️ Error al filtrar movimiento {cm.id}: {e}")
+                        continue
+                
+                # Debug: imprimir información para diagnosticar
+                print(f"🔍 Buscando movimientos para presupuesto: {presupuesto_numero}")
+                print(f"📊 Total movimientos encontrados: {len(movimientos_caja)}")
+                if len(movimientos_caja) == 0:
+                    # Buscar movimientos que contengan "SEÑA" o "PAGO" para debug
+                    movimientos_debug = [cm for cm in todos_movimientos[:10] if cm.origen and ("SEÑA" in cm.origen.upper() or "PAGO" in cm.origen.upper())]
+                    print(f"🔍 Movimientos con SEÑA/PAGO (primeros 10): {[(m.id, m.origen) for m in movimientos_debug]}")
 
                 # Obtener movimientos de cuenta corriente
                 movimientos_cuenta = list(CuentaCorriente.select(
@@ -414,23 +434,101 @@ class OrdenTrabajoServices:
 
                 # Agregar seña inicial
                 if orden.seña_pagada > 0:
+                    # Buscar el movimiento de caja de la seña inicial
+                    seña_inicial_mov = None
+                    presupuesto_numero = orden.presupuesto.numero
+                    for mov in movimientos_caja:
+                        if f"SEÑA_PRESUPUESTO:{presupuesto_numero}" in mov.origen:
+                            seña_inicial_mov = mov
+                            break
+                    
+                    usuario_nombre = "N/A"
+                    sucursal_nombre = "N/A"
+                    movimiento_id = None
+                    
+                    if seña_inicial_mov:
+                        try:
+                            if seña_inicial_mov.usuario:
+                                usuario_nombre = f"{seña_inicial_mov.usuario.nombre} {seña_inicial_mov.usuario.apellido}"
+                            if seña_inicial_mov.sucursal:
+                                sucursal_nombre = seña_inicial_mov.sucursal.nombre
+                            movimiento_id = seña_inicial_mov.id
+                        except Exception as e:
+                            print(f"⚠️ Error al obtener datos de seña inicial: {e}")
+                    
                     historial["pagos"].append({
                         "tipo": "Seña inicial",
                         "fecha": orden.fecha_creacion.isoformat(),
+                        "fecha_hora": orden.fecha_creacion.isoformat(),
                         "monto": orden.seña_pagada,
                         "metodo_pago": orden.metodo_pago,
-                        "origen": "Creación de orden"
+                        "origen": "Creación de orden",
+                        "usuario_nombre": usuario_nombre,
+                        "sucursal_nombre": sucursal_nombre,
+                        "movimiento_id": movimiento_id
                     })
 
                 # Agregar pagos adicionales desde movimientos de caja
+                # Excluir la seña inicial que ya se agregó
+                presupuesto_numero = orden.presupuesto.numero
                 for movimiento in movimientos_caja:
-                    if movimiento.origen.startswith("PAGO_ADICIONAL_ORDEN"):
+                    try:
+                        # Validar que el movimiento tenga origen
+                        if not movimiento.origen:
+                            continue
+                        
+                        origen_str = str(movimiento.origen)
+                        # Solo agregar si es un pago adicional (no la seña inicial)
+                        if (f"PAGO_ADICIONAL_ORDEN:{presupuesto_numero}" in origen_str or
+                            ("PAGO_ADICIONAL" in origen_str.upper() and 
+                             f"SEÑA_PRESUPUESTO:{presupuesto_numero}" not in origen_str)):
+                            
+                            # Obtener método de pago de forma segura
+                            metodo_pago = "N/A"
+                            if movimiento.payment_method:
+                                if hasattr(movimiento.payment_method, 'value'):
+                                    metodo_pago = movimiento.payment_method.value
+                                else:
+                                    metodo_pago = str(movimiento.payment_method)
+                            
+                            # Obtener usuario de forma segura
+                            usuario_nombre = "N/A"
+                            if movimiento.usuario:
+                                usuario_nombre = f"{movimiento.usuario.nombre} {movimiento.usuario.apellido}"
+                            
+                            # Obtener sucursal de forma segura
+                            sucursal_nombre = "N/A"
+                            if movimiento.sucursal:
+                                sucursal_nombre = movimiento.sucursal.nombre
+                            
+                            historial["pagos"].append({
+                                "tipo": "Pago adicional",
+                                "fecha": movimiento.fecha_hora.isoformat() if movimiento.fecha_hora else None,
+                                "fecha_hora": movimiento.fecha_hora.isoformat() if movimiento.fecha_hora else None,
+                                "monto": movimiento.monto,
+                                "metodo_pago": metodo_pago,
+                                "origen": origen_str,
+                                "usuario_nombre": usuario_nombre,
+                                "sucursal_nombre": sucursal_nombre,
+                                "movimiento_id": movimiento.id
+                            })
+                    except Exception as e:
+                        print(f"⚠️ Error al procesar movimiento {movimiento.id}: {e}")
+                        continue
+                
+                # Agregar pagos desde cuenta corriente
+                for movimiento_cc in movimientos_cuenta:
+                    if movimiento_cc.tipo == "credito" and movimiento_cc.monto > 0:
                         historial["pagos"].append({
                             "tipo": "Pago adicional",
-                            "fecha": movimiento.fecha_hora.isoformat(),
-                            "monto": movimiento.monto,
-                            "metodo_pago": movimiento.payment_method,
-                            "origen": "Pago registrado en caja"
+                            "fecha": movimiento_cc.fecha.isoformat(),
+                            "fecha_hora": movimiento_cc.fecha.isoformat(),
+                            "monto": movimiento_cc.monto,
+                            "metodo_pago": "N/A",
+                            "origen": movimiento_cc.concepto,
+                            "usuario_nombre": "N/A",
+                            "sucursal_nombre": "N/A",
+                            "movimiento_id": movimiento_cc.id
                         })
 
                 # Ordenar pagos por fecha
@@ -445,6 +543,9 @@ class OrdenTrabajoServices:
             except HTTPException:
                 raise
             except Exception as e:
-                raise HTTPException(status_code=500, detail="Error al obtener historial de pagos: {str(e)}")
+                print(f"❌ Error al obtener historial de pagos: {e}")
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"Error al obtener historial de pagos: {str(e)}")
 
 

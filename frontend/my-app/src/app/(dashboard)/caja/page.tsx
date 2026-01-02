@@ -20,29 +20,6 @@ interface CajaTotales {
   total_general: number;
 }
 
-interface BalanceFinanciero {
-  fecha_desde: string;
-  fecha_hasta: string;
-  total_ingresos: number;
-  total_egresos: number;
-  balance: number;
-  balance_porcentual: number;
-  resumen_ingresos: { [key: string]: number };
-  resumen_egresos: { [key: string]: number };
-}
-
-interface SaldoPendiente {
-  presupuesto_id: number;
-  cliente_id: number;
-  cliente_nombre: string;
-  cliente_dni: string;
-  fecha_creacion: string;
-  total_presupuesto: number;
-  pagos_realizados: number;
-  saldo_pendiente: number;
-  sucursal_nombre: string;
-  estado: string;
-}
 
 const metodosPago = [
   { value: "EFECTIVO", label: "Efectivo" },
@@ -75,12 +52,9 @@ export default function CajaPage() {
   const [resultadosBusqueda, setResultadosBusqueda] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   
-  // Estados para reportes
+  // Estados para búsqueda
   const [fechaDesde, setFechaDesde] = useState(getLocalDateString());
   const [fechaHasta, setFechaHasta] = useState(getLocalDateString());
-  const [balanceFinanciero, setBalanceFinanciero] = useState<BalanceFinanciero | null>(null);
-  const [saldosPendientes, setSaldosPendientes] = useState<SaldoPendiente[]>([]);
-  const [isLoadingReports, setIsLoadingReports] = useState(false);
   
   // Estados para los modales de ingreso y egreso
   const [showIngresoModal, setShowIngresoModal] = useState(false);
@@ -249,61 +223,6 @@ export default function CajaPage() {
     }
   };
 
-  const obtenerBalanceFinanciero = async () => {
-    setIsLoadingReports(true);
-    try {
-      const response = await fetch(`${API_BASE}/caja/balance-financiero`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          fecha_desde: fechaDesde,
-          fecha_hasta: fechaHasta,
-          sucursal_id: sucursalId,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      setBalanceFinanciero(data.data);
-      toast.success("Balance financiero obtenido correctamente");
-    } catch (error: any) {
-      console.error("Error al obtener balance financiero:", error.message);
-      toast.error("Error al obtener balance financiero: " + error.message);
-    } finally {
-      setIsLoadingReports(false);
-    }
-  };
-
-  const obtenerSaldosPendientes = async () => {
-    setIsLoadingReports(true);
-    try {
-      const response = await fetch(`${API_BASE}/caja/saldos-pendientes`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          fecha_desde: fechaDesde,
-          fecha_hasta: fechaHasta,
-          sucursal_id: sucursalId,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      setSaldosPendientes(data.data.saldos);
-      toast.success("Saldos pendientes obtenidos correctamente");
-    } catch (error: any) {
-      console.error("Error al obtener saldos pendientes:", error.message);
-      toast.error("Error al obtener saldos pendientes: " + error.message);
-    } finally {
-      setIsLoadingReports(false);
-    }
-  };
 
   const registrarIngreso = async () => {
     // Validar que todos los campos estén completos
@@ -693,16 +612,6 @@ export default function CajaPage() {
                 Búsqueda
               </button>
             </li>
-            <li className="nav-item" role="presentation">
-              <button className="nav-link" data-bs-toggle="tab" data-bs-target="#balance" type="button" role="tab">
-                Balance
-              </button>
-            </li>
-            <li className="nav-item" role="presentation">
-              <button className="nav-link" data-bs-toggle="tab" data-bs-target="#saldos" type="button" role="tab">
-                Saldos Pendientes
-              </button>
-            </li>
           </ul>
         </div>
         <div className="card-body">
@@ -991,231 +900,6 @@ export default function CajaPage() {
                                 </td>
                                 <td className="small text-muted">
                                   {movimiento.usuario_nombre}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Tab: Balance Financiero */}
-            <div className="tab-pane fade" id="balance" role="tabpanel">
-              <div className="card">
-                <div className="card-body">
-                  <h5 className="card-title mb-3">
-                    <i className="bi bi-bar-chart me-2"></i>
-                    Balance Financiero
-                  </h5>
-                  
-                  <div className="row mb-4">
-                    <div className="col-md-3">
-                      <label className="form-label">Fecha desde</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={fechaDesde}
-                        onChange={(e) => setFechaDesde(e.target.value)}
-                      />
-                    </div>
-                    <div className="col-md-3">
-                      <label className="form-label">Fecha hasta</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={fechaHasta}
-                        onChange={(e) => setFechaHasta(e.target.value)}
-                      />
-                    </div>
-                    <div className="col-md-3 d-flex align-items-end">
-                      <button 
-                        onClick={obtenerBalanceFinanciero} 
-                        disabled={isLoadingReports}
-                        className="btn btn-primary w-100"
-                      >
-                        {isLoadingReports ? <i className="bi bi-arrow-clockwise spin me-2"></i> : <i className="bi bi-bar-chart me-2"></i>}
-                        Obtener Balance
-                      </button>
-                    </div>
-                  </div>
-
-                  {balanceFinanciero && (
-                    <div>
-                      {/* Resumen general */}
-                      <div className="row mb-4">
-                        <div className="col-md-4">
-                          <div className="card border-success">
-                            <div className="card-body text-center">
-                              <div className="text-success small mb-1">Total Ingresos</div>
-                              <div className="h3 text-success fw-bold">
-                                ${balanceFinanciero.total_ingresos.toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className="card border-danger">
-                            <div className="card-body text-center">
-                              <div className="text-danger small mb-1">Total Egresos</div>
-                              <div className="h3 text-danger fw-bold">
-                                ${balanceFinanciero.total_egresos.toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className={`card ${
-                            balanceFinanciero.balance >= 0 
-                              ? "border-primary" 
-                              : "border-warning"
-                          }`}>
-                            <div className="card-body text-center">
-                              <div className={`small mb-1 ${
-                                balanceFinanciero.balance >= 0 ? "text-primary" : "text-warning"
-                              }`}>
-                                Balance
-                              </div>
-                              <div className={`h3 fw-bold ${
-                                balanceFinanciero.balance >= 0 ? "text-primary" : "text-warning"
-                              }`}>
-                                ${balanceFinanciero.balance.toLocaleString()}
-                              </div>
-                              <div className="small text-muted">
-                                {balanceFinanciero.balance_porcentual.toFixed(1)}% de ingresos
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Detalle por método de pago y categoría */}
-                      <div className="row">
-                        <div className="col-md-6">
-                          <h6 className="fw-medium mb-3">Ingresos por Método de Pago</h6>
-                          <div className="list-group">
-                            {Object.entries(balanceFinanciero.resumen_ingresos).map(([metodo, monto]) => (
-                              <div key={metodo} className="list-group-item d-flex justify-content-between align-items-center">
-                                <span className="small">{getMetodoPagoLabel(metodo)}</span>
-                                <span className="fw-medium text-success">${monto.toLocaleString()}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        
-                        <div className="col-md-6">
-                          <h6 className="fw-medium mb-3">Egresos por Categoría</h6>
-                          <div className="list-group">
-                            {Object.entries(balanceFinanciero.resumen_egresos).map(([categoria, monto]) => (
-                              <div key={categoria} className="list-group-item d-flex justify-content-between align-items-center">
-                                <span className="small">{categoria}</span>
-                                <span className="fw-medium text-danger">${monto.toLocaleString()}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Tab: Saldos Pendientes */}
-            <div className="tab-pane fade" id="saldos" role="tabpanel">
-              <div className="card">
-                <div className="card-body">
-                  <h5 className="card-title mb-3">
-                    <i className="bi bi-people me-2"></i>
-                    Saldos Pendientes de Clientes
-                  </h5>
-                  
-                  <div className="row mb-4">
-                    <div className="col-md-3">
-                      <label className="form-label">Fecha desde</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={fechaDesde}
-                        onChange={(e) => setFechaDesde(e.target.value)}
-                      />
-                    </div>
-                    <div className="col-md-3">
-                      <label className="form-label">Fecha hasta</label>
-                      <input
-                        type="date"
-                        className="form-control"
-                        value={fechaHasta}
-                        onChange={(e) => setFechaHasta(e.target.value)}
-                      />
-                    </div>
-                    <div className="col-md-3 d-flex align-items-end">
-                      <button 
-                        onClick={obtenerSaldosPendientes} 
-                        disabled={isLoadingReports}
-                        className="btn btn-primary w-100"
-                      >
-                        {isLoadingReports ? <i className="bi bi-arrow-clockwise spin me-2"></i> : <i className="bi bi-people me-2"></i>}
-                        Obtener Saldos
-                      </button>
-                    </div>
-                  </div>
-
-                  {saldosPendientes.length > 0 && (
-                    <div className="card">
-                      <div className="card-header bg-light">
-                        <h6 className="card-title mb-0">
-                          Saldos Pendientes: {saldosPendientes.length} clientes
-                        </h6>
-                        <p className="text-muted small mb-0">
-                          Total pendiente: ${saldosPendientes.reduce((sum, s) => sum + s.saldo_pendiente, 0).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="table-responsive">
-                        <table className="table table-hover mb-0">
-                          <thead className="table-light">
-                            <tr>
-                              <th>Cliente</th>
-                              <th>DNI</th>
-                              <th>Fecha Presupuesto</th>
-                              <th>Total</th>
-                              <th>Pagado</th>
-                              <th className="text-end">Pendiente</th>
-                              <th>Estado</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {saldosPendientes.map((saldo) => (
-                              <tr key={saldo.presupuesto_id}>
-                                <td className="fw-medium">
-                                  {saldo.cliente_nombre}
-                                </td>
-                                <td className="small text-muted">
-                                  {saldo.cliente_dni}
-                                </td>
-                                <td className="small text-muted">
-                                  {new Date(saldo.fecha_creacion).toLocaleDateString()}
-                                </td>
-                                <td className="fw-medium">
-                                  ${saldo.total_presupuesto.toLocaleString()}
-                                </td>
-                                <td className="text-success">
-                                  ${saldo.pagos_realizados.toLocaleString()}
-                                </td>
-                                <td className="text-end fw-semibold text-danger">
-                                  ${saldo.saldo_pendiente.toLocaleString()}
-                                </td>
-                                <td>
-                                  <span className={`badge ${
-                                    saldo.estado === 'pendiente' ? 'bg-warning' :
-                                    saldo.estado === 'lista' ? 'bg-success' :
-                                    'bg-secondary'
-                                  }`}>
-                                    {saldo.estado}
-                                  </span>
                                 </td>
                               </tr>
                             ))}
