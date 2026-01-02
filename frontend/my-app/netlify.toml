@@ -7,5 +7,5 @@
 
 # Configuración para Next.js
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "20"
 
