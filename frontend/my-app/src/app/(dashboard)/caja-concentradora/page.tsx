@@ -20,8 +20,9 @@ type MovimientoConcentradora = {
   caja_movimiento_id: number | null;
 };
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://127.0.0.1:8000";
+import { getApiBaseUrl } from "@/lib/api-config";
+
+const API_BASE = getApiBaseUrl();
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("es-AR", {

@@ -12,7 +12,7 @@ export function useProductos() {
     setLoading(false)
   }
 
-  const crearProducto = async (nuevoProducto) => {
+  const crearProducto = async (nuevoProducto: any) => {
     const res = await fetch("/api/productos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -21,7 +21,7 @@ export function useProductos() {
     if (res.ok) await fetchProductos()
   }
 
-  const actualizarProducto = async (id, cambios) => {
+  const actualizarProducto = async (id: string | number, cambios: any) => {
     const res = await fetch(`/api/productos/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -30,7 +30,7 @@ export function useProductos() {
     if (res.ok) await fetchProductos()
   }
 
-  const eliminarProducto = async (id) => {
+  const eliminarProducto = async (id: string | number) => {
     const res = await fetch(`/api/productos/${id}`, {
       method: "DELETE",
     })

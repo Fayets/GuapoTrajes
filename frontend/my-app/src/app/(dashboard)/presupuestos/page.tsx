@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import PresupuestoModal from "@/components/modales/presupuestoModal";
+import { getApiBaseUrl } from "@/lib/api-config";
 import {
   Dialog,
   DialogContent,
@@ -155,6 +156,8 @@ export default function PresupuestosPage() {
     cliente: string;
   } | null>(null);
 
+  const API_BASE = getApiBaseUrl();
+
   useEffect(() => {
     fetchClientes();
     fetchProductos();
@@ -164,7 +167,7 @@ export default function PresupuestosPage() {
   const fetchClientes = async () => {
     try {
       const token = localStorage.getItem("token"); // o donde guardes el token JWT
-      const res = await fetch("http://127.0.0.1:8000/clientes/all", {
+      const res = await fetch(`${API_BASE}/clientes/all`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -186,7 +189,7 @@ export default function PresupuestosPage() {
   const fetchProductos = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://127.0.0.1:8000/productos/all", {
+      const res = await fetch(`${API_BASE}/productos/all`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -223,7 +226,7 @@ export default function PresupuestosPage() {
 
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/productos/${productoId}/disponibilidad?fecha_retiro=${fechaRetiro}&fecha_devolucion=${fechaDevolucion}`
+        `${API_BASE}/productos/${productoId}/disponibilidad?fecha_retiro=${fechaRetiro}&fecha_devolucion=${fechaDevolucion}`
       );
 
       const data = await res.json();
@@ -242,7 +245,7 @@ export default function PresupuestosPage() {
     if (!producto) return;
 
     const res = await fetch(
-      `http://127.0.0.1:8000/productos/${producto.id}/disponibilidad?fecha_retiro=${formData.fechaRetiro}&fecha_devolucion=${formData.fechaDevolucion}`
+      `${API_BASE}/productos/${producto.id}/disponibilidad?fecha_retiro=${formData.fechaRetiro}&fecha_devolucion=${formData.fechaDevolucion}`
     );
     const data = await res.json();
 
@@ -371,7 +374,7 @@ export default function PresupuestosPage() {
     );
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/presupuestos/", {
+      const res = await fetch(`${API_BASE}/presupuestos/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -417,7 +420,7 @@ export default function PresupuestosPage() {
   const fetchPresupuestos = async () => {
     setCargando(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/presupuestos/", {
+      const res = await fetch(`${API_BASE}/presupuestos/`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -507,7 +510,7 @@ export default function PresupuestosPage() {
     }
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/ordenes/", {
+      const res = await fetch(`${API_BASE}/ordenes/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -582,7 +585,7 @@ export default function PresupuestosPage() {
     }
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/ordenes/", {
+      const res = await fetch(`${API_BASE}/ordenes/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -618,7 +621,7 @@ export default function PresupuestosPage() {
     if (!confirmar) return;
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/presupuestos/${id}`, {
+      const res = await fetch(`${API_BASE}/presupuestos/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,

@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getApiBaseUrl } from "@/lib/api-config"
 
 type Modista = {
   id: string
@@ -34,6 +35,7 @@ export default function ModistaPage() {
   })
 
   const [token, setToken] = useState<string | null>(null)
+  const API_BASE = getApiBaseUrl();
 
   useEffect(() => {
     const t = localStorage.getItem("token")
@@ -51,7 +53,7 @@ export default function ModistaPage() {
 
   const fetchModista = async () => {
     try {
-      const res = await fetch("http://localhost:8000/modistas/all", {
+      const res = await fetch(`${API_BASE}/modistas/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -112,7 +114,7 @@ export default function ModistaPage() {
   const eliminarModista = async () => {
     if (!modistaActual) return
     try {
-      await fetch(`http://localhost:8000/modistas/delete/${modistaActual.id}`, {
+      await fetch(`${API_BASE}/modistas/delete/${modistaActual.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -129,8 +131,8 @@ export default function ModistaPage() {
   const guardarModista = async () => {
     const metodo = modistaActual ? "PUT" : "POST"
     const url = modistaActual
-      ? `http://localhost:8000/modistas/update/${modistaActual.id}`
-      : `http://localhost:8000/modistas/register`
+      ? `${API_BASE}/modistas/update/${modistaActual.id}`
+      : `${API_BASE}/modistas/register`
 
     // Validar datos antes de enviar
     if (!formData.nombre || !formData.telefono || !formData.direccion) {

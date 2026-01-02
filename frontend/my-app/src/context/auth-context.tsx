@@ -3,6 +3,7 @@
 
 import { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getApiBaseUrl } from "@/lib/api-config";
 
 type Rol = "ADMIN" | "EMPLEADO";
 type Me = {
@@ -34,7 +35,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Llama a /auth/me usando el token actual
   const fetchMe = async (tkn: string) => {
-    const res = await fetch("http://127.0.0.1:8000/auth/me", {
+    const apiBase = getApiBaseUrl();
+    const res = await fetch(`${apiBase}/auth/me`, {
       headers: { Authorization: `Bearer ${tkn}` },
     });
     if (!res.ok) throw new Error("Unauthorized");
@@ -83,7 +85,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const login = async (username: string, password: string) => {
     setLoading(true);
     try {
-      const response = await fetch("http://127.0.0.1:8000/auth/login", {
+      const apiBase = getApiBaseUrl();
+      const response = await fetch(`${apiBase}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),

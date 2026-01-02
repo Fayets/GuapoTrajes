@@ -4,6 +4,7 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { getApiBaseUrl } from "@/lib/api-config";
 import {
   Dialog,
   DialogContent,
@@ -100,7 +101,7 @@ export default function OrdenesTrabajoPage() {
     setCargando(true);
     try {
       const res = await fetch(
-        "http://127.0.0.1:8000/ordenes/",
+        `${getApiBaseUrl()}/ordenes/`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -135,7 +136,7 @@ export default function OrdenesTrabajoPage() {
     setLoadingPago(true);
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/ordenes/${ordenSeleccionada.id}/pagar-saldo`, {
+      const res = await fetch(`${getApiBaseUrl()}/ordenes/${ordenSeleccionada.id}/pagar-saldo`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -293,7 +294,7 @@ export default function OrdenesTrabajoPage() {
                             try {
                               // Obtener los datos completos de la orden desde el backend
                               const res = await fetch(
-                                `http://127.0.0.1:8000/ordenes/${orden.id}`,
+                                `${getApiBaseUrl()}/ordenes/${orden.id}`,
                                 {
                                   headers: {
                                     Authorization: `Bearer ${localStorage.getItem("token")}`,

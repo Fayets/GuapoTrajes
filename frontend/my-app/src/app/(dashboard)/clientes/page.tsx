@@ -6,6 +6,7 @@ import ClienteModal from "@/components/modales/clienteModal";
 import { RoleGate } from "@/components/RoleGate";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getApiBaseUrl } from "@/lib/api-config";
 
 type Cliente = {
   id: number;
@@ -23,13 +24,7 @@ type Precliente = {
   celular: string;
 };
 
-export default function ClientesPage({
-  preclienteSeleccionado,
-  onConversionCompleta,
-}: {
-  preclienteSeleccionado?: Precliente;
-  onConversionCompleta?: () => void;
-}) {
+export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [clienteActual, setClienteActual] = useState<Cliente | null>(null);
@@ -61,6 +56,7 @@ export default function ClientesPage({
   });
 
   const [token, setToken] = useState<string | null>(null);
+  const API_BASE = getApiBaseUrl();
 
   useEffect(() => {
     const t = localStorage.getItem("token");
@@ -87,11 +83,8 @@ export default function ClientesPage({
     setShowModal(true);
   };
 
-  useEffect(() => {
-    if (preclienteSeleccionado) {
-      convertirPreclienteACliente(preclienteSeleccionado);
-    }
-  }, [preclienteSeleccionado]);
+  // Nota: Las props no están disponibles en páginas de Next.js
+  // Si necesitas convertir un precliente, usa query params o navegación programática
 
   useEffect(() => {
     if (token) {
@@ -103,7 +96,7 @@ export default function ClientesPage({
   const fetchClientes = async () => {
     setCargando(true);
     try {
-      const res = await fetch("http://localhost:8000/clientes/all", {
+      const res = await fetch(`${API_BASE}/clientes/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -171,7 +164,7 @@ export default function ClientesPage({
     try {
       // Obtener información detallada sobre las relaciones del cliente
       const response = await fetch(
-        `http://localhost:8000/clientes/relaciones/${cliente.id}`,
+        `${API_BASE}/clientes/relaciones/${cliente.id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -213,7 +206,7 @@ export default function ClientesPage({
   const obtenerInfoCliente = async (clienteId: number) => {
     try {
       const response = await fetch(
-        `http://localhost:8000/clientes/get_by_id/${clienteId}`,
+        `${API_BASE}/clientes/get_by_id/${clienteId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -235,7 +228,7 @@ export default function ClientesPage({
     if (!clienteActual) return;
     try {
       const response = await fetch(
-        `http://localhost:8000/clientes/delete/${clienteActual.id}`,
+        `${API_BASE}/clientes/delete/${clienteActual.id}`,
         {
           method: "DELETE",
           headers: {
@@ -304,12 +297,12 @@ export default function ClientesPage({
 
       if (clienteActual) {
         // Edición de cliente ya existente
-        url = `http://localhost:8000/clientes/update/${clienteActual.id}`;
+        url = `${API_BASE}/clientes/update/${clienteActual.id}`;
         metodo = "PUT";
         body = JSON.stringify(datosFormateados);
       } else if (preclienteSeleccionadoId) {
         // Conversión de precliente a cliente
-        url = `http://localhost:8000/preclientes/convertir/${preclienteSeleccionadoId}`;
+        url = `${API_BASE}/preclientes/convertir/${preclienteSeleccionadoId}`;
         metodo = "POST";
         body = JSON.stringify({
           direccion: datosFormateados.direccion,
@@ -317,7 +310,7 @@ export default function ClientesPage({
         });
       } else {
         // Alta normal de cliente
-        url = `http://localhost:8000/clientes/register`;
+        url = `${API_BASE}/clientes/register`;
         metodo = "POST";
         body = JSON.stringify(datosFormateados);
       }
@@ -348,9 +341,7 @@ export default function ClientesPage({
       setClienteActual(null);
       setPreclienteSeleccionadoId(null);
       fetchClientes();
-      if (onConversionCompleta) {
-        onConversionCompleta();
-      }
+      // Conversión completada
     } catch (err) {
       console.error("Error al guardar cliente", err);
       alert("Error al guardar cliente. Por favor, intente nuevamente.");

@@ -8,6 +8,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { getApiBaseUrl } from "@/lib/api-config";
 
 type Cliente = { id: number; nombre: string; apellido: string };
 type Producto = {
@@ -96,7 +97,8 @@ export default function PresupuestoModal({
           return;
         }
 
-        const res = await fetch("http://localhost:8000/eventos/all", {
+        const API_BASE = getApiBaseUrl();
+        const res = await fetch(`${API_BASE}/eventos/all`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },

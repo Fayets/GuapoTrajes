@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "sonner"
+import { getApiBaseUrl } from "@/lib/api-config"
 
 interface Sucursal {
   id: number
@@ -19,7 +20,8 @@ export default function SucursalesPage() {
   const [sucursalActual, setSucursalActual] = useState<Partial<Sucursal> | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const API_URL = "http://127.0.0.1:8000/sucursales"
+  const API_BASE = getApiBaseUrl()
+  const API_URL = `${API_BASE}/sucursales`
 
   // Función para obtener headers con token desde localStorage
   const getAuthHeaders = () => {

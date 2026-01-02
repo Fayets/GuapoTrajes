@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { getApiBaseUrl } from "@/lib/api-config";
 import {
   Table,
   TableBody,
@@ -116,7 +117,8 @@ export default function VentasPage() {
     }>
   >([]);
 
-  const API_URL = "http://127.0.0.1:8000/ventas";
+  const API_BASE = getApiBaseUrl();
+  const API_URL = `${API_BASE}/ventas`;
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem("token");
@@ -152,7 +154,7 @@ export default function VentasPage() {
   useEffect(() => {
     const fetchClientes = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/clientes/all", {
+        const res = await fetch(`${API_BASE}/clientes/all`, {
           headers: getAuthHeaders(),
         });
         if (!res.ok) throw new Error("Error al obtener clientes");
@@ -165,7 +167,7 @@ export default function VentasPage() {
 
     const fetchProductos = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/productos/all", {
+        const res = await fetch(`${API_BASE}/productos/all`, {
           headers: getAuthHeaders(),
         });
         if (!res.ok) throw new Error("Error al obtener productos");

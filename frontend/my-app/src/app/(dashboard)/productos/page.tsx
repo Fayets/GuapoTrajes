@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import JsBarcode from "jsbarcode";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/RoleGate";
+import { getApiBaseUrl } from "@/lib/api-config";
 
 interface Producto {
   id: number;
@@ -75,7 +76,8 @@ export default function ProductosPage() {
   // Stats para chips
   const [stats, setStats] = useState<Record<string, number>>({});
 
-  const API_URL = "http://127.0.0.1:8000/productos"; // :contentReference[oaicite:3]{index=3}
+  const API_BASE = getApiBaseUrl();
+  const API_URL = `${API_BASE}/productos`;
 
   useEffect(() => {
     const t = localStorage.getItem("token");

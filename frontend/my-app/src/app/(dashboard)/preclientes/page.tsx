@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import ReactPaginate from "react-paginate";
 import ClienteModal from "@/components/modales/clienteModal";
 import { Input } from "@/components/ui/input";
+import { getApiBaseUrl } from "@/lib/api-config";
 import {
   Table,
   TableBody,
@@ -65,6 +66,7 @@ export default function PreclientesPage() {
   });
 
   const [token, setToken] = useState<string | null>(null);
+  const API_BASE = getApiBaseUrl();
 
   useEffect(() => {
     const t = localStorage.getItem("token");
@@ -83,7 +85,7 @@ export default function PreclientesPage() {
   const fetchClientes = async () => {
     setCargando(true);
     try {
-      const res = await fetch("http://localhost:8000/preclientes/all", {
+      const res = await fetch(`${API_BASE}/preclientes/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -147,7 +149,7 @@ export default function PreclientesPage() {
     if (!clienteActual) return;
     try {
       await fetch(
-        `http://localhost:8000/preclientes/delete/${clienteActual.id}`,
+        `${API_BASE}/preclientes/delete/${clienteActual.id}`,
         {
           method: "DELETE",
           headers: {
@@ -178,8 +180,8 @@ export default function PreclientesPage() {
   const guardarCliente = async () => {
     const metodo = clienteActual ? "PUT" : "POST";
     const url = clienteActual
-      ? `http://localhost:8000/preclientes/update/${clienteActual.id}`
-      : `http://localhost:8000/preclientes/register`;
+      ? `${API_BASE}/preclientes/update/${clienteActual.id}`
+      : `${API_BASE}/preclientes/register`;
 
     // Validar datos antes de enviar
     if (!formData.nombre || !formData.apellido || !formData.celular) {
@@ -260,7 +262,7 @@ export default function PreclientesPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:8000/preclientes/convertir/${preclienteIdConvertir}`,
+        `${API_BASE}/preclientes/convertir/${preclienteIdConvertir}`,
         {
           method: "POST",
           headers: {

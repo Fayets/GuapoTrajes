@@ -26,12 +26,15 @@ interface TooltipTriggerProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export const TooltipTrigger = React.forwardRef<HTMLDivElement, TooltipTriggerProps>(
   ({ className, asChild = false, children, ...props }, ref) => {
-    const Comp = asChild ? React.Fragment : "div"
+    if (asChild) {
+      // Cuando asChild es true, no podemos usar ref ni className en Fragment
+      return <React.Fragment {...props}>{children}</React.Fragment>
+    }
 
     return (
-      <Comp ref={ref} className={cn("tooltip-trigger", className)} {...props}>
+      <div ref={ref} className={cn("tooltip-trigger", className)} {...props}>
         {children}
-      </Comp>
+      </div>
     )
   },
 )

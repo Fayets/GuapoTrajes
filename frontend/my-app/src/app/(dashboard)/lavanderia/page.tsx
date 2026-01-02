@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { getApiBaseUrl } from "@/lib/api-config"
 
 type Lavanderia = {
   id: string
@@ -34,6 +35,7 @@ export default function LavanderiaPage() {
   })
 
   const [token, setToken] = useState<string | null>(null)
+  const API_BASE = getApiBaseUrl();
 
   useEffect(() => {
     const t = localStorage.getItem("token")
@@ -51,7 +53,7 @@ export default function LavanderiaPage() {
 
   const fetchLavanderia = async () => {
     try {
-      const res = await fetch("http://localhost:8000/lavanderia/all", {
+      const res = await fetch(`${API_BASE}/lavanderia/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -112,7 +114,7 @@ export default function LavanderiaPage() {
   const eliminarLavanderia = async () => {
     if (!lavanderiaActual) return
     try {
-      await fetch(`http://localhost:8000/lavanderia/delete/${lavanderiaActual.id}`, {
+      await fetch(`${API_BASE}/lavanderia/delete/${lavanderiaActual.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -129,8 +131,8 @@ export default function LavanderiaPage() {
   const guardarLavanderia = async () => {
     const metodo = lavanderiaActual ? "PUT" : "POST"
     const url = lavanderiaActual
-      ? `http://localhost:8000/lavanderia/update/${lavanderiaActual.id}`
-      : `http://localhost:8000/lavanderia/register`
+      ? `${API_BASE}/lavanderia/update/${lavanderiaActual.id}`
+      : `${API_BASE}/lavanderia/register`
 
     // Validar datos antes de enviar
     if (!formData.nombre || !formData.telefono || !formData.direccion) {

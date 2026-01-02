@@ -20,8 +20,6 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "md", asChild = false, ...props }, ref) => {
-    const Comp = asChild ? React.Fragment : "button"
-
     // Mapear variantes a clases de Bootstrap
     const variantClass =
       variant === "ghost"
@@ -33,7 +31,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // Mapear tamaños a clases de Bootstrap
     const sizeClass = size === "sm" ? "btn-sm" : size === "lg" ? "btn-lg" : ""
 
-    return <Comp className={cn("btn", variantClass, sizeClass, className)} ref={ref} {...props} />
+    if (asChild) {
+      // Cuando asChild es true, no podemos usar ref ni className en Fragment
+      return <React.Fragment {...props} />
+    }
+
+    return <button className={cn("btn", variantClass, sizeClass, className)} ref={ref} {...props} />
   },
 )
 Button.displayName = "Button"

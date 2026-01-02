@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { getApiBaseUrl } from "@/lib/api-config";
 
 type Evento = {
   id: string;
@@ -27,6 +28,8 @@ export default function EventoPage() {
   const [formData, setFormData] = useState({
     nombre: "",
   });
+
+  const API_BASE = getApiBaseUrl();
 
   const [token, setToken] = useState<string | null>(null);
 
@@ -47,7 +50,7 @@ export default function EventoPage() {
   const fetchEventos = async () => {
     setCargando(true);
     try {
-      const res = await fetch("http://localhost:8000/eventos/all", {
+      const res = await fetch(`${API_BASE}/eventos/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -106,7 +109,7 @@ export default function EventoPage() {
   const eliminarEvento = async () => {
     if (!eventoActual) return;
     try {
-      await fetch(`http://localhost:8000/eventos/delete/${eventoActual.id}`, {
+      await fetch(`${API_BASE}/eventos/delete/${eventoActual.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -123,8 +126,8 @@ export default function EventoPage() {
   const guardarEvento = async () => {
     const metodo = eventoActual ? "PUT" : "POST";
     const url = eventoActual
-      ? `http://localhost:8000/eventos/update/${eventoActual.id}`
-      : `http://localhost:8000/eventos/register`;
+      ? `${API_BASE}/eventos/update/${eventoActual.id}`
+      : `${API_BASE}/eventos/register`;
 
     // Validar datos antes de enviar
     if (!formData.nombre) {
