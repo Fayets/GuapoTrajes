@@ -40,11 +40,20 @@ class OrdenTrabajoServices:
 
                 total = presupuesto.total
                 saldo_pendiente = total - seña_pagada
-                fecha_bloqueo = presupuesto.fecha_evento - timedelta(days=5)
+                
+                # Asegurar que la fecha_evento se copie exactamente sin conversiones
+                # La fecha_evento del presupuesto ya es un objeto date, copiarlo directamente
+                fecha_evento_orden = presupuesto.fecha_evento
+                
+                # Debug: verificar la fecha antes de guardar
+                print(f"🔍 DEBUG - Presupuesto fecha_evento: {presupuesto.fecha_evento} (tipo: {type(presupuesto.fecha_evento)})")
+                print(f"🔍 DEBUG - Orden fecha_evento a guardar: {fecha_evento_orden} (tipo: {type(fecha_evento_orden)})")
+                
+                fecha_bloqueo = fecha_evento_orden - timedelta(days=5)
 
                 orden = OrdenTrabajo(
                     presupuesto=presupuesto,
-                    fecha_evento=presupuesto.fecha_evento,
+                    fecha_evento=fecha_evento_orden,
                     seña_pagada=seña_pagada,
                     saldo_pendiente=saldo_pendiente,
                     metodo_pago=payment_method,  # Guardar como string
@@ -98,6 +107,10 @@ class OrdenTrabajoServices:
                     )
                 
                 presupuesto.estado = "Aprobado"
+                
+                # Debug: verificar la fecha después de guardar
+                print(f"🔍 DEBUG - Orden guardada fecha_evento: {orden.fecha_evento} (tipo: {type(orden.fecha_evento)})")
+                print(f"🔍 DEBUG - Presupuesto fecha_evento después: {presupuesto.fecha_evento} (tipo: {type(presupuesto.fecha_evento)})")
                 
                 return {
                     "message": "Orden de trabajo creada exitosamente",

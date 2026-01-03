@@ -298,7 +298,7 @@ export default function OrdenesTrabajoPage() {
                       <td className="text-muted text-uppercase">{orden.presupuesto_numero}</td>
                       <td>{orden.cliente_nombre}</td>
                       <td className="text-nowrap">
-                        {format(new Date(orden.fecha_evento), "dd/MM/yyyy", {
+                        {format(new Date(orden.fecha_evento + "T00:00:00"), "dd/MM/yyyy", {
                           locale: es,
                         })}
                       </td>
@@ -549,7 +549,7 @@ export default function OrdenesTrabajoPage() {
                     <div className="col-12 col-md-6">
                       <span className="text-muted small d-block">Fecha del evento</span>
                       <span className="fw-semibold">
-                        {format(new Date(ordenSeleccionada.fecha_evento), "dd/MM/yyyy", {
+                        {format(new Date(ordenSeleccionada.fecha_evento + "T00:00:00"), "dd/MM/yyyy", {
                           locale: es,
                         })}
                       </span>
@@ -628,7 +628,7 @@ export default function OrdenesTrabajoPage() {
                             </span>
                           </div>
                           <div className="text-muted small mt-2">
-                            Bloqueo: {format(new Date(prod.fecha_bloqueo), "dd/MM/yyyy", { locale: es })}
+                            Bloqueo: {format(new Date(prod.fecha_bloqueo + "T00:00:00"), "dd/MM/yyyy", { locale: es })}
                           </div>
                           {prod.observaciones && (
                             <div className="text-muted small mt-1">

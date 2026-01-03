@@ -19,6 +19,7 @@ from src.controllers.caja_chica_controller import router as caja_chica_router
 from src.controllers.caja_concentradora_controller import router as caja_concentradora_router
 from src.controllers.pagos_controller import router as pagos_router
 from src.controllers.eventos_controller import router as eventos_router
+from src.controllers.reportes_controller import router as reportes_router
 from src.migrations import apply_schema_migrations
 
 app = FastAPI()
@@ -80,6 +81,9 @@ app.include_router(pagos_router, tags=["Pagos"])
 
 #Eventos
 app.include_router(eventos_router, prefix="/eventos", tags=["Eventos"])
+
+#Reportes
+app.include_router(reportes_router, tags=["Reportes"])
 
 
 # Personalizar el esquema de seguridad en OpenAPI para usar Bearer tokens

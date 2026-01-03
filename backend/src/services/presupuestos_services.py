@@ -1,5 +1,5 @@
 from pony.orm import db_session, select, flush, commit, Database, desc
-from datetime import datetime
+from datetime import datetime, date
 from fastapi import HTTPException
 from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, db
 from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse
@@ -69,11 +69,20 @@ class PresupuestosServices:
                     from src.models import Usuario
                     usuario_aplico_descuento = Usuario.get(id=current_user.id)
 
+                # Asegurar que fecha_evento sea un objeto date puro
+                fecha_evento_presupuesto = data.fecha_evento
+                if isinstance(fecha_evento_presupuesto, datetime):
+                    fecha_evento_presupuesto = fecha_evento_presupuesto.date()
+                
+                # Debug: verificar la fecha recibida
+                print(f"🔍 DEBUG Presupuesto - Fecha recibida: {data.fecha_evento} (tipo: {type(data.fecha_evento)})")
+                print(f"🔍 DEBUG Presupuesto - Fecha a guardar: {fecha_evento_presupuesto} (tipo: {type(fecha_evento_presupuesto)})")
+                
                 # Crear presupuesto - construir argumentos condicionalmente
                 presupuesto_args = {
                     "numero": numero,
                     "cliente": cliente,
-                    "fecha_evento": data.fecha_evento,
+                    "fecha_evento": fecha_evento_presupuesto,
                     "fecha_retiro": data.fecha_retiro,
                     "fecha_devolucion": data.fecha_devolucion,
                     "categoria_evento": data.categoria_evento,
@@ -96,6 +105,9 @@ class PresupuestosServices:
                     presupuesto_args["extra_discount_created_at"] = datetime.now()
                 
                 presupuesto = Presupuesto(**presupuesto_args)
+                
+                # Debug: verificar la fecha guardada
+                print(f"🔍 DEBUG Presupuesto - Fecha guardada: {presupuesto.fecha_evento} (tipo: {type(presupuesto.fecha_evento)})")
                 
 
                 # Crear items

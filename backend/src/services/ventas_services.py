@@ -112,7 +112,7 @@ class VentasServices:
                     "payment_method": venta_data.payment_method,
                     "origen": f"VENTA:{venta_id}",
                     "venta_id": venta_id,
-                    "sucursal_id": sucursal.ids
+                    "sucursal_id": sucursal.id
                 }
                 
                 caja_service.create_movimiento(movimiento_data, usuario.id)

@@ -730,7 +730,9 @@ export default function PresupuestosPage() {
     const formatearFecha = (fecha?: string) => {
       if (!fecha) return null;
       try {
-        return format(new Date(fecha), "dd/MM/yyyy", { locale: es });
+        // Agregar T00:00:00 para evitar problemas de zona horaria
+        const fechaConHora = fecha.includes("T") ? fecha : fecha + "T00:00:00";
+        return format(new Date(fechaConHora), "dd/MM/yyyy", { locale: es });
       } catch {
         return fecha;
       }
@@ -894,7 +896,7 @@ export default function PresupuestosPage() {
                       <td>{p.cliente_nombre}</td>
                       <td>
                         {p.fecha_evento
-                          ? format(new Date(p.fecha_evento), "dd/MM/yyyy", {
+                          ? format(new Date(p.fecha_evento + "T00:00:00"), "dd/MM/yyyy", {
                               locale: es,
                             })
                           : "Sin fecha"}
