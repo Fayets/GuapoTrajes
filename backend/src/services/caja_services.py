@@ -286,8 +286,8 @@ class CajaServices:
                     (payment_method is None or cm.payment_method == payment_method)):
                     movimientos_filtrados.append(cm)
             
-            # Ordenar por hora
-            movimientos_filtrados.sort(key=lambda x: x.fecha_hora)
+            # Ordenar por hora descendente (más reciente primero)
+            movimientos_filtrados.sort(key=lambda x: x.fecha_hora, reverse=True)
             
             movimientos = []
             for cm in movimientos_filtrados:

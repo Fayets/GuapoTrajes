@@ -24,10 +24,13 @@ def registrar_cliente(cliente: schemas.ClientCreate, current_user=Depends(get_cu
     try:
         return servicio.crear_cliente(cliente)
     except HTTPException as e:
-        return {"message": e.detail, "success": False, "data": None}
+        # Lanzar el HTTPException para que FastAPI maneje el código de estado correctamente
+        raise e
     except Exception as e:
         print(f"Error: {e}")  
-        return {"message": f"Error al crear cliente: {str(e)}", "success": False, "data": None}
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error inesperado al crear cliente: {str(e)}")
 
    
 

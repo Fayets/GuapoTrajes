@@ -229,6 +229,9 @@ class OrdenTrabajoServices:
                     "presupuesto_id": orden.presupuesto.id,
                     "presupuesto_numero": orden.presupuesto.numero,
                     "cliente_nombre": f"{orden.presupuesto.cliente.nombre} {orden.presupuesto.cliente.apellido}",
+                    "cliente_dni": orden.presupuesto.cliente.dni,
+                    "cliente_direccion": orden.presupuesto.cliente.direccion,
+                    "cliente_celular": orden.presupuesto.cliente.celular,
                     "fecha_evento": orden.fecha_evento.isoformat(),
                     "fecha_creacion": orden.fecha_creacion.isoformat() if orden.fecha_creacion else "",
                     "seña_pagada": orden.seña_pagada,
@@ -415,7 +418,14 @@ class OrdenTrabajoServices:
                 movimientos_caja = []
                 for cm in todos_movimientos:
                     try:
-                        if cm.origen and presupuesto_numero in str(cm.origen):
+                        if not cm.origen:
+                            continue
+                        origen_str = str(cm.origen)
+                        # Buscar movimientos que contengan el número de presupuesto
+                        # o que sean específicamente de esta orden
+                        if (presupuesto_numero in origen_str or
+                            f"SEÑA_PRESUPUESTO:{presupuesto_numero}" in origen_str or
+                            f"PAGO_ADICIONAL_ORDEN:{presupuesto_numero}" in origen_str):
                             movimientos_caja.append(cm)
                     except Exception as e:
                         print(f"⚠️ Error al filtrar movimiento {cm.id}: {e}")
@@ -423,11 +433,9 @@ class OrdenTrabajoServices:
                 
                 # Debug: imprimir información para diagnosticar
                 print(f"🔍 Buscando movimientos para presupuesto: {presupuesto_numero}")
-                print(f"📊 Total movimientos encontrados: {len(movimientos_caja)}")
-                if len(movimientos_caja) == 0:
-                    # Buscar movimientos que contengan "SEÑA" o "PAGO" para debug
-                    movimientos_debug = [cm for cm in todos_movimientos[:10] if cm.origen and ("SEÑA" in cm.origen.upper() or "PAGO" in cm.origen.upper())]
-                    print(f"🔍 Movimientos con SEÑA/PAGO (primeros 10): {[(m.id, m.origen) for m in movimientos_debug]}")
+                print(f"📊 Total movimientos de caja encontrados: {len(movimientos_caja)}")
+                for mov in movimientos_caja:
+                    print(f"  - Movimiento {mov.id}: origen={mov.origen}, monto={mov.monto}, fecha={mov.fecha_hora}")
 
                 # Obtener movimientos de cuenta corriente
                 movimientos_cuenta = list(CuentaCorriente.select(
@@ -481,6 +489,10 @@ class OrdenTrabajoServices:
                         "movimiento_id": movimiento_id
                     })
 
+                # Crear un set para rastrear montos ya agregados y evitar duplicados
+                # Usaremos (monto, fecha) como clave única
+                pagos_agregados = set()
+                
                 # Agregar pagos adicionales desde movimientos de caja
                 # Excluir la seña inicial que ya se agregó
                 presupuesto_numero = orden.presupuesto.numero
@@ -495,6 +507,16 @@ class OrdenTrabajoServices:
                         if (f"PAGO_ADICIONAL_ORDEN:{presupuesto_numero}" in origen_str or
                             ("PAGO_ADICIONAL" in origen_str.upper() and 
                              f"SEÑA_PRESUPUESTO:{presupuesto_numero}" not in origen_str)):
+                            
+                            # Crear clave única para evitar duplicados
+                            fecha_mov = movimiento.fecha_hora.isoformat() if movimiento.fecha_hora else ""
+                            clave_pago = (float(movimiento.monto), fecha_mov)
+                            
+                            if clave_pago in pagos_agregados:
+                                print(f"⚠️ Pago duplicado detectado: monto={movimiento.monto}, fecha={fecha_mov}")
+                                continue
+                            
+                            pagos_agregados.add(clave_pago)
                             
                             # Obtener método de pago de forma segura
                             metodo_pago = "N/A"
@@ -527,22 +549,41 @@ class OrdenTrabajoServices:
                             })
                     except Exception as e:
                         print(f"⚠️ Error al procesar movimiento {movimiento.id}: {e}")
+                        import traceback
+                        traceback.print_exc()
                         continue
                 
-                # Agregar pagos desde cuenta corriente
+                # Agregar pagos desde cuenta corriente que no tengan movimiento de caja correspondiente
+                print(f"📊 Total movimientos de cuenta corriente encontrados: {len(movimientos_cuenta)}")
                 for movimiento_cc in movimientos_cuenta:
-                    if movimiento_cc.tipo == "credito" and movimiento_cc.monto > 0:
-                        historial["pagos"].append({
-                            "tipo": "Pago adicional",
-                            "fecha": movimiento_cc.fecha.isoformat(),
-                            "fecha_hora": movimiento_cc.fecha.isoformat(),
-                            "monto": movimiento_cc.monto,
-                            "metodo_pago": "N/A",
-                            "origen": movimiento_cc.concepto,
-                            "usuario_nombre": "N/A",
-                            "sucursal_nombre": "N/A",
-                            "movimiento_id": movimiento_cc.id
-                        })
+                    try:
+                        if movimiento_cc.tipo == "credito" and movimiento_cc.monto > 0:
+                            # Crear clave única para evitar duplicados
+                            fecha_cc = movimiento_cc.fecha.isoformat() if movimiento_cc.fecha else ""
+                            clave_pago = (float(movimiento_cc.monto), fecha_cc)
+                            
+                            # Solo agregar si no fue agregado desde movimientos de caja
+                            if clave_pago not in pagos_agregados:
+                                pagos_agregados.add(clave_pago)
+                                print(f"📝 Agregando pago desde cuenta corriente: monto={movimiento_cc.monto}, fecha={fecha_cc}")
+                                historial["pagos"].append({
+                                    "tipo": "Pago adicional",
+                                    "fecha": movimiento_cc.fecha.isoformat() if movimiento_cc.fecha else None,
+                                    "fecha_hora": movimiento_cc.fecha.isoformat() if movimiento_cc.fecha else None,
+                                    "monto": movimiento_cc.monto,
+                                    "metodo_pago": "N/A",
+                                    "origen": movimiento_cc.concepto,
+                                    "usuario_nombre": "N/A",
+                                    "sucursal_nombre": "N/A",
+                                    "movimiento_id": movimiento_cc.id
+                                })
+                            else:
+                                print(f"⚠️ Pago de cuenta corriente ya agregado desde caja: monto={movimiento_cc.monto}, fecha={fecha_cc}")
+                    except Exception as e:
+                        print(f"⚠️ Error al procesar movimiento de cuenta corriente {movimiento_cc.id}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
 
                 # Ordenar pagos por fecha
                 historial["pagos"].sort(key=lambda x: x["fecha"])

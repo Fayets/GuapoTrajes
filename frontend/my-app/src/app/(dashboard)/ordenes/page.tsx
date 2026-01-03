@@ -31,6 +31,9 @@ type OrdenTrabajo = {
   presupuesto_id: number;
   presupuesto_numero: string;
   cliente_nombre: string;
+  cliente_dni?: string;
+  cliente_direccion?: string;
+  cliente_celular?: string;
   fecha_evento: string;
   fecha_creacion: string;
   seña_pagada: number;
@@ -200,6 +203,254 @@ export default function OrdenesTrabajoPage() {
       setHistorialSeñas([]);
     } finally {
       setCargandoHistorial(false);
+    }
+  };
+
+  const generarContrato = () => {
+    if (!ordenSeleccionada || ordenSeleccionada.saldo_pendiente !== 0) {
+      return;
+    }
+
+    // Obtener información de la orden
+    const numeroContrato = ordenSeleccionada.presupuesto_numero.padStart(6, '0');
+    const clienteNombre = ordenSeleccionada.cliente_nombre || "";
+    const clienteDNI = ordenSeleccionada.cliente_dni || "____________________";
+    const clienteDireccion = ordenSeleccionada.cliente_direccion || "__________________________";
+    const fechaEvento = ordenSeleccionada.fecha_evento 
+      ? format(new Date(ordenSeleccionada.fecha_evento + "T00:00:00"), "dd/MM/yyyy", { locale: es })
+      : "";
+    const fechaCreacion = ordenSeleccionada.fecha_creacion
+      ? format(new Date(ordenSeleccionada.fecha_creacion), "dd/MM/yyyy", { locale: es })
+      : format(new Date(), "dd/MM/yyyy", { locale: es });
+    
+    // Obtener día y mes de la fecha de creación
+    const fechaCreacionDate = ordenSeleccionada.fecha_creacion
+      ? new Date(ordenSeleccionada.fecha_creacion)
+      : new Date();
+    const dia = fechaCreacionDate.getDate();
+    const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+    const mes = meses[fechaCreacionDate.getMonth()];
+    const año = fechaCreacionDate.getFullYear();
+
+    // Calcular días de vigencia (diferencia entre fecha evento y fecha creación)
+    const fechaEventoDate = ordenSeleccionada.fecha_evento 
+      ? new Date(ordenSeleccionada.fecha_evento + "T00:00:00")
+      : new Date();
+    const diasVigencia = Math.max(1, Math.ceil((fechaEventoDate.getTime() - fechaCreacionDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    // Precio total
+    const precioTotal = ordenSeleccionada.total || (ordenSeleccionada.seña_pagada + ordenSeleccionada.saldo_pendiente);
+    const precioFormateado = precioTotal.toLocaleString("es-AR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    // Precio por día de prórroga (aproximadamente 10% del total por día)
+    const precioPorDia = Math.ceil(precioTotal * 0.1);
+    const precioPorDiaFormateado = precioPorDia.toLocaleString("es-AR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    // Lista de prendas
+    const listaPrendas = ordenSeleccionada.productos_reservados
+      .map((prod, index) => `${index + 1}. ${prod.producto_descripcion}`)
+      .join("<br>");
+
+    // Fecha de vencimiento del pagaré (30 días después de la fecha de creación)
+    const fechaVencimiento = new Date(fechaCreacionDate);
+    fechaVencimiento.setDate(fechaVencimiento.getDate() + 30);
+    const diaVencimiento = fechaVencimiento.getDate();
+    const mesVencimiento = meses[fechaVencimiento.getMonth()];
+    const añoVencimiento = fechaVencimiento.getFullYear();
+
+    const celular = ordenSeleccionada.cliente_celular || "___________________________";
+
+    const contenidoContrato = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrato de Alquiler - ${numeroContrato}</title>
+    <style>
+        @media print {
+            body { margin: 0; }
+            .no-print { display: none; }
+            .page-break { page-break-after: always; }
+        }
+        body {
+            font-family: 'Times New Roman', serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            line-height: 1.6;
+            font-size: 12pt;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .numero-contrato {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .clausula {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+        .clausula strong {
+            font-weight: bold;
+        }
+        .lista-prendas {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .firma {
+            margin-top: 40px;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+        }
+        .pagare {
+            margin-top: 50px;
+            page-break-before: always;
+        }
+        .botones {
+            text-align: center;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .underline {
+            border-bottom: 1px solid #000;
+            display: inline-block;
+            min-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Contrato Alquiler de Prendas de Vestir</h1>
+        <div class="numero-contrato">N° ${numeroContrato}</div>
+    </div>
+
+    <div class="clausula">
+        Entre <strong>Schmira Ariel Fernando</strong>, local <strong>Guapo</strong>, por una parte, en adelante <strong>EL LOCADOR</strong>,
+        y <span class="underline">${clienteNombre}</span>, DNI <span class="underline">${clienteDNI}</span>, con domicilio en <span class="underline">${clienteDireccion}</span> de la Ciudad de La Rioja, por la otra parte, en adelante <strong>EL LOCATARIO</strong>, convienen de común acuerdo en celebrar el presente contrato, el que se regirá por las siguientes cláusulas, sin perjuicio de la de Ley, a saber:
+    </div>
+
+    <div class="clausula">
+        <strong>PRIMERA: OBJETO</strong><br><br>
+        EL LOCADOR da en locación al LOCATARIO las prendas que se detallan:
+        <div class="lista-prendas">
+            ${listaPrendas}
+        </div>
+        Las cuales se reciben en perfecto estado de conservación y uso, a entera satisfacción del LOCATARIO, quien ha probado y verificado las prendas objeto del mismo, y ha constatado su excelente estado de conservación.
+    </div>
+
+    <div class="clausula">
+        <strong>SEGUNDA: VIGENCIA</strong><br><br>
+        El presente contrato tendrá una vigencia de <span class="underline">${diasVigencia}</span> días corridos a partir de la firma del mismo.<br>
+        El plazo de la locación quedará automáticamente prorrogado a su vencimiento, hasta la real restitución de la totalidad de las prendas.<br>
+        Las mismas deberán ser devueltas en el local Guapo sito en Santiago del Estero 83 de la ciudad de La Rioja.
+    </div>
+
+    <div class="clausula">
+        <strong>TERCERA: PRECIO</strong><br><br>
+        El precio pactado de común acuerdo del presente contrato se fija en PESOS $ <span class="underline">${precioFormateado}</span>.<br>
+        El pago deberá integrarse en un 100% antes del retiro de las prendas del local Guapo.<br>
+        La prórroga obliga al LOCATARIO a abonar la suma de pesos $ <span class="underline">${precioPorDiaFormateado}</span> por día, hasta la restitución del total de las prendas al LOCADOR.<br>
+        En garantía de la totalidad de las prendas alquiladas se firma un pagaré de aval, presente al pie, el cual integra y es parte del presente contrato.
+    </div>
+
+    <div class="clausula">
+        <strong>CUARTA</strong><br><br>
+        Las prendas han sido probadas por el LOCATARIO quien las recibe a su entera y total satisfacción.<br>
+        El LOCATARIO se obliga a devolverlas al LOCADOR en el mismo estado en que las recibe, prevaleciendo ante cualquier eventualidad el criterio del LOCADOR sobre el estado de las prendas devueltas.<br>
+        EL LOCADOR no asume ningún tipo de responsabilidad por el uso y destino de las mismas.
+    </div>
+
+    <div class="clausula">
+        <strong>QUINTA: OBLIGACIONES DEL LOCATARIO</strong><br><br>
+        EL LOCATARIO, además de las mencionadas precedentemente, asume las siguientes obligaciones:<br><br>
+        • No realizar modificaciones o arreglos de ninguna naturaleza a las prendas.<br>
+        • No realizar lavado de las prendas alquiladas.<br><br>
+        En caso de incumplimiento de alguna de las obligaciones a cargo del LOCATARIO, se producirá la mora en forma automática y el LOCADOR quedará facultado para declarar rescindida la locación, sin necesidad de interpelación extrajudicial o judicial previa.
+    </div>
+
+    <div class="clausula">
+        <strong>SEXTA</strong><br><br>
+        En caso de rotura, mancha, deterioro o extravío de las prendas alquiladas, el LOCADOR realizará la reparación, reposición o lo que estime necesario, según su absoluto y único criterio, para garantizar el buen estado de las mismas, debiendo soportar los cargos que la gestión demande enteramente el LOCATARIO.
+    </div>
+
+    <div class="clausula">
+        <strong>SÉPTIMA: CANCELACIÓN</strong><br><br>
+        De cancelarse el evento motivo del presente contrato, el LOCATARIO deberá abonar al LOCADOR:<br>
+        a) Si las prendas estuvieran en el local y no han sido retiradas para el evento, el cargo por seña que hubiera abonado; en tal caso el LOCATARIO no podrá pretender la devolución de lo ya abonado, quedando para el LOCADOR en concepto de indemnización.<br>
+        b) Si las prendas han sido retiradas rige el contrato en todas sus cláusulas.
+    </div>
+
+    <div class="clausula">
+        <strong>OCTAVA: JURISDICCIÓN</strong><br><br>
+        Para todos los efectos legales emergentes del presente, las partes se someten al fuero y jurisdicción ordinarios de los Tribunales Civiles de la Ciudad de La Rioja, con renuncia expresa a todo otro que pudiera corresponderles, constituyendo domicilios especiales y legales en los enunciados en este contrato.
+    </div>
+
+    <div class="clausula">
+        <strong>NOVENA</strong><br><br>
+        En conformidad del presente contrato se firma un ejemplar en la ciudad de La Rioja a los <span class="underline">${dia}</span> días del mes de <span class="underline">${mes}</span> de ${año}.
+    </div>
+
+    <div class="firma">
+        <div style="margin-bottom: 30px;">
+            <div style="margin-bottom: 5px;">Firma: <span class="underline"></span></div>
+            <div>D.N.I.: <span class="underline">${clienteDNI}</span></div>
+        </div>
+    </div>
+
+    <div class="pagare">
+        <div class="header">
+            <h1>PAGARÉ</h1>
+        </div>
+        <div class="clausula">
+            La Rioja, <span class="underline">${dia}</span> de ${mes} de ${año}.<br>
+            Vence el <span class="underline">${diaVencimiento}</span> de <span class="underline">${mesVencimiento}</span> de ${añoVencimiento}.<br><br>
+            Pagaré $ <span class="underline">${precioFormateado}</span> Sin Protesto (Art. 50 D. Ley 5965/63)<br><br>
+            A señor Schmira Ariel Fernando o a su orden.<br>
+            La cantidad de pesos <span class="underline">${precioFormateado}</span>.<br>
+            Por igual valor recibido en prendas de vestir a su entera satisfacción.<br>
+            Pagadero en Santiago del Estero 83 de la Ciudad de La Rioja.<br><br>
+            <div style="margin-top: 30px;">
+                <div style="margin-bottom: 10px;">Firmante: <span class="underline"></span></div>
+                <div style="margin-bottom: 10px;">Aclaración: <span class="underline">${clienteNombre}</span></div>
+                <div>Celular: <span class="underline">${celular}</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="botones no-print">
+        <button onclick="window.print()" style="padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Imprimir</button>
+        <button onclick="window.close()" style="padding: 8px 15px; background-color: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cerrar</button>
+    </div>
+</body>
+</html>
+    `;
+
+    const ventanaContrato = window.open('', '_blank', 'width=900,height=1200');
+    if (ventanaContrato) {
+      ventanaContrato.document.write(contenidoContrato);
+      ventanaContrato.document.close();
+    } else {
+      alert("No se pudo abrir la ventana de contrato. Asegúrate de no tener bloqueadores de pop-ups.");
     }
   };
 
@@ -829,7 +1080,16 @@ export default function OrdenesTrabajoPage() {
               )}
             </div>
 
-            <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
+            <DialogFooter className="border-top pt-3 d-flex justify-content-between gap-2 px-3 px-md-4 pb-2">
+              <button
+                className="btn btn-outline-primary"
+                onClick={generarContrato}
+                disabled={ordenSeleccionada.saldo_pendiente !== 0}
+                title={ordenSeleccionada.saldo_pendiente !== 0 ? "El saldo pendiente debe ser cero para generar el contrato" : "Generar contrato de alquiler"}
+              >
+                <i className="bi bi-file-earmark-text me-2"></i>
+                Contrato
+              </button>
               <button
                 className="btn btn-light border"
                 onClick={() => {

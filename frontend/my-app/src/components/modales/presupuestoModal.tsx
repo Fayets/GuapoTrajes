@@ -674,9 +674,9 @@ export default function PresupuestoModal({
                     <div className="border rounded p-3 bg-light">
                       <h6 className="mb-3">Productos Seleccionados</h6>
                       <ul className="list-group list-group-flush">
-                        {items.map((item) => (
+                        {items.map((item, index) => (
                           <li
-                            key={item.productoId}
+                            key={item.id || `${item.productoId}-${index}`}
                             className="list-group-item d-flex justify-content-between align-items-center bg-transparent border-0 px-0"
                           >
                             <span className="fw-medium">
@@ -688,7 +688,7 @@ export default function PresupuestoModal({
                               </span>
                               <button
                                 className="btn btn-sm btn-outline-danger"
-                                onClick={() => eliminarItem(item.productoId)}
+                                onClick={() => eliminarItem(item.id)}
                                 title="Eliminar producto"
                               >
                                 <i className="bi bi-trash"></i>

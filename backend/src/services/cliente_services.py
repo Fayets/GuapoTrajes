@@ -11,13 +11,32 @@ class ClientServices:
     def crear_cliente(self, cliente: schemas.ClientCreate) -> dict:
         with db_session:
             try:
+                # Validar que el DNI no esté vacío
+                if not cliente.dni or not cliente.dni.strip():
+                    raise HTTPException(status_code=400, detail="El DNI es obligatorio y no puede estar vacío")
+                
+                # Validar que nombre y apellido no estén vacíos
+                if not cliente.nombre or not cliente.nombre.strip():
+                    raise HTTPException(status_code=400, detail="El nombre es obligatorio y no puede estar vacío")
+                
+                if not cliente.apellido or not cliente.apellido.strip():
+                    raise HTTPException(status_code=400, detail="El apellido es obligatorio y no puede estar vacío")
+                
+                # Validar que direccion no esté vacío
+                if not cliente.direccion or not cliente.direccion.strip():
+                    raise HTTPException(status_code=400, detail="La dirección es obligatoria y no puede estar vacía")
+                
+                # Validar que celular no esté vacío
+                if not cliente.celular or not cliente.celular.strip():
+                    raise HTTPException(status_code=400, detail="El celular es obligatorio y no puede estar vacío")
+                
                 nuevo_cliente = models.Cliente(
-                    nombre=cliente.nombre,
-                    apellido=cliente.apellido,
-                    dni=cliente.dni,
-                    direccion=cliente.direccion,
-                    celular=cliente.celular,
-                    notas=cliente.notas
+                    nombre=cliente.nombre.strip(),
+                    apellido=cliente.apellido.strip(),
+                    dni=cliente.dni.strip(),
+                    direccion=cliente.direccion.strip(),
+                    celular=cliente.celular.strip(),
+                    notas=cliente.notas.strip() if cliente.notas else ""
                 )
                 return {
                     "message": "Cliente creado exitosamente",
@@ -32,8 +51,35 @@ class ClientServices:
                         "notas": nuevo_cliente.notas
                     }
                 }
-            except TransactionIntegrityError:
+            except HTTPException:
+                raise
+            except TransactionIntegrityError as e:
+                # Verificar si el error es por DNI duplicado
+                error_msg = str(e)
+                if "dni" in error_msg.lower() or "unique" in error_msg.lower():
+                    raise HTTPException(status_code=400, detail="Ya existe un cliente con este DNI")
                 raise HTTPException(status_code=400, detail="El cliente ya existe")
+            except Exception as e:
+                # Capturar errores de PonyORM y convertirlos en mensajes amigables
+                error_msg = str(e).lower()
+                
+                # Mapear errores comunes de PonyORM a mensajes amigables
+                if "required" in error_msg:
+                    if "celular" in error_msg:
+                        raise HTTPException(status_code=400, detail="El celular es obligatorio y no puede estar vacío")
+                    elif "direccion" in error_msg:
+                        raise HTTPException(status_code=400, detail="La dirección es obligatoria y no puede estar vacía")
+                    elif "dni" in error_msg:
+                        raise HTTPException(status_code=400, detail="El DNI es obligatorio y no puede estar vacío")
+                    elif "nombre" in error_msg:
+                        raise HTTPException(status_code=400, detail="El nombre es obligatorio y no puede estar vacío")
+                    elif "apellido" in error_msg:
+                        raise HTTPException(status_code=400, detail="El apellido es obligatorio y no puede estar vacío")
+                    else:
+                        raise HTTPException(status_code=400, detail="Faltan campos obligatorios. Por favor, complete todos los campos requeridos")
+                
+                # Si no es un error conocido, lanzar el error original
+                raise HTTPException(status_code=500, detail=f"Error inesperado al crear el cliente: {str(e)}")
 
             
     def get_todos_clientes(self):

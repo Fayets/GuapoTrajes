@@ -272,20 +272,35 @@ export default function ClientesPage() {
   };
 
   const guardarCliente = async () => {
-    if (!formData.nombre || !formData.apellido || !formData.dni) {
+    // Validación mejorada: verificar que los campos no estén vacíos después de trim
+    const nombreTrim = formData.nombre?.trim() || "";
+    const apellidoTrim = formData.apellido?.trim() || "";
+    const dniTrim = formData.dni?.trim() || "";
+    const direccionTrim = formData.direccion?.trim() || "";
+    const celularTrim = formData.celular?.trim() || "";
+
+    // Validar todos los campos obligatorios
+    const camposFaltantes = [];
+    if (!nombreTrim) camposFaltantes.push("Nombre");
+    if (!apellidoTrim) camposFaltantes.push("Apellido");
+    if (!dniTrim) camposFaltantes.push("DNI");
+    if (!direccionTrim) camposFaltantes.push("Dirección");
+    if (!celularTrim) camposFaltantes.push("Celular");
+
+    if (camposFaltantes.length > 0) {
       alert(
-        "Por favor complete los campos obligatorios: Nombre, Apellido y DNI"
+        `❌ Error: Los siguientes campos son obligatorios y no pueden estar vacíos:\n\n${camposFaltantes.join("\n")}\n\nPor favor, complete todos los campos requeridos antes de guardar.`
       );
       return;
     }
 
     const datosFormateados = {
-      nombre: formData.nombre.trim(),
-      apellido: formData.apellido.trim(),
-      dni: formData.dni.trim(),
-      direccion: formData.direccion.trim(),
-      celular: formData.celular.trim(),
-      notas: formData.notas.trim(),
+      nombre: nombreTrim,
+      apellido: apellidoTrim,
+      dni: dniTrim,
+      direccion: direccionTrim,
+      celular: celularTrim,
+      notas: formData.notas?.trim() || "",
     };
 
     try {
@@ -325,17 +340,42 @@ export default function ClientesPage() {
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Error del servidor:", errorData);
-        alert(
-          `Error al guardar cliente: ${
-            errorData.detail || "Revise los datos ingresados"
-          }`
-        );
+        let errorMessage = "";
+        
+        try {
+          const errorData = await res.json();
+          console.error("Error del servidor:", errorData);
+          
+          // Intentar obtener el mensaje de error más específico
+          if (errorData.detail) {
+            // El mensaje del backend ya es amigable, usarlo directamente
+            errorMessage = errorData.detail;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else {
+            errorMessage = "No se pudo guardar el cliente. Revise los datos ingresados.";
+          }
+        } catch (parseError) {
+          // Si no se puede parsear el JSON, usar el status text
+          if (res.status === 400) {
+            errorMessage = "No se pudo guardar el cliente. Por favor, verifique que todos los campos obligatorios estén completos.";
+          } else {
+            errorMessage = `Error ${res.status}: ${res.statusText || "Error desconocido"}`;
+          }
+        }
+        
+        alert(`❌ ${errorMessage}`);
         return;
       }
 
       const nuevoCliente = await res.json();
+      
+      // Verificar si la respuesta indica éxito
+      if (nuevoCliente.success === false) {
+        alert(`❌ Error: ${nuevoCliente.message || "No se pudo guardar el cliente"}`);
+        return;
+      }
+      
       setClientes([...clientes, nuevoCliente.data || nuevoCliente]); // según la estructura devuelta
       setShowModal(false);
       setClienteActual(null);
@@ -344,7 +384,8 @@ export default function ClientesPage() {
       // Conversión completada
     } catch (err) {
       console.error("Error al guardar cliente", err);
-      alert("Error al guardar cliente. Por favor, intente nuevamente.");
+      const errorMessage = err instanceof Error ? err.message : "Error desconocido";
+      alert(`❌ Error de conexión: ${errorMessage}\n\nPor favor, verifique su conexión e intente nuevamente.`);
     }
   };
 
