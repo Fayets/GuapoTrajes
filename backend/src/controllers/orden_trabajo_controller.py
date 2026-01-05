@@ -3,6 +3,7 @@ from src.schemas import OrdenTrabajoCreateSchema, OrdenTrabajoResponseSchema, Pr
 from src.services.orden_trabajo_services import OrdenTrabajoServices
 from pony.orm import db_session
 from src.controllers.auth_controller import get_current_user
+from src.deps import require_role
 from fastapi.responses import FileResponse
 from src.models import OrdenTrabajo
 from datetime import datetime
@@ -188,4 +189,14 @@ def obtener_historial_pagos(orden_id: int, current_user=Depends(get_current_user
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado al obtener historial de pagos: {str(e)}")
+
+@router.delete("/{orden_id}", dependencies=[Depends(require_role("ADMIN"))])
+def eliminar_orden_trabajo(orden_id: int, current_user=Depends(get_current_user)):
+    """Eliminar una orden de trabajo (solo ADMIN). Libera los productos reservados."""
+    try:
+        return servicio.eliminar_orden_trabajo(orden_id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al eliminar orden de trabajo: {str(e)}")
 

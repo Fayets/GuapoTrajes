@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from datetime import date
+from typing import Optional
 from src.services.reportes_services import ReportesServices
 from src.controllers.auth_controller import get_current_user
 
@@ -272,4 +273,147 @@ def obtener_stock_por_linea(
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado al obtener stock por línea: {str(e)}")
+
+@router.get("/saldos-a-cobrar")
+def obtener_saldos_a_cobrar(
+    fecha_desde: date = Query(..., description="Fecha desde para el reporte"),
+    fecha_hasta: date = Query(..., description="Fecha hasta para el reporte"),
+    current_user=Depends(get_current_user)
+):
+    """
+    Obtener reporte de saldos pendientes a cobrar de clientes en un rango de fechas.
+    Muestra las órdenes de trabajo con saldo_pendiente > 0.
+    Filtra automáticamente por la sucursal del usuario logueado.
+    """
+    try:
+        # Obtener la sucursal del usuario actual (es obligatoria según el modelo)
+        sucursal_id = current_user.sucursal.id
+        
+        resultado = servicio.obtener_saldos_a_cobrar(
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            sucursal_id=sucursal_id
+        )
+        
+        total_saldo = sum(item["total_saldo_pendiente"] for item in resultado)
+        
+        return {
+            "message": "Reporte de saldos a cobrar obtenido exitosamente",
+            "success": True,
+            "data": {
+                "fecha_desde": fecha_desde.isoformat(),
+                "fecha_hasta": fecha_hasta.isoformat(),
+                "sucursal_id": sucursal_id,
+                "total_clientes": len(resultado),
+                "total_saldo_pendiente": total_saldo,
+                "saldos": resultado
+            }
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al obtener saldos a cobrar: {str(e)}")
+
+@router.get("/prendas-a-armar")
+def obtener_prendas_a_armar(
+    fecha_desde: date = Query(..., description="Fecha desde para el reporte"),
+    fecha_hasta: date = Query(..., description="Fecha hasta para el reporte"),
+    current_user=Depends(get_current_user)
+):
+    """
+    Obtener reporte de prendas a armar (órdenes de trabajo a entregar).
+    Muestra las órdenes de trabajo con fecha_evento entre las fechas seleccionadas,
+    incluyendo los productos/conjuntos que hay que separar para cada cliente.
+    Filtra automáticamente por la sucursal del usuario logueado.
+    """
+    try:
+        # Obtener la sucursal del usuario actual (es obligatoria según el modelo)
+        sucursal_id = current_user.sucursal.id
+        
+        resultado = servicio.obtener_prendas_a_armar(
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            sucursal_id=sucursal_id
+        )
+        
+        return {
+            "message": "Reporte de prendas a armar obtenido exitosamente",
+            "success": True,
+            "data": {
+                "fecha_desde": fecha_desde.isoformat(),
+                "fecha_hasta": fecha_hasta.isoformat(),
+                "sucursal_id": sucursal_id,
+                "total_ordenes": len(resultado),
+                "ordenes": resultado
+            }
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al obtener prendas a armar: {str(e)}")
+
+@router.get("/no-devolvieron")
+def obtener_no_devolvieron(
+    fecha_hasta: Optional[date] = Query(None, description="Fecha de referencia para comparar (default: fecha actual)"),
+    current_user=Depends(get_current_user)
+):
+    """
+    Obtener reporte de órdenes de trabajo que no han devuelto los productos.
+    Muestra las órdenes donde la fecha_devolucion ya pasó y los productos no fueron devueltos.
+    Filtra automáticamente por la sucursal del usuario logueado.
+    """
+    try:
+        # Obtener la sucursal del usuario actual (es obligatoria según el modelo)
+        sucursal_id = current_user.sucursal.id
+        
+        resultado = servicio.obtener_no_devolvieron(
+            fecha_hasta=fecha_hasta,
+            sucursal_id=sucursal_id
+        )
+        
+        return {
+            "message": "Reporte de no devolvieron obtenido exitosamente",
+            "success": True,
+            "data": {
+                "fecha_hasta": fecha_hasta.isoformat() if fecha_hasta else None,
+                "sucursal_id": sucursal_id,
+                "total_ordenes": len(resultado),
+                "ordenes": resultado
+            }
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al obtener no devolvieron: {str(e)}")
+
+@router.get("/productos-criticos")
+def obtener_productos_criticos(
+    current_user=Depends(get_current_user)
+):
+    """
+    Obtener reporte de productos críticos (alquilados más de 10 veces).
+    Estos productos están para cambio o venta por desgaste.
+    Filtra automáticamente por la sucursal del usuario logueado.
+    """
+    try:
+        # Obtener la sucursal del usuario actual (es obligatoria según el modelo)
+        sucursal_id = current_user.sucursal.id
+        
+        resultado = servicio.obtener_productos_criticos(
+            sucursal_id=sucursal_id
+        )
+        
+        return {
+            "message": "Reporte de productos críticos obtenido exitosamente",
+            "success": True,
+            "data": {
+                "sucursal_id": sucursal_id,
+                "total_productos": len(resultado),
+                "productos": resultado
+            }
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al obtener productos críticos: {str(e)}")
 

@@ -104,7 +104,7 @@ export default function Dashboard() {
       icon: "bi-bar-chart",
       href: "/reportes",
       color: "bg-dark bg-opacity-10 text-dark",
-      allow: ["ADMIN"],
+      allow: ["ADMIN", "EMPLEADO"],
     },
 
     {

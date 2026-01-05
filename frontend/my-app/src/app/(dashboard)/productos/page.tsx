@@ -36,6 +36,7 @@ interface Producto {
   estado: string;
   sucursal_id: number;
   inmovilizado: boolean;
+  veces_alquilado?: number;
   sucursal?: { nombre: string };
 }
 
@@ -90,9 +91,10 @@ export default function ProductosPage() {
   }, []);
 
   // Carga de stats (chips)
-  useEffect(() => {
+  const loadStats = useCallback(() => {
     if (!token) return;
-    fetch(`${API_URL}/stats/estado`, {
+    const apiUrl = `${getApiBaseUrl()}/productos/stats/estado`;
+    fetch(apiUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -103,13 +105,9 @@ export default function ProductosPage() {
       .catch(() => setStats({}));
   }, [token]);
 
-  const computeStats = useCallback((items: Producto[]) => {
-    const statsLocales: Record<string, number> = { Todos: items.length } as any;
-    ESTADOS.forEach((estado) => {
-      statsLocales[estado] = items.filter((p) => p.estado === estado).length;
-    });
-    setStats(statsLocales);
-  }, []);
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
   // Carga de productos con paginación y filtro remoto
   const loadProductos = () => {
@@ -154,11 +152,9 @@ export default function ProductosPage() {
         if (Array.isArray(data)) {
           console.log(`✅ ${data.length} productos cargados correctamente`);
           setProductos(data);
-          computeStats(data);
         } else {
           console.error("❌ Formato de datos inesperado:", data);
           setProductos([]);
-          computeStats([]);
         }
       })
       .catch((error) => {
@@ -336,15 +332,15 @@ export default function ProductosPage() {
   }) => (
     <button
       onClick={onClick}
-      className={`inline-flex align-items-center gap-2 px-4 py-2 rounded-pill border text-sm transition-all ${
+      className={`btn d-flex align-items-center gap-2 ${
         active
-          ? "bg-dark text-white border-dark"
-          : "bg-white text-secondary border-secondary"
+          ? "btn-primary"
+          : "btn-outline-secondary"
       }`}
       title={`Filtrar por ${label}`}
     >
       <span>{label}</span>
-      <span className="badge rounded-pill bg-light text-dark border border-secondary px-2">
+      <span className={`badge ${active ? "bg-light text-primary" : "bg-secondary text-white"}`}>
         {value ?? 0}
       </span>
     </button>
@@ -538,13 +534,15 @@ export default function ProductosPage() {
                             }
                             toast.success(result?.message || "Estado actualizado correctamente");
                             loadProductos();
+                            loadStats();
                           } catch (error: any) {
                             console.error(error);
                             toast.error(error?.message || "Error al actualizar el estado.");
                             e.target.value = estadoAnterior;
                           }
                         }}
-                        className="border border-gray-300 rounded px-2 py-1 text-sm"
+                        className="form-select form-select-sm"
+                        style={{ minWidth: "140px" }}
                       >
                         {ESTADOS.map((e) => (
                           <option key={e} value={e}>
@@ -1053,62 +1051,226 @@ export default function ProductosPage() {
 
       {/* Modal ver detalle */}
       <Dialog open={isDetalleOpen} onOpenChange={setIsDetalleOpen}>
-        <DialogContent className="w-full max-w-3xl">
-          <DialogHeader>
+        <DialogContent
+          dialogClassName="modal-xl"
+          dialogStyle={{ maxWidth: "900px", width: "90%" }}
+        >
+          <DialogHeader className="pb-3 px-3 px-md-4">
             <DialogTitle>Detalle del Producto</DialogTitle>
           </DialogHeader>
 
           {productoActual && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4">
-              {[
-                ["Código de Barra", productoActual.codigo_barra],
-                ["Descripción", productoActual.descripcion],
-                ["Línea", productoActual.linea],
-                ["Talle", productoActual.talle],
-                ["Tela", productoActual.tela],
-                ["Color", productoActual.color],
-                ["Costo", `$${productoActual.costo}`],
-                [
-                  "Precio Alq. Lista",
-                  `$${productoActual.precio_alquiler_lista}`,
-                ],
-                [
-                  "Precio Alq. Efectivo",
-                  `$${productoActual.precio_alquiler_efectivo}`,
-                ],
-                [
-                  "Precio Venta Nuevo Lista",
-                  `$${productoActual.precio_venta_nuevo_lista}`,
-                ],
-                [
-                  "Precio Venta Nuevo Efectivo",
-                  `$${productoActual.precio_venta_nuevo_efectivo}`,
-                ],
-                [
-                  "Precio Medio Uso",
-                  `$${productoActual.precio_de_venta_medio_uso}`,
-                ],
-                ["Precio Venta", `$${productoActual.precio_venta}`],
-                ["Precio Liquidación", `$${productoActual.precio_liquidacion}`],
-                ["Stock", String(productoActual.stock)],
-                ["Estado", productoActual.estado],
-                ["Fecha Alta", productoActual.fecha_alta],
-                ["¿Inmovilizado?", productoActual.inmovilizado ? "Sí" : "No"],
-              ].map(([label, value]) => (
-                <div key={label} className="bg-muted border rounded p-4">
-                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                    {label}
-                  </div>
-                  <div className="text-sm font-medium text-gray-900">
-                    {value}
+            <div className="px-3 px-md-4 pb-1">
+              <div className="row g-4">
+                <div className="col-12 col-md-6">
+                  <div className="card shadow-sm h-100">
+                    <div className="card-header bg-light">
+                      <h6 className="mb-0">
+                        <i className="bi bi-info-circle me-2"></i>Datos generales
+                      </h6>
+                    </div>
+                    <div className="card-body p-4">
+                      <div className="row g-3">
+                        <div className="col-12">
+                          <label className="form-label fw-bold">Código de Barra</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.codigo_barra || "N/A"}
+                          </div>
+                        </div>
+                        <div className="col-12">
+                          <label className="form-label fw-bold">Descripción</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.descripcion || "N/A"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">Línea</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.linea || "N/A"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">Talle</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.talle || "N/A"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">Tela</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.tela || "N/A"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">Color</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.color || "N/A"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">Estado</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.estado || "N/A"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">Fecha de Alta</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.fecha_alta || "N/A"}
+                          </div>
+                        </div>
+                        <div className="col-12">
+                          <div className="form-check mt-2">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id="producto-inmovilizado-view"
+                              checked={productoActual.inmovilizado || false}
+                              disabled
+                            />
+                            <label
+                              className="form-check-label fw-bold ms-2"
+                              htmlFor="producto-inmovilizado-view"
+                            >
+                              Inmovilizado
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ))}
+
+                <div className="col-12 col-md-6">
+                  <div className="card shadow-sm h-100">
+                    <div className="card-header bg-light">
+                      <h6 className="mb-0">
+                        <i className="bi bi-cash-stack me-2"></i>Precios y stock
+                      </h6>
+                    </div>
+                    <div className="card-body p-4">
+                      <div className="row g-3">
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">Costo</label>
+                          <div className="form-control bg-light border-0">
+                            ${productoActual.costo?.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) || "0.00"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">
+                            Precio Alquiler (Lista)
+                          </label>
+                          <div className="form-control bg-light border-0">
+                            ${productoActual.precio_alquiler_lista?.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) || "0.00"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">
+                            Precio Alquiler (Efectivo)
+                          </label>
+                          <div className="form-control bg-light border-0">
+                            ${productoActual.precio_alquiler_efectivo?.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) || "0.00"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">
+                            Precio Venta Nuevo (Lista)
+                          </label>
+                          <div className="form-control bg-light border-0">
+                            ${productoActual.precio_venta_nuevo_lista?.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) || "0.00"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">
+                            Precio Venta Nuevo (Efectivo)
+                          </label>
+                          <div className="form-control bg-light border-0">
+                            ${productoActual.precio_venta_nuevo_efectivo?.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) || "0.00"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">
+                            Precio Medio Uso
+                          </label>
+                          <div className="form-control bg-light border-0">
+                            ${productoActual.precio_de_venta_medio_uso?.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) || "0.00"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">
+                            Precio Venta Final
+                          </label>
+                          <div className="form-control bg-light border-0">
+                            ${productoActual.precio_venta?.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) || "0.00"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">
+                            Precio Liquidación
+                          </label>
+                          <div className="form-control bg-light border-0">
+                            ${productoActual.precio_liquidacion?.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) || "0.00"}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">Stock</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.stock || 0}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">Stock Mínimo</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.stock_minimo || 0}
+                          </div>
+                        </div>
+                        <div className="col-12 col-sm-6">
+                          <label className="form-label fw-bold">
+                            Cantidad de Usos o Veces Alquiladas
+                          </label>
+                          <div className="form-control bg-light border-0 fw-bold">
+                            {productoActual.veces_alquilado || 0}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          <DialogFooter className="mt-6">
-            <Button onClick={() => setIsDetalleOpen(false)}>Cerrar</Button>
+          <DialogFooter className="mt-4 pt-4 border-top d-flex justify-content-end gap-3 px-3 px-md-4 pb-1">
+            <Button
+              className="btn btn-secondary"
+              onClick={() => setIsDetalleOpen(false)}
+            >
+              Cerrar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

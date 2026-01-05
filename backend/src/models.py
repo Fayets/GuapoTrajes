@@ -71,6 +71,7 @@ class Producto(db.Entity):
     estado = Required(EstadoProducto)
     sucursal = Required(Sucursal)
     inmovilizado = Required(bool, default=False)
+    veces_alquilado = Required(int, default=0)  # Contador de veces que se ha alquilado
     productos_modistas = Set("ProductoModista")  # Añadir esta línea
     productos_lavanderias = Set("ProductoLavanderia")  # Añadir esta línea
     productos_reservados = Set("ProductoReservado")

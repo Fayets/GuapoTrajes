@@ -55,7 +55,7 @@ export function Sidebar({ collapsed, toggleSidebar }: SidebarProps) {
       title: "Reportes",
       icon: "bi-bar-chart",
       href: "/reportes",
-      allow: ["ADMIN"],
+      allow: ["ADMIN", "EMPLEADO"],
     },
     { title: "Modista", icon: "bi-basket", href: "/modista", allow: ["ADMIN"] },
     {

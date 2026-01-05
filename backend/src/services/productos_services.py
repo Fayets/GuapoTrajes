@@ -108,6 +108,7 @@ class ProductoServices:
                     "estado": producto.estado,
                     "sucursal_id": producto.sucursal.id,
                     "inmovilizado": producto.inmovilizado,
+                    "veces_alquilado": producto.veces_alquilado,
                 }
 
             except Exception as e:

@@ -1,4 +1,4 @@
-from pony.orm import db_session, select
+from pony.orm import db_session, select, flush
 from fastapi import HTTPException
 from src.models import OrdenTrabajo, ProductoReservado, Presupuesto, Producto, CuentaCorriente, CajaMovimiento, MetodoPago
 from datetime import datetime, timedelta
@@ -301,7 +301,18 @@ class OrdenTrabajoServices:
                 if nuevo_estado not in estados_validos:
                     raise HTTPException(status_code=400, detail=f"Estado no válido. Estados permitidos: {estados_validos}")
 
+                # Si se marca como "Completada", incrementar el contador de veces alquilado para cada producto
+                if nuevo_estado == "Completada" and orden.estado != "Completada":
+                    presupuesto = orden.presupuesto
+                    if presupuesto:
+                        # Incrementar contador para cada producto en el presupuesto
+                        for item in presupuesto.items:
+                            producto = item.producto
+                            if producto:
+                                producto.veces_alquilado += item.cantidad
+
                 orden.estado = nuevo_estado
+                flush()
 
                 return {
                     "message": f"Estado de orden actualizado a {nuevo_estado}",
@@ -601,5 +612,49 @@ class OrdenTrabajoServices:
                 import traceback
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al obtener historial de pagos: {str(e)}")
+
+    def eliminar_orden_trabajo(self, orden_id: int) -> dict:
+        """Eliminar una orden de trabajo y liberar los productos reservados"""
+        with db_session:
+            try:
+                orden = OrdenTrabajo.get(id=orden_id)
+                if not orden:
+                    raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
+
+                # Obtener el presupuesto asociado antes de eliminar la orden
+                presupuesto = orden.presupuesto
+                
+                # Eliminar todos los productos reservados asociados a esta orden
+                # Esto libera automáticamente los productos para que estén disponibles
+                productos_reservados = list(orden.productos_reservados)
+                for producto_reservado in productos_reservados:
+                    producto_reservado.delete()
+                
+                # Asegurar que las eliminaciones se apliquen antes de eliminar la orden
+                flush()
+
+                # Eliminar la orden
+                orden_id_eliminada = orden.id
+                orden.delete()
+                
+                # Cambiar el estado del presupuesto a "cancelada" ya que la orden fue eliminada
+                if presupuesto:
+                    presupuesto.estado = "cancelada"
+                    flush()  # Asegurar que el cambio de estado del presupuesto se guarde
+
+                return {
+                    "message": "Orden de trabajo eliminada exitosamente. El presupuesto ha sido cancelado y los productos han sido liberados.",
+                    "success": True,
+                    "data": {
+                        "id": orden_id_eliminada
+                    }
+                }
+
+            except HTTPException:
+                raise
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"Error al eliminar orden de trabajo: {str(e)}")
 
 

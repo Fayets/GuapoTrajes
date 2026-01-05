@@ -3,6 +3,7 @@ from datetime import datetime, date
 from fastapi import HTTPException
 from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, db
 from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse
+from src.services.disponibilidad_services import verificar_disponibilidad
 
 class PresupuestosServices:
     def __init__(self):
@@ -18,11 +19,27 @@ class PresupuestosServices:
                     raise HTTPException(status_code=404, detail="Cliente no encontrado")
                 
 
-                # Verificar que todos los productos existen
+                # Verificar que todos los productos existen y están disponibles
+                fecha_retiro = data.fecha_retiro or data.fecha_evento
+                fecha_devolucion = data.fecha_devolucion or data.fecha_evento
+                
                 for i, item in enumerate(data.items):
                     producto = Producto.get(id=item.producto_id)
                     if not producto:
                         raise HTTPException(status_code=404, detail=f"Producto ID {item.producto_id} no encontrado")
+                    
+                    # Verificar disponibilidad del producto
+                    disponible = verificar_disponibilidad(
+                        producto_id=item.producto_id,
+                        fecha_retiro=fecha_retiro,
+                        fecha_devolucion=fecha_devolucion
+                    )
+                    
+                    if not disponible:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"El producto '{producto.descripcion}' no está disponible en las fechas seleccionadas (ya está reservado en otro presupuesto u orden de trabajo)"
+                        )
 
                 # Calcular total base sumando los subtotales de los items
                 # NOTA: El frontend ya aplicó el descuento redistribuyendo los precios de los items,
@@ -213,11 +230,28 @@ class PresupuestosServices:
                 if not cliente:
                     raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
-                # Verificar productos
+                # Verificar productos y disponibilidad
+                fecha_retiro = data.fecha_retiro or data.fecha_evento
+                fecha_devolucion = data.fecha_devolucion or data.fecha_evento
+                
                 for item in data.items:
                     producto = Producto.get(id=item.producto_id)
                     if not producto:
                         raise HTTPException(status_code=404, detail=f"Producto ID {item.producto_id} no encontrado")
+                    
+                    # Verificar disponibilidad del producto (excluyendo este presupuesto)
+                    disponible = verificar_disponibilidad(
+                        producto_id=item.producto_id,
+                        fecha_retiro=fecha_retiro,
+                        fecha_devolucion=fecha_devolucion,
+                        presupuesto_excluir_id=presupuesto_id
+                    )
+                    
+                    if not disponible:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"El producto '{producto.descripcion}' no está disponible en las fechas seleccionadas (ya está reservado en otro presupuesto u orden de trabajo)"
+                        )
 
                 # Actualizar presupuesto
                 presupuesto.cliente = cliente

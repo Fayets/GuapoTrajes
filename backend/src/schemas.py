@@ -75,6 +75,7 @@ class ProductBase(BaseModel):
     estado: str
     sucursal_id: int
     inmovilizado: bool
+    veces_alquilado: int = 0
 
 class ProductCreate(ProductBase):
     pass

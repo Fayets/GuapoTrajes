@@ -986,3 +986,464 @@ class ReportesServices:
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Error al obtener stock por línea: {str(e)}")
 
+    @db_session
+    def obtener_saldos_a_cobrar(
+        self,
+        fecha_desde: date,
+        fecha_hasta: date,
+        sucursal_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Obtener reporte de saldos pendientes a cobrar de clientes en un rango de fechas.
+        Muestra las órdenes de trabajo con saldo_pendiente > 0.
+        
+        Args:
+            fecha_desde: Fecha inicial del rango (filtra por fecha_creacion de la orden)
+            fecha_hasta: Fecha final del rango
+            sucursal_id: ID de la sucursal (opcional, si es None busca en todas)
+        
+        Returns:
+            Lista de diccionarios con información de cada cliente y su saldo pendiente
+        """
+        try:
+            print(f"🔍 DEBUG: Obteniendo saldos a cobrar para sucursal_id={sucursal_id}, fecha_desde={fecha_desde}, fecha_hasta={fecha_hasta}")
+
+            # Obtener todas las órdenes de trabajo y filtrar en Python
+            todas_ordenes = list(OrdenTrabajo.select())
+            print(f"🔍 DEBUG: Total órdenes en BD: {len(todas_ordenes)}")
+
+            # Filtrar órdenes con saldo pendiente > 0 en el rango de fechas
+            ordenes_con_saldo = []
+            for orden in todas_ordenes:
+                try:
+                    # Solo órdenes con saldo pendiente > 0
+                    if orden.saldo_pendiente <= 0:
+                        continue
+
+                    # Verificar que tenga presupuesto y cliente
+                    if not orden.presupuesto or not orden.presupuesto.cliente:
+                        continue
+
+                    # Filtrar por fecha_creacion de la orden (comparar solo la parte de fecha)
+                    if not orden.fecha_creacion:
+                        continue
+
+                    fecha_creacion_orden = orden.fecha_creacion.date()
+                    
+                    if fecha_creacion_orden < fecha_desde or fecha_creacion_orden > fecha_hasta:
+                        continue
+
+                    # Filtrar por sucursal (basado en productos del presupuesto)
+                    if sucursal_id:
+                        tiene_producto_sucursal = False
+                        try:
+                            for item in orden.presupuesto.items:
+                                if item.producto and item.producto.sucursal and item.producto.sucursal.id == sucursal_id:
+                                    tiene_producto_sucursal = True
+                                    break
+                        except Exception as e:
+                            print(f"⚠️ Error al verificar sucursal en orden {orden.id}: {e}")
+                            continue
+
+                        if not tiene_producto_sucursal:
+                            continue
+
+                    ordenes_con_saldo.append(orden)
+                except Exception as e:
+                    print(f"⚠️ Error al procesar orden {orden.id if hasattr(orden, 'id') else 'N/A'}: {e}")
+                    continue
+
+            print(f"🔍 DEBUG: Órdenes con saldo pendiente encontradas: {len(ordenes_con_saldo)}")
+
+            # Agrupar por cliente y sumar saldos
+            saldos_por_cliente = {}
+            for orden in ordenes_con_saldo:
+                try:
+                    cliente = orden.presupuesto.cliente
+                    cliente_id = cliente.id
+
+                    if cliente_id not in saldos_por_cliente:
+                        saldos_por_cliente[cliente_id] = {
+                            "cliente_id": cliente_id,
+                            "cliente_nombre": f"{cliente.nombre} {cliente.apellido}",
+                            "cliente_dni": cliente.dni or "",
+                            "cliente_celular": cliente.celular or "",
+                            "cliente_telefono": "",  # El modelo Cliente no tiene campo telefono
+                            "total_saldo_pendiente": 0.0,
+                            "cantidad_ordenes": 0,
+                            "ordenes": []
+                        }
+
+                    # Agregar información de la orden
+                    orden_info = {
+                        "orden_id": orden.id,
+                        "presupuesto_numero": orden.presupuesto.numero,
+                        "fecha_evento": orden.fecha_evento.isoformat() if orden.fecha_evento else "",
+                        "fecha_creacion": orden.fecha_creacion.isoformat() if orden.fecha_creacion else "",
+                        "saldo_pendiente": float(orden.saldo_pendiente),
+                        "seña_pagada": float(orden.seña_pagada),
+                        "total_orden": float(orden.seña_pagada + orden.saldo_pendiente),
+                        "estado": orden.estado,
+                        "metodo_pago": orden.metodo_pago or ""
+                    }
+
+                    saldos_por_cliente[cliente_id]["ordenes"].append(orden_info)
+                    saldos_por_cliente[cliente_id]["total_saldo_pendiente"] += float(orden.saldo_pendiente)
+                    saldos_por_cliente[cliente_id]["cantidad_ordenes"] += 1
+                except Exception as e:
+                    print(f"⚠️ Error al procesar orden {orden.id if hasattr(orden, 'id') else 'N/A'}: {e}")
+                    continue
+
+            # Convertir a lista y ordenar por total_saldo_pendiente descendente
+            saldos_lista = list(saldos_por_cliente.values())
+            saldos_lista.sort(key=lambda x: x["total_saldo_pendiente"], reverse=True)
+
+            print(f"🔍 DEBUG: Clientes con saldo pendiente: {len(saldos_lista)}")
+
+            return saldos_lista
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Error al obtener saldos a cobrar: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Error al obtener saldos a cobrar: {str(e)}")
+
+    @db_session
+    def obtener_prendas_a_armar(
+        self,
+        fecha_desde: date,
+        fecha_hasta: date,
+        sucursal_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Obtener reporte de prendas a armar (órdenes de trabajo a entregar).
+        Muestra las órdenes de trabajo con fecha_evento entre las fechas seleccionadas,
+        incluyendo los productos/conjuntos que hay que separar.
+        
+        Args:
+            fecha_desde: Fecha inicial del rango (filtra por fecha_evento de la orden)
+            fecha_hasta: Fecha final del rango
+            sucursal_id: ID de la sucursal (opcional, si es None busca en todas)
+        
+        Returns:
+            Lista de diccionarios con información de cada orden y sus productos a armar
+        """
+        try:
+            print(f"🔍 DEBUG: Obteniendo prendas a armar para sucursal_id={sucursal_id}, fecha_desde={fecha_desde}, fecha_hasta={fecha_hasta}")
+
+            # Obtener todas las órdenes de trabajo y filtrar en Python
+            todas_ordenes = list(OrdenTrabajo.select())
+            print(f"🔍 DEBUG: Total órdenes en BD: {len(todas_ordenes)}")
+
+            # Filtrar órdenes con fecha_evento en el rango de fechas
+            ordenes_filtradas = []
+            for orden in todas_ordenes:
+                try:
+                    # Verificar que tenga presupuesto y cliente
+                    if not orden.presupuesto or not orden.presupuesto.cliente:
+                        continue
+
+                    # Filtrar por fecha_evento (fecha de entrega)
+                    if not orden.fecha_evento:
+                        continue
+                    
+                    if orden.fecha_evento < fecha_desde or orden.fecha_evento > fecha_hasta:
+                        continue
+
+                    # Filtrar por sucursal (basado en productos del presupuesto)
+                    if sucursal_id:
+                        tiene_producto_sucursal = False
+                        try:
+                            for item in orden.presupuesto.items:
+                                if item.producto and item.producto.sucursal and item.producto.sucursal.id == sucursal_id:
+                                    tiene_producto_sucursal = True
+                                    break
+                        except Exception as e:
+                            print(f"⚠️ Error al verificar sucursal en orden {orden.id}: {e}")
+                            continue
+                        
+                        if not tiene_producto_sucursal:
+                            continue
+
+                    # Solo incluir órdenes que no estén canceladas
+                    if orden.estado and orden.estado.lower() == "cancelada":
+                        continue
+
+                    ordenes_filtradas.append(orden)
+                except Exception as e:
+                    print(f"⚠️ Error al procesar orden {orden.id if hasattr(orden, 'id') else 'N/A'}: {e}")
+                    continue
+
+            print(f"🔍 DEBUG: Órdenes encontradas: {len(ordenes_filtradas)}")
+
+            # Construir la lista de resultados
+            resultado = []
+            for orden in ordenes_filtradas:
+                try:
+                    cliente = orden.presupuesto.cliente
+                    presupuesto = orden.presupuesto
+
+                    # Obtener productos/conjuntos a armar (items del presupuesto)
+                    productos_a_armar = []
+                    for item in presupuesto.items:
+                        producto = item.producto
+                        productos_a_armar.append({
+                            "producto_id": producto.id,
+                            "codigo_barra": producto.codigo_barra,
+                            "descripcion": producto.descripcion,
+                            "linea": producto.linea,
+                            "talle": producto.talle,
+                            "color": producto.color,
+                            "tela": producto.tela,
+                            "cantidad": item.cantidad,
+                            "precio_unitario": float(item.precio_unitario),
+                            "subtotal": float(item.subtotal)
+                        })
+
+                    orden_info = {
+                        "orden_id": orden.id,
+                        "presupuesto_id": presupuesto.id,
+                        "presupuesto_numero": presupuesto.numero,
+                        "cliente_id": cliente.id,
+                        "cliente_nombre": f"{cliente.nombre} {cliente.apellido}",
+                        "cliente_dni": cliente.dni or "",
+                        "cliente_celular": cliente.celular or "",
+                        "cliente_direccion": cliente.direccion or "",
+                        "fecha_evento": orden.fecha_evento.isoformat() if orden.fecha_evento else "",
+                        "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else "",
+                        "categoria_evento": presupuesto.categoria_evento or "",
+                        "nombre_agasajado": presupuesto.nombre_agasajado or "",
+                        "lugar_evento": presupuesto.lugar_evento or "",
+                        "estado": orden.estado,
+                        "total": float(presupuesto.total),
+                        "productos": productos_a_armar,
+                        "cantidad_productos": len(productos_a_armar),
+                        "cantidad_total_items": sum(item.cantidad for item in presupuesto.items)
+                    }
+
+                    resultado.append(orden_info)
+                except Exception as e:
+                    print(f"⚠️ Error al procesar orden {orden.id if hasattr(orden, 'id') else 'N/A'}: {e}")
+                    continue
+
+            # Ordenar por fecha_evento ascendente
+            resultado.sort(key=lambda x: x["fecha_evento"])
+
+            print(f"🔍 DEBUG: Órdenes procesadas: {len(resultado)}")
+
+            return resultado
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Error al obtener prendas a armar: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Error al obtener prendas a armar: {str(e)}")
+
+    @db_session
+    def obtener_no_devolvieron(
+        self,
+        fecha_hasta: Optional[date] = None,
+        sucursal_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Obtener reporte de órdenes de trabajo que no han devuelto los productos.
+        Muestra las órdenes donde la fecha_devolucion ya pasó y los productos no fueron devueltos.
+        
+        Args:
+            fecha_hasta: Fecha de referencia (default: fecha actual). Se comparan órdenes con fecha_devolucion anterior a esta fecha
+            sucursal_id: ID de la sucursal (opcional, si es None busca en todas)
+        
+        Returns:
+            Lista de diccionarios con información de cada orden y sus productos no devueltos
+        """
+        try:
+            from datetime import date as date_type
+            if fecha_hasta is None:
+                fecha_hasta = date_type.today()
+            
+            print(f"🔍 DEBUG: Obteniendo no devolvieron para sucursal_id={sucursal_id}, fecha_hasta={fecha_hasta}")
+
+            # Obtener todas las órdenes de trabajo y filtrar en Python
+            todas_ordenes = list(OrdenTrabajo.select())
+            print(f"🔍 DEBUG: Total órdenes en BD: {len(todas_ordenes)}")
+
+            # Filtrar órdenes que no han devuelto
+            ordenes_no_devueltas = []
+            for orden in todas_ordenes:
+                try:
+                    # Verificar que tenga presupuesto y cliente
+                    if not orden.presupuesto or not orden.presupuesto.cliente:
+                        continue
+
+                    # Excluir órdenes canceladas
+                    if orden.estado and orden.estado.lower() == "cancelada":
+                        continue
+
+                    # Verificar que tenga fecha_devolucion
+                    presupuesto = orden.presupuesto
+                    if not presupuesto.fecha_devolucion:
+                        continue
+
+                    # Verificar que la fecha_devolucion ya pasó (es menor a fecha_hasta)
+                    if presupuesto.fecha_devolucion >= fecha_hasta:
+                        continue
+
+                    # Filtrar por sucursal (basado en productos del presupuesto)
+                    if sucursal_id:
+                        tiene_producto_sucursal = False
+                        try:
+                            for item in presupuesto.items:
+                                if item.producto and item.producto.sucursal and item.producto.sucursal.id == sucursal_id:
+                                    tiene_producto_sucursal = True
+                                    break
+                        except Exception as e:
+                            print(f"⚠️ Error al verificar sucursal en orden {orden.id}: {e}")
+                            continue
+                        
+                        if not tiene_producto_sucursal:
+                            continue
+
+                    ordenes_no_devueltas.append(orden)
+                except Exception as e:
+                    print(f"⚠️ Error al procesar orden {orden.id if hasattr(orden, 'id') else 'N/A'}: {e}")
+                    continue
+
+            print(f"🔍 DEBUG: Órdenes no devueltas encontradas: {len(ordenes_no_devueltas)}")
+
+            # Construir la lista de resultados
+            resultado = []
+            for orden in ordenes_no_devueltas:
+                try:
+                    cliente = orden.presupuesto.cliente
+                    presupuesto = orden.presupuesto
+
+                    # Obtener productos de la orden (items del presupuesto)
+                    productos = []
+                    for item in presupuesto.items:
+                        producto = item.producto
+                        productos.append({
+                            "producto_id": producto.id,
+                            "codigo_barra": producto.codigo_barra,
+                            "descripcion": producto.descripcion,
+                            "linea": producto.linea,
+                            "talle": producto.talle,
+                            "color": producto.color,
+                            "tela": producto.tela,
+                            "cantidad": item.cantidad,
+                            "precio_unitario": float(item.precio_unitario),
+                            "subtotal": float(item.subtotal)
+                        })
+
+                    # Calcular días de retraso
+                    dias_retraso = (fecha_hasta - presupuesto.fecha_devolucion).days
+
+                    orden_info = {
+                        "orden_id": orden.id,
+                        "presupuesto_id": presupuesto.id,
+                        "presupuesto_numero": presupuesto.numero,
+                        "cliente_id": cliente.id,
+                        "cliente_nombre": f"{cliente.nombre} {cliente.apellido}",
+                        "cliente_dni": cliente.dni or "",
+                        "cliente_celular": cliente.celular or "",
+                        "cliente_direccion": cliente.direccion or "",
+                        "fecha_evento": orden.fecha_evento.isoformat() if orden.fecha_evento else "",
+                        "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else "",
+                        "fecha_devolucion": presupuesto.fecha_devolucion.isoformat() if presupuesto.fecha_devolucion else "",
+                        "dias_retraso": dias_retraso,
+                        "categoria_evento": presupuesto.categoria_evento or "",
+                        "nombre_agasajado": presupuesto.nombre_agasajado or "",
+                        "lugar_evento": presupuesto.lugar_evento or "",
+                        "estado": orden.estado,
+                        "total": float(presupuesto.total),
+                        "seña_pagada": float(orden.seña_pagada),
+                        "saldo_pendiente": float(orden.saldo_pendiente),
+                        "productos": productos,
+                        "cantidad_productos": len(productos),
+                        "cantidad_total_items": sum(item.cantidad for item in presupuesto.items)
+                    }
+
+                    resultado.append(orden_info)
+                except Exception as e:
+                    print(f"⚠️ Error al procesar orden {orden.id if hasattr(orden, 'id') else 'N/A'}: {e}")
+                    continue
+
+            # Ordenar por días de retraso descendente (más retraso primero)
+            resultado.sort(key=lambda x: x["dias_retraso"], reverse=True)
+
+            print(f"🔍 DEBUG: Órdenes procesadas: {len(resultado)}")
+
+            return resultado
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Error al obtener no devolvieron: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Error al obtener no devolvieron: {str(e)}")
+
+    @db_session
+    def obtener_productos_criticos(
+        self,
+        sucursal_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Obtener productos críticos (alquilados más de 10 veces).
+        Estos productos están para cambio o venta por desgaste.
+        
+        Args:
+            sucursal_id: ID de la sucursal (opcional, si es None busca en todas)
+        
+        Returns:
+            Lista de diccionarios con información de cada producto crítico
+        """
+        try:
+            # Obtener todos los productos con veces_alquilado > 10
+            productos_query = Producto.select(lambda p: p.veces_alquilado > 10)
+            
+            # Si se especifica sucursal, filtrar por sucursal
+            if sucursal_id:
+                productos_query = Producto.select(
+                    lambda p: p.veces_alquilado > 10 and p.sucursal.id == sucursal_id
+                )
+            
+            productos = list(productos_query)
+            
+            # Ordenar por veces_alquilado descendente
+            productos.sort(key=lambda p: p.veces_alquilado, reverse=True)
+            
+            # Construir lista de resultados
+            resultados = []
+            for producto in productos:
+                resultados.append({
+                    "producto_id": producto.id,
+                    "codigo_barra": producto.codigo_barra,
+                    "descripcion": producto.descripcion,
+                    "linea": producto.linea,
+                    "talle": producto.talle,
+                    "color": producto.color,
+                    "tela": producto.tela,
+                    "estado": producto.estado.value if hasattr(producto.estado, 'value') else str(producto.estado),
+                    "sucursal_id": producto.sucursal.id,
+                    "sucursal_nombre": producto.sucursal.nombre,
+                    "veces_alquilado": producto.veces_alquilado,
+                    "stock": producto.stock,
+                    "fecha_alta": producto.fecha_alta.isoformat() if producto.fecha_alta else None,
+                    "precio_venta_medio_uso": producto.precio_de_venta_medio_uso,
+                    "precio_liquidacion": producto.precio_liquidacion,
+                })
+            
+            return resultados
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"Error al obtener productos críticos: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Error al obtener productos críticos: {str(e)}")
+

@@ -56,7 +56,8 @@ type Presupuesto = {
     | "aprobado"
     | "rechazado"
     | "vencido"
-    | "convertido_orden";
+    | "convertido_orden"
+    | "cancelada";
   observaciones: string;
   fecha_retiro?: string;
   fecha_devolucion?: string;
@@ -486,6 +487,8 @@ export default function PresupuestosPage() {
       case "aprobado":
         return "bg-success";
       case "rechazado":
+        return "bg-danger";
+      case "cancelada":
         return "bg-danger";
       case "vencido":
         return "bg-secondary";
@@ -936,6 +939,8 @@ export default function PresupuestosPage() {
                             >
                               Emitir Recibo
                             </button>
+                          ) : p.estado.toLowerCase() === "cancelada" ? (
+                            <div></div>
                           ) : (
                             <button
                               className="btn btn-sm btn-outline-primary"
@@ -953,7 +958,8 @@ export default function PresupuestosPage() {
                             </button>
                           )}
                           {p.estado.toLowerCase() === "convertido_orden" ||
-                          p.estado.toLowerCase() === "aprobado" ? (
+                          p.estado.toLowerCase() === "aprobado" ||
+                          p.estado.toLowerCase() === "cancelada" ? (
                             <div></div>
                           ) : (
                             <button
