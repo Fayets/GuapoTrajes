@@ -2,7 +2,7 @@ from pony.orm import db_session, select
 from fastapi import HTTPException
 from datetime import date, datetime
 from typing import List, Dict, Optional
-from src.models import Presupuesto, OrdenTrabajo, ItemPresupuesto, Producto, Cliente, CajaMovimiento, Venta, TipoMovimiento, EstadoProducto
+from src.models import Presupuesto, OrdenTrabajo, ItemPresupuesto, Producto, Cliente, CajaMovimiento, Venta, TipoMovimiento, EstadoProducto, ProductoReservado, ProductoLavanderia, ProductoModista, DetalleVenta, DetalleVenta
 
 
 class ReportesServices:
@@ -1446,4 +1446,447 @@ class ReportesServices:
             import traceback
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Error al obtener productos críticos: {str(e)}")
+
+    @db_session
+    def obtener_productos_criticos_armado(
+        self,
+        fecha_desde: date,
+        fecha_hasta: date,
+        sucursal_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Obtener productos críticos para el armado semanal.
+        Lista productos que no están disponibles para el armado semanal (en lavandería, modista, cliente)
+        y que se necesitan para órdenes de trabajo en el rango de fechas seleccionado.
+        
+        Args:
+            fecha_desde: Fecha inicial del rango (filtra por fecha_evento de la orden)
+            fecha_hasta: Fecha final del rango
+            sucursal_id: ID de la sucursal (opcional, si es None busca en todas)
+        
+        Returns:
+            Lista de diccionarios con información de cada producto crítico y la orden que lo necesita
+        """
+        try:
+            print(f"🔍 DEBUG: Obteniendo productos críticos para armado semanal, sucursal_id={sucursal_id}, fecha_desde={fecha_desde}, fecha_hasta={fecha_hasta}")
+
+            # Obtener todas las órdenes de trabajo y filtrar en Python
+            todas_ordenes = list(OrdenTrabajo.select())
+            print(f"🔍 DEBUG: Total órdenes en BD: {len(todas_ordenes)}")
+
+            # Filtrar órdenes con fecha_evento en el rango de fechas
+            ordenes_filtradas = []
+            for orden in todas_ordenes:
+                try:
+                    # Verificar que tenga presupuesto y cliente
+                    if not orden.presupuesto or not orden.presupuesto.cliente:
+                        continue
+
+                    # Filtrar por fecha_evento (fecha de entrega)
+                    if not orden.fecha_evento:
+                        continue
+                    
+                    if orden.fecha_evento < fecha_desde or orden.fecha_evento > fecha_hasta:
+                        continue
+
+                    # Filtrar por sucursal (basado en productos del presupuesto)
+                    if sucursal_id:
+                        tiene_producto_sucursal = False
+                        try:
+                            for item in orden.presupuesto.items:
+                                if item.producto and item.producto.sucursal and item.producto.sucursal.id == sucursal_id:
+                                    tiene_producto_sucursal = True
+                                    break
+                        except Exception as e:
+                            print(f"⚠️ Error al verificar sucursal en orden {orden.id}: {e}")
+                            continue
+                        
+                        if not tiene_producto_sucursal:
+                            continue
+
+                    # Solo incluir órdenes que no estén canceladas
+                    if orden.estado and orden.estado.lower() == "cancelada":
+                        continue
+
+                    ordenes_filtradas.append(orden)
+                except Exception as e:
+                    print(f"⚠️ Error al procesar orden {orden.id if hasattr(orden, 'id') else 'N/A'}: {e}")
+                    continue
+
+            print(f"🔍 DEBUG: Órdenes filtradas: {len(ordenes_filtradas)}")
+
+            # Obtener todos los productos en lavandería y modista (sin fecha_salida)
+            productos_lavanderia = list(ProductoLavanderia.select(lambda pl: pl.fecha_salida is None))
+            productos_modista = list(ProductoModista.select(lambda pm: pm.fecha_salida is None))
+            
+            # Crear sets para búsqueda rápida
+            productos_en_lavanderia = {pl.producto.id for pl in productos_lavanderia}
+            productos_en_modista = {pm.producto.id for pm in productos_modista}
+            
+            # Diccionario para almacenar información de lavandería y modista por producto
+            info_lavanderia = {}
+            for pl in productos_lavanderia:
+                info_lavanderia[pl.producto.id] = {
+                    "lavanderia_nombre": pl.lavanderia.nombre if pl.lavanderia else "N/A",
+                    "fecha_ingreso": pl.fecha_ingreso.isoformat() if pl.fecha_ingreso else None,
+                    "notas": pl.notas or ""
+                }
+            
+            info_modista = {}
+            for pm in productos_modista:
+                info_modista[pm.producto.id] = {
+                    "modista_nombre": pm.modista.nombre if pm.modista else "N/A",
+                    "fecha_ingreso": pm.fecha_ingreso.isoformat() if pm.fecha_ingreso else None,
+                    "notas": pm.notas or ""
+                }
+
+            # Construir la lista de productos críticos
+            productos_criticos = []
+            productos_vistos = set()  # Para evitar duplicados
+
+            for orden in ordenes_filtradas:
+                try:
+                    cliente = orden.presupuesto.cliente
+                    presupuesto = orden.presupuesto
+
+                    # Obtener productos reservados de la orden
+                    productos_reservados = list(ProductoReservado.select(lambda pr: pr.orden_trabajo.id == orden.id))
+                    
+                    # Si no hay productos reservados, usar los items del presupuesto
+                    if not productos_reservados:
+                        productos_a_verificar = presupuesto.items
+                    else:
+                        productos_a_verificar = [pr.producto for pr in productos_reservados]
+
+                    for item_or_producto in productos_a_verificar:
+                        try:
+                            # Obtener el producto
+                            if hasattr(item_or_producto, 'producto'):
+                                # Es un ItemPresupuesto
+                                producto = item_or_producto.producto
+                            else:
+                                # Es un Producto directamente
+                                producto = item_or_producto
+
+                            if not producto:
+                                continue
+
+                            # Verificar si el producto es crítico (no está en SALON)
+                            es_critico = False
+                            motivo_critico = ""
+                            ubicacion_actual = ""
+
+                            # Verificar estado del producto
+                            estado_producto = producto.estado.value if hasattr(producto.estado, 'value') else str(producto.estado)
+                            
+                            if estado_producto != "SALON":
+                                es_critico = True
+                                if estado_producto == "LAVANDERIA":
+                                    motivo_critico = "En lavandería"
+                                    ubicacion_actual = info_lavanderia.get(producto.id, {}).get("lavanderia_nombre", "N/A")
+                                elif estado_producto == "MODISTA":
+                                    motivo_critico = "En modista"
+                                    ubicacion_actual = info_modista.get(producto.id, {}).get("modista_nombre", "N/A")
+                                elif estado_producto == "CLIENTE":
+                                    motivo_critico = "En poder del cliente"
+                                    ubicacion_actual = "Cliente"
+                                else:
+                                    motivo_critico = f"Estado: {estado_producto}"
+                                    ubicacion_actual = estado_producto
+                            
+                            # También verificar si está en lavandería o modista aunque el estado no lo refleje
+                            if producto.id in productos_en_lavanderia:
+                                es_critico = True
+                                motivo_critico = "En lavandería"
+                                ubicacion_actual = info_lavanderia.get(producto.id, {}).get("lavanderia_nombre", "N/A")
+                            
+                            if producto.id in productos_en_modista:
+                                es_critico = True
+                                motivo_critico = "En modista"
+                                ubicacion_actual = info_modista.get(producto.id, {}).get("modista_nombre", "N/A")
+
+                            # Solo agregar si es crítico
+                            if es_critico:
+                                # Crear clave única para evitar duplicados
+                                clave_unica = f"{producto.id}_{orden.id}"
+                                
+                                if clave_unica not in productos_vistos:
+                                    productos_vistos.add(clave_unica)
+                                    
+                                    # Obtener información adicional
+                                    fecha_ingreso_lavanderia = None
+                                    fecha_ingreso_modista = None
+                                    notas_lavanderia = ""
+                                    notas_modista = ""
+                                    
+                                    if producto.id in info_lavanderia:
+                                        fecha_ingreso_lavanderia = info_lavanderia[producto.id].get("fecha_ingreso")
+                                        notas_lavanderia = info_lavanderia[producto.id].get("notas", "")
+                                    
+                                    if producto.id in info_modista:
+                                        fecha_ingreso_modista = info_modista[producto.id].get("fecha_ingreso")
+                                        notas_modista = info_modista[producto.id].get("notas", "")
+
+                                    producto_critico = {
+                                        "producto_id": producto.id,
+                                        "codigo_barra": producto.codigo_barra,
+                                        "descripcion": producto.descripcion,
+                                        "linea": producto.linea,
+                                        "talle": producto.talle,
+                                        "color": producto.color,
+                                        "tela": producto.tela,
+                                        "estado": estado_producto,
+                                        "motivo_critico": motivo_critico,
+                                        "ubicacion_actual": ubicacion_actual,
+                                        "fecha_ingreso_lavanderia": fecha_ingreso_lavanderia,
+                                        "fecha_ingreso_modista": fecha_ingreso_modista,
+                                        "notas_lavanderia": notas_lavanderia,
+                                        "notas_modista": notas_modista,
+                                        "sucursal_id": producto.sucursal.id if producto.sucursal else None,
+                                        "sucursal_nombre": producto.sucursal.nombre if producto.sucursal else "N/A",
+                                        # Información de la orden que lo necesita
+                                        "orden_id": orden.id,
+                                        "presupuesto_id": presupuesto.id,
+                                        "presupuesto_numero": presupuesto.numero,
+                                        "cliente_id": cliente.id,
+                                        "cliente_nombre": f"{cliente.nombre} {cliente.apellido}",
+                                        "cliente_dni": cliente.dni or "",
+                                        "cliente_celular": cliente.celular or "",
+                                        "fecha_evento": orden.fecha_evento.isoformat() if orden.fecha_evento else "",
+                                        "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else "",
+                                        "categoria_evento": presupuesto.categoria_evento or "",
+                                        "nombre_agasajado": presupuesto.nombre_agasajado or "",
+                                    }
+
+                                    productos_criticos.append(producto_critico)
+                        except Exception as item_error:
+                            print(f"⚠️ Error al procesar producto en orden {orden.id}: {item_error}")
+                            continue
+                except Exception as orden_error:
+                    print(f"⚠️ Error al procesar orden {orden.id if hasattr(orden, 'id') else 'N/A'}: {orden_error}")
+                    continue
+
+            # Ordenar por fecha_evento ascendente (más urgente primero)
+            productos_criticos.sort(key=lambda x: x["fecha_evento"])
+
+            print(f"🔍 DEBUG: Productos críticos encontrados: {len(productos_criticos)}")
+
+            return productos_criticos
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Error al obtener productos críticos para armado: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Error al obtener productos críticos para armado: {str(e)}")
+
+    @db_session
+    def obtener_historico_producto(
+        self,
+        codigo_barra: str,
+        fecha_hasta: Optional[date] = None,
+        sucursal_id: Optional[int] = None
+    ) -> Dict:
+        """
+        Obtener histórico completo (trazabilidad) de un producto desde su ingreso al stock hasta una fecha determinada.
+        Incluye: ingreso, alquileres, lavandería, modista, ventas, cambios de estado.
+        
+        Args:
+            codigo_barra: Código de barras del producto
+            fecha_hasta: Fecha hasta la cual se busca el histórico (default: fecha actual)
+            sucursal_id: ID de la sucursal (opcional, si es None busca en todas)
+        
+        Returns:
+            Diccionario con información del producto y lista cronológica de eventos
+        """
+        try:
+            from datetime import date as date_type
+            if fecha_hasta is None:
+                fecha_hasta = date_type.today()
+            
+            print(f"🔍 DEBUG: Obteniendo histórico de producto {codigo_barra}, fecha_hasta={fecha_hasta}, sucursal_id={sucursal_id}")
+
+            # Buscar el producto por código de barras
+            producto = Producto.get(codigo_barra=codigo_barra)
+            
+            if not producto:
+                raise HTTPException(status_code=404, detail=f"Producto con código de barras {codigo_barra} no encontrado")
+            
+            # Filtrar por sucursal si se especifica
+            if sucursal_id and producto.sucursal.id != sucursal_id:
+                raise HTTPException(status_code=403, detail="El producto no pertenece a la sucursal especificada")
+            
+            # Lista de eventos cronológicos
+            eventos = []
+            
+            # 1. Evento de ingreso al stock
+            if producto.fecha_alta and producto.fecha_alta <= fecha_hasta:
+                eventos.append({
+                    "tipo": "ingreso",
+                    "fecha": producto.fecha_alta.isoformat(),
+                    "fecha_datetime": datetime.combine(producto.fecha_alta, datetime.min.time()),
+                    "descripcion": "Ingreso al stock",
+                    "detalle": f"Producto ingresado al sistema en sucursal {producto.sucursal.nombre}",
+                    "estado": producto.estado.value if hasattr(producto.estado, 'value') else str(producto.estado),
+                    "sucursal": producto.sucursal.nombre
+                })
+            
+            # 2. Alquileres (órdenes de trabajo)
+            productos_reservados = list(ProductoReservado.select(
+                lambda pr: pr.producto.id == producto.id
+            ))
+            
+            for pr in productos_reservados:
+                orden = pr.orden_trabajo
+                if not orden or not orden.fecha_evento:
+                    continue
+                
+                if orden.fecha_evento > fecha_hasta:
+                    continue
+                
+                presupuesto = orden.presupuesto
+                cliente = presupuesto.cliente if presupuesto else None
+                
+                eventos.append({
+                    "tipo": "alquiler",
+                    "fecha": orden.fecha_evento.isoformat(),
+                    "fecha_datetime": datetime.combine(orden.fecha_evento, datetime.min.time()),
+                    "descripcion": f"Alquilado - Orden #{orden.id}",
+                    "detalle": f"Cliente: {cliente.nombre} {cliente.apellido} - Evento: {presupuesto.categoria_evento or 'N/A'} - Estado orden: {orden.estado}",
+                    "cliente_nombre": f"{cliente.nombre} {cliente.apellido}" if cliente else "N/A",
+                    "orden_id": orden.id,
+                    "presupuesto_numero": presupuesto.numero if presupuesto else "N/A",
+                    "estado_reserva": pr.estado,
+                    "fecha_evento": orden.fecha_evento.isoformat()
+                })
+            
+            # 3. Lavandería
+            productos_lavanderia = list(ProductoLavanderia.select(
+                lambda pl: pl.producto.id == producto.id
+            ))
+            
+            for pl in productos_lavanderia:
+                if pl.fecha_ingreso and pl.fecha_ingreso <= fecha_hasta:
+                    eventos.append({
+                        "tipo": "lavanderia_ingreso",
+                        "fecha": pl.fecha_ingreso.isoformat(),
+                        "fecha_datetime": datetime.combine(pl.fecha_ingreso, datetime.min.time()),
+                        "descripcion": f"Ingreso a lavandería: {pl.lavanderia.nombre}",
+                        "detalle": f"Producto enviado a lavandería - Notas: {pl.notas or 'Sin notas'}",
+                        "lavanderia_nombre": pl.lavanderia.nombre,
+                        "notas": pl.notas or ""
+                    })
+                
+                if pl.fecha_salida and pl.fecha_salida <= fecha_hasta:
+                    eventos.append({
+                        "tipo": "lavanderia_salida",
+                        "fecha": pl.fecha_salida.isoformat(),
+                        "fecha_datetime": datetime.combine(pl.fecha_salida, datetime.min.time()),
+                        "descripcion": f"Salida de lavandería: {pl.lavanderia.nombre}",
+                        "detalle": f"Producto regresado de lavandería",
+                        "lavanderia_nombre": pl.lavanderia.nombre
+                    })
+            
+            # 4. Modista
+            productos_modista = list(ProductoModista.select(
+                lambda pm: pm.producto.id == producto.id
+            ))
+            
+            for pm in productos_modista:
+                if pm.fecha_ingreso and pm.fecha_ingreso <= fecha_hasta:
+                    eventos.append({
+                        "tipo": "modista_ingreso",
+                        "fecha": pm.fecha_ingreso.isoformat(),
+                        "fecha_datetime": datetime.combine(pm.fecha_ingreso, datetime.min.time()),
+                        "descripcion": f"Ingreso a modista: {pm.modista.nombre}",
+                        "detalle": f"Producto enviado a modista - Notas: {pm.notas or 'Sin notas'}",
+                        "modista_nombre": pm.modista.nombre,
+                        "notas": pm.notas or ""
+                    })
+                
+                if pm.fecha_salida and pm.fecha_salida <= fecha_hasta:
+                    eventos.append({
+                        "tipo": "modista_salida",
+                        "fecha": pm.fecha_salida.isoformat(),
+                        "fecha_datetime": datetime.combine(pm.fecha_salida, datetime.min.time()),
+                        "descripcion": f"Salida de modista: {pm.modista.nombre}",
+                        "detalle": f"Producto regresado de modista",
+                        "modista_nombre": pm.modista.nombre
+                    })
+            
+            # 5. Ventas
+            detalles_venta = list(DetalleVenta.select(
+                lambda dv: dv.producto.id == producto.id
+            ))
+            
+            for dv in detalles_venta:
+                venta = dv.venta
+                if not venta or not venta.fecha:
+                    continue
+                
+                if venta.fecha > fecha_hasta:
+                    continue
+                
+                cliente = venta.cliente
+                eventos.append({
+                    "tipo": "venta",
+                    "fecha": venta.fecha.isoformat(),
+                    "fecha_datetime": datetime.combine(venta.fecha, venta.fecha_hora.time() if hasattr(venta, 'fecha_hora') else datetime.min.time()),
+                    "descripcion": f"Vendido - Venta #{venta.id}",
+                    "detalle": f"Cliente: {cliente.nombre} {cliente.apellido} - Cantidad: {dv.cantidad} - Precio unitario: ${dv.precio_unitario:,.2f} - Subtotal: ${dv.subtotal:,.2f}",
+                    "cliente_nombre": f"{cliente.nombre} {cliente.apellido}",
+                    "venta_id": venta.id,
+                    "cantidad": dv.cantidad,
+                    "precio_unitario": float(dv.precio_unitario),
+                    "subtotal": float(dv.subtotal),
+                    "tipo_precio": venta.tipo_precio
+                })
+            
+            # Ordenar eventos por fecha (más antiguos primero)
+            eventos.sort(key=lambda x: x["fecha_datetime"])
+            
+            # Información del producto
+            producto_info = {
+                "producto_id": producto.id,
+                "codigo_barra": producto.codigo_barra,
+                "descripcion": producto.descripcion,
+                "linea": producto.linea,
+                "talle": producto.talle,
+                "color": producto.color,
+                "tela": producto.tela,
+                "estado_actual": producto.estado.value if hasattr(producto.estado, 'value') else str(producto.estado),
+                "sucursal_id": producto.sucursal.id,
+                "sucursal_nombre": producto.sucursal.nombre,
+                "fecha_alta": producto.fecha_alta.isoformat() if producto.fecha_alta else None,
+                "veces_alquilado": producto.veces_alquilado,
+                "stock": producto.stock,
+                "inmovilizado": producto.inmovilizado
+            }
+            
+            # Resumen estadístico
+            resumen = {
+                "total_eventos": len(eventos),
+                "total_alquileres": len([e for e in eventos if e["tipo"] == "alquiler"]),
+                "total_ventas": len([e for e in eventos if e["tipo"] == "venta"]),
+                "total_lavanderia": len([e for e in eventos if "lavanderia" in e["tipo"]]),
+                "total_modista": len([e for e in eventos if "modista" in e["tipo"]])
+            }
+            
+            print(f"🔍 DEBUG: Histórico generado con {len(eventos)} eventos")
+            
+            return {
+                "producto": producto_info,
+                "eventos": eventos,
+                "resumen": resumen,
+                "fecha_hasta": fecha_hasta.isoformat()
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Error al obtener histórico de producto: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Error al obtener histórico de producto: {str(e)}")
 

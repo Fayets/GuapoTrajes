@@ -140,9 +140,19 @@ export default function ReportesPage() {
   const [noDevolvieron, setNoDevolvieron] = useState<any[]>([]);
   const [isLoadingNoDevolvieron, setIsLoadingNoDevolvieron] = useState(false);
 
-  // Estados para el reporte de productos críticos
-  const [productosCriticos, setProductosCriticos] = useState<any[]>([]);
-  const [isLoadingProductosCriticos, setIsLoadingProductosCriticos] = useState(false);
+  // Estados para el reporte de productos críticos para armado
+  const [fechaDesdeCriticosArmado, setFechaDesdeCriticosArmado] = useState("");
+  const [fechaHastaCriticosArmado, setFechaHastaCriticosArmado] = useState("");
+  const [productosCriticosArmado, setProductosCriticosArmado] = useState<any[]>(
+    []
+  );
+  const [isLoadingCriticosArmado, setIsLoadingCriticosArmado] = useState(false);
+
+  // Estados para el reporte de histórico de producto
+  const [codigoBarraHistorico, setCodigoBarraHistorico] = useState("");
+  const [fechaHastaHistorico, setFechaHastaHistorico] = useState("");
+  const [historicoProducto, setHistoricoProducto] = useState<any>(null);
+  const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
 
   const reportTiles = useMemo(() => {
     const todosLosReportes = [
@@ -219,10 +229,10 @@ export default function ReportesPage() {
         icon: CircleAlert,
       },
       {
-        key: "productos_criticos",
-        title: "Productos críticos",
-        desc: "Productos con nivel alto de desgaste o uso",
-        icon: Boxes,
+        key: "productos_criticos_armado",
+        title: "Productos críticos para armado",
+        desc: "Productos no disponibles para el armado semanal",
+        icon: CircleAlert,
       },
     ];
 
@@ -1784,13 +1794,21 @@ export default function ReportesPage() {
     }
   };
 
-  // Funciones para productos críticos
-  const obtenerProductosCriticos = async () => {
-    setIsLoadingProductosCriticos(true);
+  // Funciones para productos críticos para armado
+  const obtenerProductosCriticosArmado = async () => {
+    if (!fechaDesdeCriticosArmado || !fechaHastaCriticosArmado) {
+      toast.error("Por favor, selecciona ambas fechas");
+      return;
+    }
+
+    setIsLoadingCriticosArmado(true);
     try {
-      const response = await fetch(`${API_BASE}/reportes/productos-criticos`, {
-        headers: getAuthHeaders(),
-      });
+      const response = await fetch(
+        `${API_BASE}/reportes/productos-criticos-armado?fecha_desde=${fechaDesdeCriticosArmado}&fecha_hasta=${fechaHastaCriticosArmado}`,
+        {
+          headers: getAuthHeaders(),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -1800,9 +1818,9 @@ export default function ReportesPage() {
       }
 
       const data = await response.json();
-      console.log("📊 Respuesta de productos críticos:", data);
+      console.log("📊 Respuesta de productos críticos para armado:", data);
       if (data.success && data.data) {
-        setProductosCriticos(data.data.productos || []);
+        setProductosCriticosArmado(data.data.productos || []);
         toast.success(
           `Reporte generado: ${data.data.total_productos} productos críticos encontrados`
         );
@@ -1810,16 +1828,18 @@ export default function ReportesPage() {
         throw new Error("Formato de respuesta inválido");
       }
     } catch (error: any) {
-      console.error("Error al obtener productos críticos:", error);
-      toast.error("Error al obtener productos críticos: " + error.message);
-      setProductosCriticos([]);
+      console.error("Error al obtener productos críticos para armado:", error);
+      toast.error(
+        "Error al obtener productos críticos para armado: " + error.message
+      );
+      setProductosCriticosArmado([]);
     } finally {
-      setIsLoadingProductosCriticos(false);
+      setIsLoadingCriticosArmado(false);
     }
   };
 
-  const exportarProductosCriticosPDF = () => {
-    if (productosCriticos.length === 0) {
+  const exportarProductosCriticosArmadoPDF = () => {
+    if (productosCriticosArmado.length === 0) {
       toast.error("No hay datos para exportar");
       return;
     }
@@ -1830,11 +1850,11 @@ export default function ReportesPage() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Productos Críticos</title>
+    <title>Productos Críticos para Armado Semanal</title>
     <style>
         @media print {
             @page {
-                size: A4;
+                size: A4 landscape;
                 margin: 1cm;
             }
             body { 
@@ -1845,7 +1865,7 @@ export default function ReportesPage() {
         }
         body {
             font-family: Arial, sans-serif;
-            font-size: 10pt;
+            font-size: 9pt;
             margin: 0;
             padding: 10px;
         }
@@ -1869,56 +1889,57 @@ export default function ReportesPage() {
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
-            font-size: 9pt;
+            font-size: 8pt;
         }
         .productos-table th {
             background-color: #dc3545;
             color: white;
-            padding: 8px;
+            padding: 6px;
             text-align: left;
             border: 1px solid #000;
             font-weight: bold;
         }
         .productos-table td {
-            padding: 6px;
-            border: 1px solid #ccc;
+            padding: 4px;
+            border: 1px solid #000;
         }
         .productos-table tr:nth-child(even) {
-            background-color: #f5f5f5;
-        }
-        .veces-alquilado {
-            color: #dc3545;
-            font-weight: bold;
-            font-size: 11pt;
+            background-color: #f9f9f9;
         }
         .resumen {
-            margin-top: 30px;
+            margin-top: 20px;
             padding: 10px;
-            background-color: #fff5f5;
-            border: 2px solid #dc3545;
-            font-size: 10pt;
+            background-color: #f0f0f0;
+            border: 1px solid #000;
         }
         .resumen h2 {
             margin-top: 0;
             font-size: 14pt;
-            color: #dc3545;
         }
         .botones {
-            text-align: center;
             margin-top: 20px;
+            text-align: center;
         }
-        button {
+        .botones button {
             padding: 10px 20px;
             margin: 0 10px;
-            font-size: 14px;
+            font-size: 12pt;
             cursor: pointer;
+        }
+        .motivo-critico {
+            font-weight: bold;
+            color: #dc3545;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>PRODUCTOS CRÍTICOS</h1>
-        <p>Productos con nivel alto de desgaste o uso (más de 10 alquileres)</p>
+        <h1>Productos Críticos para Armado Semanal</h1>
+        <p>Período: ${format(new Date(fechaDesdeCriticosArmado), "dd/MM/yyyy", {
+          locale: es,
+        })} - ${format(new Date(fechaHastaCriticosArmado), "dd/MM/yyyy", {
+      locale: es,
+    })}</p>
         <p>Fecha de generación: ${format(new Date(), "dd/MM/yyyy HH:mm", {
           locale: es,
         })}</p>
@@ -1927,20 +1948,22 @@ export default function ReportesPage() {
     <table class="productos-table">
         <thead>
             <tr>
-                <th>Código de Barras</th>
+                <th>Código</th>
                 <th>Descripción</th>
                 <th>Línea</th>
                 <th>Talle</th>
                 <th>Color</th>
-                <th>Tela</th>
                 <th>Estado</th>
-                <th>Veces Alquilado</th>
-                <th>Stock</th>
+                <th>Motivo Crítico</th>
+                <th>Ubicación</th>
+                <th>Cliente</th>
+                <th>Presupuesto</th>
+                <th>Fecha Evento</th>
             </tr>
         </thead>
         <tbody>`;
 
-    productosCriticos.forEach((producto) => {
+    productosCriticosArmado.forEach((producto) => {
       htmlContent += `
             <tr>
                 <td>${producto.codigo_barra}</td>
@@ -1948,10 +1971,14 @@ export default function ReportesPage() {
                 <td>${producto.linea}</td>
                 <td>${producto.talle}</td>
                 <td>${producto.color}</td>
-                <td>${producto.tela}</td>
                 <td>${producto.estado}</td>
-                <td class="veces-alquilado">${producto.veces_alquilado}</td>
-                <td>${producto.stock}</td>
+                <td class="motivo-critico">${producto.motivo_critico}</td>
+                <td>${producto.ubicacion_actual}</td>
+                <td>${producto.cliente_nombre}</td>
+                <td>${producto.presupuesto_numero}</td>
+                <td>${format(new Date(producto.fecha_evento), "dd/MM/yyyy", {
+                  locale: es,
+                })}</td>
             </tr>`;
     });
 
@@ -1961,14 +1988,24 @@ export default function ReportesPage() {
 
     <div class="resumen">
         <h2>Resumen</h2>
-        <p><strong>Total de productos críticos:</strong> ${productosCriticos.length}</p>
-        <p><strong>Promedio de veces alquilado:</strong> ${(
-          productosCriticos.reduce((sum, p) => sum + p.veces_alquilado, 0) /
-          productosCriticos.length
-        ).toFixed(2)}</p>
-        <p><strong>Máximo de veces alquilado:</strong> ${Math.max(
-          ...productosCriticos.map((p) => p.veces_alquilado)
-        )}</p>
+        <p><strong>Total de productos críticos:</strong> ${
+          productosCriticosArmado.length
+        }</p>
+        <p><strong>En lavandería:</strong> ${
+          productosCriticosArmado.filter(
+            (p) => p.motivo_critico === "En lavandería"
+          ).length
+        }</p>
+        <p><strong>En modista:</strong> ${
+          productosCriticosArmado.filter(
+            (p) => p.motivo_critico === "En modista"
+          ).length
+        }</p>
+        <p><strong>En poder del cliente:</strong> ${
+          productosCriticosArmado.filter(
+            (p) => p.motivo_critico === "En poder del cliente"
+          ).length
+        }</p>
     </div>
 
     <div class="botones no-print">
@@ -1978,7 +2015,7 @@ export default function ReportesPage() {
 </body>
 </html>`;
 
-    const ventana = window.open("", "_blank", "width=900,height=700");
+    const ventana = window.open("", "_blank", "width=1200,height=700");
     if (ventana) {
       ventana.document.write(htmlContent);
       ventana.document.close();
@@ -1987,6 +2024,48 @@ export default function ReportesPage() {
       );
     } else {
       toast.error("Por favor, permite ventanas emergentes para generar el PDF");
+    }
+  };
+
+  // Funciones para histórico de producto
+  const obtenerHistoricoProducto = async () => {
+    if (!codigoBarraHistorico) {
+      toast.error("Por favor, ingresa el código de barras del producto");
+      return;
+    }
+
+    setIsLoadingHistorico(true);
+    try {
+      let url = `${API_BASE}/reportes/historico-producto?codigo_barra=${codigoBarraHistorico}`;
+      if (fechaHastaHistorico) {
+        url += `&fecha_hasta=${fechaHastaHistorico}`;
+      }
+
+      const response = await fetch(url, {
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.detail || `Error ${response.status}: ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      console.log("📊 Respuesta de histórico de producto:", data);
+      if (data.success && data.data) {
+        setHistoricoProducto(data.data);
+        toast.success("Histórico de producto obtenido exitosamente");
+      } else {
+        throw new Error("Formato de respuesta inválido");
+      }
+    } catch (error: any) {
+      console.error("Error al obtener histórico de producto:", error);
+      toast.error("Error al obtener histórico de producto: " + error.message);
+      setHistoricoProducto(null);
+    } finally {
+      setIsLoadingHistorico(false);
     }
   };
 
@@ -4876,28 +4955,52 @@ export default function ReportesPage() {
       )}
 
       {/* Reporte: Productos Críticos */}
-      {selectedReporte === "productos_criticos" && (
+      {/* Reporte: Productos Críticos para Armado */}
+      {selectedReporte === "productos_criticos_armado" && (
         <div className="card">
           <div className="card-header">
             <h5 className="card-title mb-0">
               <i className="bi bi-exclamation-triangle me-2"></i>
-              Productos Críticos
+              Productos Críticos para Armado Semanal
             </h5>
             <p className="text-muted small mb-0">
-              Productos con nivel alto de desgaste o uso (más de 10 alquileres).
-              Estos productos están para cambio o venta por desgaste.
+              Listado de productos críticos entre fechas, para ver productos que
+              no están disponibles para el armado semanal. Ej: productos en
+              lavandería, modista, etc, que se necesitan en la semana.
             </p>
           </div>
           <div className="card-body">
+            {/* Filtros de fecha */}
+            <div className="row mb-4">
+              <div className="col-md-4">
+                <label className="form-label">Fecha Desde</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  value={fechaDesdeCriticosArmado}
+                  onChange={(e) => setFechaDesdeCriticosArmado(e.target.value)}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Fecha Hasta</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  value={fechaHastaCriticosArmado}
+                  onChange={(e) => setFechaHastaCriticosArmado(e.target.value)}
+                />
+              </div>
+            </div>
+
             {/* Botones */}
             <div className="row mb-4">
               <div className="col-md-12 d-flex gap-2">
                 <button
-                  onClick={obtenerProductosCriticos}
-                  disabled={isLoadingProductosCriticos}
+                  onClick={obtenerProductosCriticosArmado}
+                  disabled={isLoadingCriticosArmado}
                   className="btn btn-primary"
                 >
-                  {isLoadingProductosCriticos ? (
+                  {isLoadingCriticosArmado ? (
                     <>
                       <i className="bi bi-arrow-clockwise spin me-2"></i>
                       Generando...
@@ -4909,9 +5012,9 @@ export default function ReportesPage() {
                     </>
                   )}
                 </button>
-                {productosCriticos.length > 0 && (
+                {productosCriticosArmado.length > 0 && (
                   <button
-                    onClick={exportarProductosCriticosPDF}
+                    onClick={exportarProductosCriticosArmadoPDF}
                     className="btn btn-outline-danger"
                   >
                     <i className="bi bi-file-pdf me-2"></i>
@@ -4922,54 +5025,70 @@ export default function ReportesPage() {
             </div>
 
             {/* Resultados */}
-            {isLoadingProductosCriticos ? (
+            {isLoadingCriticosArmado ? (
               <div className="text-center text-muted py-5">
                 <i className="bi bi-arrow-clockwise spin display-4 d-block mb-3"></i>
                 Generando reporte...
               </div>
-            ) : productosCriticos.length > 0 ? (
+            ) : productosCriticosArmado.length > 0 ? (
               <div>
                 <div className="mb-3">
                   <div className="row">
-                    <div className="col-md-4">
+                    <div className="col-md-3">
                       <div className="card border-danger">
                         <div className="card-body text-center">
                           <div className="text-danger small mb-1">
                             Total Productos
                           </div>
                           <div className="h3 text-danger fw-bold">
-                            {productosCriticos.length}
+                            {productosCriticosArmado.length}
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="col-md-4">
+                    <div className="col-md-3">
                       <div className="card border-warning">
                         <div className="card-body text-center">
                           <div className="text-warning small mb-1">
-                            Promedio de Alquileres
+                            En Lavandería
                           </div>
                           <div className="h3 text-warning fw-bold">
-                            {(
-                              productosCriticos.reduce(
-                                (sum, p) => sum + p.veces_alquilado,
-                                0
-                              ) / productosCriticos.length
-                            ).toFixed(1)}
+                            {
+                              productosCriticosArmado.filter(
+                                (p) => p.motivo_critico === "En lavandería"
+                              ).length
+                            }
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="col-md-4">
-                      <div className="card border-danger">
+                    <div className="col-md-3">
+                      <div className="card border-info">
                         <div className="card-body text-center">
-                          <div className="text-danger small mb-1">
-                            Máximo de Alquileres
+                          <div className="text-info small mb-1">En Modista</div>
+                          <div className="h3 text-info fw-bold">
+                            {
+                              productosCriticosArmado.filter(
+                                (p) => p.motivo_critico === "En modista"
+                              ).length
+                            }
                           </div>
-                          <div className="h3 text-danger fw-bold">
-                            {Math.max(
-                              ...productosCriticos.map((p) => p.veces_alquilado)
-                            )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-3">
+                      <div className="card border-secondary">
+                        <div className="card-body text-center">
+                          <div className="text-secondary small mb-1">
+                            En Cliente
+                          </div>
+                          <div className="h3 text-secondary fw-bold">
+                            {
+                              productosCriticosArmado.filter(
+                                (p) =>
+                                  p.motivo_critico === "En poder del cliente"
+                              ).length
+                            }
                           </div>
                         </div>
                       </div>
@@ -4981,54 +5100,60 @@ export default function ReportesPage() {
                   <table className="table table-striped table-hover">
                     <thead className="table-light">
                       <tr>
-                        <th>Código de Barras</th>
+                        <th>Código</th>
                         <th>Descripción</th>
                         <th>Línea</th>
                         <th>Talle</th>
                         <th>Color</th>
-                        <th>Tela</th>
                         <th>Estado</th>
-                        <th className="text-center">Veces Alquilado</th>
-                        <th className="text-center">Stock</th>
-                        <th>Sucursal</th>
+                        <th>Motivo Crítico</th>
+                        <th>Ubicación</th>
+                        <th>Cliente</th>
+                        <th>Presupuesto</th>
+                        <th>Fecha Evento</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {productosCriticos.map((producto) => (
-                        <tr key={producto.producto_id}>
-                          <td className="fw-medium">
-                            {producto.codigo_barra}
-                          </td>
+                      {productosCriticosArmado.map((producto, index) => (
+                        <tr
+                          key={`${producto.producto_id}_${producto.orden_id}_${index}`}
+                        >
+                          <td className="fw-medium">{producto.codigo_barra}</td>
                           <td>{producto.descripcion}</td>
-                          <td className="small text-muted">
-                            {producto.linea}
-                          </td>
-                          <td className="small text-muted">
-                            {producto.talle}
-                          </td>
-                          <td className="small text-muted">
-                            {producto.color}
-                          </td>
-                          <td className="small text-muted">
-                            {producto.tela}
-                          </td>
+                          <td className="small text-muted">{producto.linea}</td>
+                          <td className="small text-muted">{producto.talle}</td>
+                          <td className="small text-muted">{producto.color}</td>
                           <td>
                             <span className="badge bg-secondary">
                               {producto.estado}
                             </span>
                           </td>
-                          <td className="text-center">
-                            <span className="badge bg-danger">
-                              {producto.veces_alquilado}
-                            </span>
-                          </td>
-                          <td className="text-center">
-                            <span className="badge bg-info">
-                              {producto.stock}
+                          <td>
+                            <span
+                              className={`badge ${
+                                producto.motivo_critico === "En lavandería"
+                                  ? "bg-warning"
+                                  : producto.motivo_critico === "En modista"
+                                  ? "bg-info"
+                                  : "bg-secondary"
+                              }`}
+                            >
+                              {producto.motivo_critico}
                             </span>
                           </td>
                           <td className="small text-muted">
-                            {producto.sucursal_nombre}
+                            {producto.ubicacion_actual}
+                          </td>
+                          <td className="small">{producto.cliente_nombre}</td>
+                          <td className="small fw-medium">
+                            {producto.presupuesto_numero}
+                          </td>
+                          <td className="small">
+                            {format(
+                              new Date(producto.fecha_evento),
+                              "dd/MM/yyyy",
+                              { locale: es }
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -5041,9 +5166,300 @@ export default function ReportesPage() {
                 <i className="bi bi-inbox display-1 d-block mb-3"></i>
                 <h5 className="text-muted">No hay datos</h5>
                 <p className="text-muted">
-                  No se encontraron productos críticos (con más de 10 alquileres).
+                  No se encontraron productos críticos para el armado semanal en
+                  el período seleccionado.
                   <br />
-                  <small>Genera el reporte para ver los productos con nivel alto de desgaste o uso.</small>
+                  <small>
+                    Selecciona un rango de fechas y genera el reporte para ver
+                    los productos no disponibles.
+                  </small>
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Reporte: Histórico de Producto */}
+      {selectedReporte === "trazabilidad_producto" && (
+        <div className="card">
+          <div className="card-header">
+            <h5 className="card-title mb-0">
+              <i className="bi bi-clock-history me-2"></i>
+              Histórico de Producto
+            </h5>
+            <p className="text-muted small mb-0">
+              Trazabilidad completa del producto desde su ingreso al stock hasta
+              una fecha determinada. Incluye: ingreso, alquileres, lavandería,
+              modista, ventas.
+            </p>
+          </div>
+          <div className="card-body">
+            {/* Filtros */}
+            <div className="row mb-4">
+              <div className="col-md-4">
+                <label className="form-label">Código de Barras</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Ingresa el código de barras"
+                  value={codigoBarraHistorico}
+                  onChange={(e) => setCodigoBarraHistorico(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter") {
+                      obtenerHistoricoProducto();
+                    }
+                  }}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Fecha Hasta (Opcional)</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  value={fechaHastaHistorico}
+                  onChange={(e) => setFechaHastaHistorico(e.target.value)}
+                />
+                <small className="text-muted">
+                  Si no se especifica, se usa la fecha actual
+                </small>
+              </div>
+            </div>
+
+            {/* Botones */}
+            <div className="row mb-4">
+              <div className="col-md-12 d-flex gap-2">
+                <button
+                  onClick={obtenerHistoricoProducto}
+                  disabled={isLoadingHistorico}
+                  className="btn btn-primary"
+                >
+                  {isLoadingHistorico ? (
+                    <>
+                      <i className="bi bi-arrow-clockwise spin me-2"></i>
+                      Generando...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-search me-2"></i>
+                      Generar Histórico
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Resultados */}
+            {isLoadingHistorico ? (
+              <div className="text-center text-muted py-5">
+                <i className="bi bi-arrow-clockwise spin display-4 d-block mb-3"></i>
+                Generando histórico...
+              </div>
+            ) : historicoProducto ? (
+              <div>
+                {/* Información del Producto */}
+                <div className="card border-primary mb-4">
+                  <div className="card-header bg-primary text-white">
+                    <h6 className="mb-0">Información del Producto</h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="row">
+                      <div className="col-md-3">
+                        <strong>Código:</strong>{" "}
+                        {historicoProducto.producto.codigo_barra}
+                      </div>
+                      <div className="col-md-6">
+                        <strong>Descripción:</strong>{" "}
+                        {historicoProducto.producto.descripcion}
+                      </div>
+                      <div className="col-md-3">
+                        <strong>Estado Actual:</strong>{" "}
+                        <span className="badge bg-secondary">
+                          {historicoProducto.producto.estado_actual}
+                        </span>
+                      </div>
+                      <div className="col-md-3">
+                        <strong>Línea:</strong>{" "}
+                        {historicoProducto.producto.linea}
+                      </div>
+                      <div className="col-md-3">
+                        <strong>Talle:</strong>{" "}
+                        {historicoProducto.producto.talle}
+                      </div>
+                      <div className="col-md-3">
+                        <strong>Color:</strong>{" "}
+                        {historicoProducto.producto.color}
+                      </div>
+                      <div className="col-md-3">
+                        <strong>Veces Alquilado:</strong>{" "}
+                        <span className="badge bg-danger">
+                          {historicoProducto.producto.veces_alquilado}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Resumen */}
+                <div className="row mb-4">
+                  <div className="col-md-2">
+                    <div className="card border-info">
+                      <div className="card-body text-center">
+                        <div className="text-info small mb-1">
+                          Total Eventos
+                        </div>
+                        <div className="h4 text-info fw-bold">
+                          {historicoProducto.resumen.total_eventos}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-2">
+                    <div className="card border-success">
+                      <div className="card-body text-center">
+                        <div className="text-success small mb-1">
+                          Alquileres
+                        </div>
+                        <div className="h4 text-success fw-bold">
+                          {historicoProducto.resumen.total_alquileres}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-2">
+                    <div className="card border-warning">
+                      <div className="card-body text-center">
+                        <div className="text-warning small mb-1">Ventas</div>
+                        <div className="h4 text-warning fw-bold">
+                          {historicoProducto.resumen.total_ventas}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div className="card border-primary">
+                      <div className="card-body text-center">
+                        <div className="text-primary small mb-1">
+                          Lavandería
+                        </div>
+                        <div className="h4 text-primary fw-bold">
+                          {historicoProducto.resumen.total_lavanderia}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-3">
+                    <div className="card border-secondary">
+                      <div className="card-body text-center">
+                        <div className="text-secondary small mb-1">Modista</div>
+                        <div className="h4 text-secondary fw-bold">
+                          {historicoProducto.resumen.total_modista}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Timeline de Eventos */}
+                <div className="timeline-container">
+                  <h5 className="mb-3">Línea de Tiempo</h5>
+                  <div className="timeline">
+                    {historicoProducto.eventos.map(
+                      (evento: any, index: number) => {
+                        const getIcon = () => {
+                          switch (evento.tipo) {
+                            case "ingreso":
+                              return "bi-box-arrow-in-down";
+                            case "alquiler":
+                              return "bi-calendar-check";
+                            case "venta":
+                              return "bi-cash-coin";
+                            case "lavanderia_ingreso":
+                              return "bi-droplet";
+                            case "lavanderia_salida":
+                              return "bi-droplet-fill";
+                            case "modista_ingreso":
+                              return "bi-scissors";
+                            case "modista_salida":
+                              return "bi-scissors";
+                            default:
+                              return "bi-circle";
+                          }
+                        };
+
+                        const getColor = () => {
+                          switch (evento.tipo) {
+                            case "ingreso":
+                              return "primary";
+                            case "alquiler":
+                              return "success";
+                            case "venta":
+                              return "warning";
+                            case "lavanderia_ingreso":
+                            case "lavanderia_salida":
+                              return "info";
+                            case "modista_ingreso":
+                            case "modista_salida":
+                              return "secondary";
+                            default:
+                              return "dark";
+                          }
+                        };
+
+                        const color = getColor();
+                        const icon = getIcon();
+
+                        return (
+                          <div key={index} className="timeline-item">
+                            <div className={`timeline-marker bg-${color}`}>
+                              <i className={`bi ${icon}`}></i>
+                            </div>
+                            <div className="timeline-content">
+                              <div className="card">
+                                <div className="card-body">
+                                  <div className="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 className="mb-0">
+                                      {evento.descripcion}
+                                    </h6>
+                                    <span className={`badge bg-${color}`}>
+                                      {format(
+                                        new Date(evento.fecha),
+                                        "dd/MM/yyyy",
+                                        { locale: es }
+                                      )}
+                                    </span>
+                                  </div>
+                                  <p className="text-muted small mb-0">
+                                    {evento.detalle}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+                </div>
+
+                {historicoProducto.eventos.length === 0 && (
+                  <div className="text-center text-muted py-5">
+                    <i className="bi bi-inbox display-1 d-block mb-3"></i>
+                    <h5 className="text-muted">No hay eventos</h5>
+                    <p className="text-muted">
+                      No se encontraron eventos para este producto en el período
+                      seleccionado.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center text-muted py-5">
+                <i className="bi bi-search display-1 d-block mb-3"></i>
+                <h5 className="text-muted">Buscar Histórico</h5>
+                <p className="text-muted">
+                  Ingresa el código de barras del producto para ver su
+                  trazabilidad completa.
                 </p>
               </div>
             )}
@@ -5068,6 +5484,43 @@ export default function ReportesPage() {
           to {
             transform: rotate(360deg);
           }
+        }
+        .timeline-container {
+          margin-top: 2rem;
+        }
+        .timeline {
+          position: relative;
+          padding-left: 2rem;
+        }
+        .timeline-item {
+          position: relative;
+          padding-bottom: 2rem;
+        }
+        .timeline-item:not(:last-child)::before {
+          content: "";
+          position: absolute;
+          left: -1.5rem;
+          top: 2rem;
+          width: 2px;
+          height: calc(100% - 1rem);
+          background-color: #dee2e6;
+        }
+        .timeline-marker {
+          position: absolute;
+          left: -2rem;
+          top: 0;
+          width: 2.5rem;
+          height: 2.5rem;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 1rem;
+          z-index: 1;
+        }
+        .timeline-content {
+          margin-left: 1rem;
         }
       `}</style>
     </div>

@@ -417,3 +417,72 @@ def obtener_productos_criticos(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado al obtener productos críticos: {str(e)}")
 
+@router.get("/productos-criticos-armado")
+def obtener_productos_criticos_armado(
+    fecha_desde: date = Query(..., description="Fecha desde para el reporte"),
+    fecha_hasta: date = Query(..., description="Fecha hasta para el reporte"),
+    current_user=Depends(get_current_user)
+):
+    """
+    Obtener reporte de productos críticos para el armado semanal.
+    Lista productos que no están disponibles (en lavandería, modista, cliente)
+    y que se necesitan para órdenes de trabajo en el rango de fechas seleccionado.
+    Filtra automáticamente por la sucursal del usuario logueado.
+    """
+    try:
+        # Obtener la sucursal del usuario actual (es obligatoria según el modelo)
+        sucursal_id = current_user.sucursal.id
+        
+        resultado = servicio.obtener_productos_criticos_armado(
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            sucursal_id=sucursal_id
+        )
+        
+        return {
+            "message": "Reporte de productos críticos para armado obtenido exitosamente",
+            "success": True,
+            "data": {
+                "fecha_desde": fecha_desde.isoformat(),
+                "fecha_hasta": fecha_hasta.isoformat(),
+                "sucursal_id": sucursal_id,
+                "total_productos": len(resultado),
+                "productos": resultado
+            }
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al obtener productos críticos para armado: {str(e)}")
+
+@router.get("/historico-producto")
+def obtener_historico_producto(
+    codigo_barra: str = Query(..., description="Código de barras del producto"),
+    fecha_hasta: Optional[date] = Query(None, description="Fecha hasta la cual se busca el histórico (default: fecha actual)"),
+    current_user=Depends(get_current_user)
+):
+    """
+    Obtener histórico completo (trazabilidad) de un producto desde su ingreso al stock hasta una fecha determinada.
+    Incluye: ingreso, alquileres, lavandería, modista, ventas.
+    Filtra automáticamente por la sucursal del usuario logueado.
+    """
+    try:
+        # Obtener la sucursal del usuario actual (es obligatoria según el modelo)
+        sucursal_id = current_user.sucursal.id
+        
+        resultado = servicio.obtener_historico_producto(
+            codigo_barra=codigo_barra,
+            fecha_hasta=fecha_hasta,
+            sucursal_id=sucursal_id
+        )
+        
+        return {
+            "message": "Histórico de producto obtenido exitosamente",
+            "success": True,
+            "data": resultado
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al obtener histórico de producto: {str(e)}")
+
