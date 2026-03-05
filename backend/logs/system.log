@@ -1,0 +1,203 @@
+2026-02-05 02:40:13,448 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-02-05 02:41:10,233 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-02-06 11:30:05,276 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:31:00,771 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:31:02,345 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 404 Not Found"
+2026-02-06 11:32:10,740 [INFO] guapotrajes: Usuario SUPER_ADMIN inicial creado
+2026-02-06 11:32:38,375 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:32:39,548 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:32:39,556 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:32:39,567 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:33:49,894 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:33:51,067 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:33:51,071 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:33:51,080 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:34:41,054 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:34:42,215 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:34:42,219 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:34:42,229 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:35:09,420 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:35:10,562 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:35:10,566 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:35:10,576 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:35:36,171 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:35:37,365 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:35:37,369 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:35:37,378 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:36:30,992 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:36:32,163 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:36:32,167 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:36:32,177 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:36:57,457 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:36:58,774 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:36:58,780 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:36:58,799 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:37:15,819 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:37:17,077 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:37:17,081 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:37:17,091 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:37:59,799 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:38:00,921 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:38:00,925 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:38:00,934 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:38:27,125 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:38:28,261 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:38:28,265 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:38:28,274 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:39:15,919 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:39:17,114 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:39:17,117 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:39:17,127 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:39:32,796 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:39:33,940 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:39:33,944 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:39:33,953 [INFO] httpx: HTTP Request: POST http://testserver/ventas/register "HTTP/1.1 201 Created"
+2026-02-06 11:40:21,476 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:40:23,069 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:40:23,073 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:40:23,094 [INFO] httpx: HTTP Request: POST http://testserver/presupuestos/ "HTTP/1.1 422 Unprocessable Entity"
+2026-02-06 11:41:12,464 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:41:13,626 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:41:13,630 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:41:13,637 [INFO] httpx: HTTP Request: POST http://testserver/presupuestos/ "HTTP/1.1 422 Unprocessable Entity"
+2026-02-06 11:41:36,274 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:41:37,411 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:41:37,415 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:41:37,423 [INFO] httpx: HTTP Request: POST http://testserver/presupuestos/ "HTTP/1.1 422 Unprocessable Entity"
+2026-02-06 11:42:18,405 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:42:19,541 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:42:19,545 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:42:19,552 [INFO] httpx: HTTP Request: POST http://testserver/presupuestos/ "HTTP/1.1 422 Unprocessable Entity"
+2026-02-06 11:42:27,925 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:42:29,073 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:42:29,077 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:42:29,084 [INFO] httpx: HTTP Request: POST http://testserver/presupuestos/ "HTTP/1.1 422 Unprocessable Entity"
+2026-02-06 11:42:53,223 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:42:54,361 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:42:54,365 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:42:54,372 [INFO] httpx: HTTP Request: PUT http://testserver/presupuestos/1 "HTTP/1.1 422 Unprocessable Entity"
+2026-02-06 11:43:03,531 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:43:04,677 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:43:04,681 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:43:04,689 [INFO] httpx: HTTP Request: PUT http://testserver/presupuestos/1 "HTTP/1.1 422 Unprocessable Entity"
+2026-02-06 11:43:22,500 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:43:23,644 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:43:23,648 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:43:23,661 [INFO] httpx: HTTP Request: DELETE http://testserver/presupuestos/1 "HTTP/1.1 400 Bad Request"
+2026-02-06 11:43:57,746 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:43:58,904 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:43:58,909 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:43:58,932 [INFO] httpx: HTTP Request: POST http://testserver/ordenes/ "HTTP/1.1 404 Not Found"
+2026-02-06 11:44:49,178 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:44:50,324 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:44:50,328 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:44:50,339 [INFO] httpx: HTTP Request: POST http://testserver/ordenes/ "HTTP/1.1 404 Not Found"
+2026-02-06 11:45:02,787 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:45:03,928 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:45:03,932 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:45:03,942 [INFO] httpx: HTTP Request: POST http://testserver/ordenes/ "HTTP/1.1 404 Not Found"
+2026-02-06 11:46:46,776 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:46:47,926 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:46:47,930 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:46:47,941 [INFO] httpx: HTTP Request: POST http://testserver/ordenes/ "HTTP/1.1 404 Not Found"
+2026-02-06 11:46:59,616 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:47:00,762 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:47:00,766 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:47:00,776 [INFO] httpx: HTTP Request: POST http://testserver/ordenes/ "HTTP/1.1 404 Not Found"
+2026-02-06 11:47:45,688 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:47:46,837 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:47:46,841 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:47:46,850 [INFO] httpx: HTTP Request: POST http://testserver/ordenes/1/pagar-saldo "HTTP/1.1 400 Bad Request"
+2026-02-06 11:48:17,609 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:48:18,753 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:48:18,757 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:48:18,766 [INFO] httpx: HTTP Request: POST http://testserver/ordenes/1/pagar-saldo "HTTP/1.1 400 Bad Request"
+2026-02-06 11:48:42,876 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:48:44,085 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:48:44,089 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:48:44,099 [INFO] httpx: HTTP Request: POST http://testserver/ordenes/1/pagar-saldo "HTTP/1.1 404 Not Found"
+2026-02-06 11:48:58,838 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:49:00,034 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:49:00,039 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:49:00,049 [INFO] httpx: HTTP Request: POST http://testserver/ordenes/1/pagar-saldo "HTTP/1.1 404 Not Found"
+2026-02-06 11:49:27,095 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:49:28,263 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:49:28,266 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:49:28,274 [INFO] httpx: HTTP Request: POST http://testserver/caja_concentradora/retiro "HTTP/1.1 400 Bad Request"
+2026-02-06 11:49:33,022 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:49:34,191 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:49:34,195 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:49:34,202 [INFO] httpx: HTTP Request: PUT http://testserver/caja_concentradora/movimientos/1 "HTTP/1.1 404 Not Found"
+2026-02-06 11:49:51,111 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:49:52,279 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:49:52,283 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:49:52,289 [INFO] httpx: HTTP Request: PUT http://testserver/caja_concentradora/movimientos/1 "HTTP/1.1 404 Not Found"
+2026-02-06 11:50:21,690 [WARNING] guapotrajes: No hay sucursales disponibles; no se pudo crear usuario SUPER_ADMIN inicial.
+2026-02-06 11:50:22,874 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:50:22,878 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:50:22,884 [INFO] httpx: HTTP Request: GET http://testserver/modistas/all "HTTP/1.1 404 Not Found"
+2026-02-06 11:50:23,811 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:50:23,812 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:50:23,818 [INFO] httpx: HTTP Request: GET http://testserver/lavanderia/all "HTTP/1.1 404 Not Found"
+2026-02-06 11:50:24,750 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-02-06 11:50:24,751 [INFO] httpx: HTTP Request: POST http://testserver/auth/login "HTTP/1.1 200 OK"
+2026-02-06 11:50:24,756 [INFO] httpx: HTTP Request: GET http://testserver/eventos/all "HTTP/1.1 404 Not Found"
+2026-03-05 01:17:17,963 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:29:56,733 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:30:22,555 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:30:34,391 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:31:14,888 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:31:26,690 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:31:38,475 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:31:50,738 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:32:17,926 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:32:40,628 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:32:52,189 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:33:04,088 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:36:19,000 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:36:30,548 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:36:42,030 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:36:53,435 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 01:46:17,978 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:01:12,332 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:02:14,559 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:02:26,237 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:04:17,074 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:04:30,070 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:08:05,838 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:09:56,515 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:14:57,720 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:15:41,661 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:15:54,613 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:17:51,350 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:19:09,659 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:22:39,989 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:28:53,377 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:34:45,567 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:53:39,430 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:54:17,666 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:54:30,854 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:54:42,898 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:55:58,224 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:58:12,181 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 02:59:15,023 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 02:59:27,000 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 03:01:10,226 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 03:26:09,772 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 03:29:55,607 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 03:30:08,590 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 03:30:28,201 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 03:30:49,342 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 03:31:01,804 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 03:33:58,489 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 03:38:06,281 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 03:38:08,096 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 03:38:44,632 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 03:46:31,691 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 03:53:02,483 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 04:01:22,142 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 04:01:34,831 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 04:03:03,123 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 04:05:24,282 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-05 04:09:20,692 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-05 04:09:56,164 [INFO] guapotrajes: Usuario autenticado correctamente

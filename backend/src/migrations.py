@@ -1,0 +1,182 @@
+from decouple import config
+from pony.orm import db_session
+import logging
+
+from src.db import db
+
+logger = logging.getLogger(__name__)
+
+
+def _is_postgres() -> bool:
+    provider = config("DB_PROVIDER", default="postgres").lower()
+    return provider in {"postgres", "postgresql"}
+
+
+def apply_schema_migrations() -> None:
+    """Aplica migraciones mínimas necesarias para el nuevo flujo financiero."""
+    if not _is_postgres():
+        return
+
+    try:
+        with db_session:
+            # Migraciones para CajaChica
+            alter_statements = [
+                'ALTER TABLE "CajaChica" ADD COLUMN IF NOT EXISTS "metodo_pago" VARCHAR(32)',
+                'ALTER TABLE "CajaChica" ADD COLUMN IF NOT EXISTS "tipo_egreso" VARCHAR(32)',
+                'ALTER TABLE "CajaChica" ADD COLUMN IF NOT EXISTS "estado" VARCHAR(32)',
+                'ALTER TABLE "CajaChica" ADD COLUMN IF NOT EXISTS "referencia" VARCHAR(255)',
+                'ALTER TABLE "CajaChica" ADD COLUMN IF NOT EXISTS "caja_movimiento_id" INTEGER',
+                'ALTER TABLE "CajaMovimientos" ADD COLUMN IF NOT EXISTS "destino" VARCHAR(255)',
+                # Migraciones para CajaConcentradora
+                'ALTER TABLE "CajaConcentradora" ADD COLUMN IF NOT EXISTS "usuario_id" INTEGER',
+                'ALTER TABLE "CajaConcentradora" ADD COLUMN IF NOT EXISTS "tipo_movimiento" VARCHAR(32)',
+                'ALTER TABLE "CajaConcentradora" ADD COLUMN IF NOT EXISTS "origen" VARCHAR(32)',
+                'ALTER TABLE "CajaConcentradora" ADD COLUMN IF NOT EXISTS "destino" VARCHAR(32)',
+                'ALTER TABLE "CajaConcentradora" ADD COLUMN IF NOT EXISTS "estado" VARCHAR(32)',
+                'ALTER TABLE "CajaConcentradora" ADD COLUMN IF NOT EXISTS "caja_movimiento_id" INTEGER',
+                # Migraciones para descuentos extra
+                'ALTER TABLE "Presupuesto" ADD COLUMN IF NOT EXISTS "extra_discount_percentage" DOUBLE PRECISION',
+                'ALTER TABLE "Presupuesto" ADD COLUMN IF NOT EXISTS "extra_discount_amount" DOUBLE PRECISION',
+                'ALTER TABLE "Presupuesto" ADD COLUMN IF NOT EXISTS "extra_discount_reason" TEXT',
+                'ALTER TABLE "Presupuesto" ADD COLUMN IF NOT EXISTS "extra_discount_applied_by" INTEGER',
+                'ALTER TABLE "Presupuesto" ADD COLUMN IF NOT EXISTS "extra_discount_created_at" TIMESTAMP',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_percentage" DOUBLE PRECISION',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_amount" DOUBLE PRECISION',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_reason" TEXT',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_applied_by" INTEGER',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_created_at" TIMESTAMP',
+                'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "extra_discount_percentage" DOUBLE PRECISION',
+                'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "extra_discount_amount" DOUBLE PRECISION',
+                'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "extra_discount_reason" TEXT',
+                'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "extra_discount_applied_by" INTEGER',
+                'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "extra_discount_created_at" TIMESTAMP',
+                # Migraciones para CuentaDestino
+                'CREATE TABLE IF NOT EXISTS "CuentasDestino" ('
+                '    "id" SERIAL PRIMARY KEY,'
+                '    "sucursal" INTEGER NOT NULL REFERENCES "Sucursales"("id"),'
+                '    "nombre_titular" VARCHAR(255) NOT NULL,'
+                '    "activa" BOOLEAN NOT NULL DEFAULT TRUE'
+                ')',
+                'ALTER TABLE "CajaMovimientos" ADD COLUMN IF NOT EXISTS "cuenta_destino_id" INTEGER REFERENCES "CuentasDestino"("id")',
+                'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "cuenta_destino_id" INTEGER REFERENCES "CuentasDestino"("id")',
+                # Migraciones para Métodos de Pago Configurables
+                'CREATE TABLE IF NOT EXISTS "MetodosPagoConfigurables" ('
+                '    "id" SERIAL PRIMARY KEY,'
+                '    "sucursal" INTEGER NOT NULL REFERENCES "Sucursales"("id"),'
+                '    "nombre" VARCHAR(255) NOT NULL,'
+                '    "activo" BOOLEAN NOT NULL DEFAULT TRUE,'
+                '    "tiene_submetodos" BOOLEAN NOT NULL DEFAULT FALSE,'
+                '    "orden" INTEGER DEFAULT 0,'
+                '    "fecha_creacion" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP'
+                ')',
+                'CREATE TABLE IF NOT EXISTS "SubmetodosPago" ('
+                '    "id" SERIAL PRIMARY KEY,'
+                '    "metodo_pago" INTEGER NOT NULL REFERENCES "MetodosPagoConfigurables"("id") ON DELETE CASCADE,'
+                '    "nombre" VARCHAR(255) NOT NULL,'
+                '    "activo" BOOLEAN NOT NULL DEFAULT TRUE,'
+                '    "orden" INTEGER DEFAULT 0,'
+                '    "fecha_creacion" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP'
+                ')',
+                # Agregar columnas a tablas existentes para métodos configurables
+                'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "metodo_pago_id" INTEGER REFERENCES "MetodosPagoConfigurables"("id")',
+                'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "submetodo_pago_id" INTEGER REFERENCES "SubmetodosPago"("id")',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "metodo_pago_id" INTEGER REFERENCES "MetodosPagoConfigurables"("id")',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "submetodo_pago_id" INTEGER REFERENCES "SubmetodosPago"("id")',
+                'ALTER TABLE "CajaMovimientos" ADD COLUMN IF NOT EXISTS "metodo_pago_id" INTEGER REFERENCES "MetodosPagoConfigurables"("id")',
+                'ALTER TABLE "CajaMovimientos" ADD COLUMN IF NOT EXISTS "submetodo_pago_id" INTEGER REFERENCES "SubmetodosPago"("id")',
+                'ALTER TABLE "CuentaCorriente" ADD COLUMN IF NOT EXISTS "metodo_pago_id" INTEGER REFERENCES "MetodosPagoConfigurables"("id")',
+                'ALTER TABLE "CuentaCorriente" ADD COLUMN IF NOT EXISTS "submetodo_pago_id" INTEGER REFERENCES "SubmetodosPago"("id")',
+                # Catálogos de atributos de producto
+                'CREATE TABLE IF NOT EXISTS "ProductoLineas" ("id" SERIAL PRIMARY KEY, "nombre" VARCHAR(255) NOT NULL UNIQUE, "codigo" VARCHAR(3))',
+                'CREATE TABLE IF NOT EXISTS "ProductoTalles" ("id" SERIAL PRIMARY KEY, "nombre" VARCHAR(255) NOT NULL UNIQUE, "codigo" VARCHAR(2))',
+                'CREATE TABLE IF NOT EXISTS "ProductoTelas" ("id" SERIAL PRIMARY KEY, "nombre" VARCHAR(255) NOT NULL UNIQUE, "codigo" VARCHAR(2))',
+                'CREATE TABLE IF NOT EXISTS "ProductoColores" ("id" SERIAL PRIMARY KEY, "nombre" VARCHAR(255) NOT NULL UNIQUE, "codigo" VARCHAR(2))',
+                # Columnas FK en Productos (nullable)
+                'ALTER TABLE "Productos" ADD COLUMN IF NOT EXISTS "linea_id" INTEGER REFERENCES "ProductoLineas"("id")',
+                'ALTER TABLE "Productos" ADD COLUMN IF NOT EXISTS "talle_id" INTEGER REFERENCES "ProductoTalles"("id")',
+                'ALTER TABLE "Productos" ADD COLUMN IF NOT EXISTS "tela_id" INTEGER REFERENCES "ProductoTelas"("id")',
+                'ALTER TABLE "Productos" ADD COLUMN IF NOT EXISTS "color_id" INTEGER REFERENCES "ProductoColores"("id")',
+                # Asegurar columnas codigo en catálogos (para instalaciones existentes)
+                'ALTER TABLE "ProductoLineas" ADD COLUMN IF NOT EXISTS "codigo" VARCHAR(3)',
+                'ALTER TABLE "ProductoTalles" ADD COLUMN IF NOT EXISTS "codigo" VARCHAR(2)',
+                'ALTER TABLE "ProductoTelas" ADD COLUMN IF NOT EXISTS "codigo" VARCHAR(2)',
+                'ALTER TABLE "ProductoColores" ADD COLUMN IF NOT EXISTS "codigo" VARCHAR(2)',
+            ]
+
+            for statement in alter_statements:
+                try:
+                    db.execute(statement)
+                except Exception as e:
+                    # Ignorar errores si la columna ya existe o la tabla no existe aún
+                    logger.debug(f"Error ejecutando migración (puede ser ignorado): {e}")
+
+            # Actualizaciones de valores por defecto (solo si hay datos)
+            update_statements = [
+                'UPDATE "CajaChica" SET "metodo_pago" = \'EFECTIVO\' WHERE "metodo_pago" IS NULL',
+                'UPDATE "CajaChica" SET "estado" = \'PENDIENTE\' WHERE "estado" IS NULL',
+                # Actualizar valores por defecto en CajaConcentradora
+                'UPDATE "CajaConcentradora" SET "tipo_movimiento" = \'INGRESO\' WHERE "tipo_movimiento" IS NULL',
+                'UPDATE "CajaConcentradora" SET "origen" = \'Caja Diaria\' WHERE "origen" IS NULL',
+                'UPDATE "CajaConcentradora" SET "estado" = \'Confirmado\' WHERE "estado" IS NULL',
+            ]
+
+            for statement in update_statements:
+                try:
+                    db.execute(statement)
+                except Exception as e:
+                    # Ignorar errores si la tabla no existe o no hay datos
+                    logger.debug(f"Error ejecutando actualización (puede ser ignorado): {e}")
+
+            # Migración de datos: pasar linea/talle/tela/color (str) a FKs (solo si existen columnas viejas)
+            data_migration_sql = [
+                (
+                    'INSERT INTO "ProductoLineas" ("nombre") SELECT DISTINCT "linea" FROM "Productos" '
+                    'WHERE "linea" IS NOT NULL AND TRIM("linea") != \'\' ON CONFLICT ("nombre") DO NOTHING'
+                ),
+                'UPDATE "Productos" p SET "linea_id" = (SELECT pl.id FROM "ProductoLineas" pl WHERE pl.nombre = p.linea LIMIT 1) WHERE p."linea" IS NOT NULL',
+                (
+                    'INSERT INTO "ProductoTalles" ("nombre") SELECT DISTINCT "talle" FROM "Productos" '
+                    'WHERE "talle" IS NOT NULL AND TRIM("talle") != \'\' ON CONFLICT ("nombre") DO NOTHING'
+                ),
+                'UPDATE "Productos" p SET "talle_id" = (SELECT pt.id FROM "ProductoTalles" pt WHERE pt.nombre = p.talle LIMIT 1) WHERE p."talle" IS NOT NULL',
+                (
+                    'INSERT INTO "ProductoTelas" ("nombre") SELECT DISTINCT "tela" FROM "Productos" '
+                    'WHERE "tela" IS NOT NULL AND TRIM("tela") != \'\' ON CONFLICT ("nombre") DO NOTHING'
+                ),
+                'UPDATE "Productos" p SET "tela_id" = (SELECT pt.id FROM "ProductoTelas" pt WHERE pt.nombre = p.tela LIMIT 1) WHERE p."tela" IS NOT NULL',
+                (
+                    'INSERT INTO "ProductoColores" ("nombre") SELECT DISTINCT "color" FROM "Productos" '
+                    'WHERE "color" IS NOT NULL AND TRIM("color") != \'\' ON CONFLICT ("nombre") DO NOTHING'
+                ),
+                'UPDATE "Productos" p SET "color_id" = (SELECT pc.id FROM "ProductoColores" pc WHERE pc.nombre = p.color LIMIT 1) WHERE p."color" IS NOT NULL',
+                # Inicializar códigos por defecto en catálogos existentes (relleno con id)
+                'UPDATE "ProductoLineas" SET "codigo" = LPAD(CAST("id" AS TEXT), 3, \'0\') WHERE "codigo" IS NULL OR TRIM("codigo") = \'\'',
+                'UPDATE "ProductoTalles" SET "codigo" = LPAD(CAST("id" AS TEXT), 2, \'0\') WHERE "codigo" IS NULL OR TRIM("codigo") = \'\'',
+                'UPDATE "ProductoTelas" SET "codigo" = LPAD(CAST("id" AS TEXT), 2, \'0\') WHERE "codigo" IS NULL OR TRIM("codigo") = \'\'',
+                'UPDATE "ProductoColores" SET "codigo" = LPAD(CAST("id" AS TEXT), 2, \'0\') WHERE "codigo" IS NULL OR TRIM("codigo") = \'\'',
+                # Índices únicos para códigos
+                'CREATE UNIQUE INDEX IF NOT EXISTS "ProductoLineas_codigo_key" ON "ProductoLineas"("codigo")',
+                'CREATE UNIQUE INDEX IF NOT EXISTS "ProductoTalles_codigo_key" ON "ProductoTalles"("codigo")',
+                'CREATE UNIQUE INDEX IF NOT EXISTS "ProductoTelas_codigo_key" ON "ProductoTelas"("codigo")',
+                'CREATE UNIQUE INDEX IF NOT EXISTS "ProductoColores_codigo_key" ON "ProductoColores"("codigo")',
+            ]
+            for statement in data_migration_sql:
+                try:
+                    db.execute(statement)
+                except Exception as e:
+                    logger.debug(f"Migración datos atributos producto (puede ser ignorado si columnas ya no existen): {e}")
+
+            for drop_col in ['"linea"', '"talle"', '"tela"', '"color"']:
+                try:
+                    db.execute(f'ALTER TABLE "Productos" DROP COLUMN IF EXISTS {drop_col}')
+                except Exception as e:
+                    logger.debug(f"Drop column Productos {drop_col}: {e}")
+
+            # Crear métodos de pago por defecto para todas las sucursales
+            # Esto se hace después del mapeo en un script separado para evitar problemas
+            # El servicio de métodos de pago se encargará de crearlos si no existen
+
+    except Exception as e:
+        # Si hay un error crítico, lo registramos pero no detenemos la aplicación
+        logger.warning(f"Error en migraciones (continuando): {e}")
+
