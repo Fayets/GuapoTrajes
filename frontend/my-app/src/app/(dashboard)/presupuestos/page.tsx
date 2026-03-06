@@ -124,7 +124,7 @@ export default function PresupuestosPage() {
     { value: "EFECTIVO", label: "Efectivo" },
     { value: "DEBITO", label: "Débito" },
     { value: "CREDITO", label: "Crédito" },
-    { value: "BILLETERA_VIRTUAL", label: "Billetera Virtual" },
+    { value: "BILLETERA_VIRTUAL", label: "Transferencia" },
     { value: "TRANSFERENCIA", label: "Transferencia" },
   ];
   const [eventos, setEventos] = useState<string[]>([]);
@@ -1035,6 +1035,19 @@ export default function PresupuestosPage() {
                   />
                 </div>
 
+                <MetodoPagoSelector
+                  sucursalId={me?.sucursalId}
+                  metodoPagoId={metodoPagoId}
+                  submetodoPagoId={submetodoPagoId}
+                  onMetodoChange={(metodoId, submetodoId, metodoDisplay) => {
+                    setMetodoPagoId(metodoId)
+                    setSubmetodoPagoId(submetodoId)
+                    setMetodoPago(metodoDisplay) // Para compatibilidad
+                  }}
+                  required={true}
+                  showError={!metodoPagoId}
+                />
+
                 <div className="mb-4">
                   <label className="form-label fw-bold">
                     Cuenta Destino <span className="text-danger">*</span>
@@ -1062,19 +1075,6 @@ export default function PresupuestosPage() {
                     </div>
                   )}
                 </div>
-
-                <MetodoPagoSelector
-                  sucursalId={me?.sucursalId}
-                  metodoPagoId={metodoPagoId}
-                  submetodoPagoId={submetodoPagoId}
-                  onMetodoChange={(metodoId, submetodoId, metodoDisplay) => {
-                    setMetodoPagoId(metodoId)
-                    setSubmetodoPagoId(submetodoId)
-                    setMetodoPago(metodoDisplay) // Para compatibilidad
-                  }}
-                  required={true}
-                  showError={!metodoPagoId}
-                />
               </div>
             </div>
           </div>

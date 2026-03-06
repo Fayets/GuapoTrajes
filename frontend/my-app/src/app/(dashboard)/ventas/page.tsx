@@ -79,7 +79,7 @@ const metodosPago = [
   { value: "EFECTIVO", label: "Efectivo" },
   { value: "DEBITO", label: "Débito" },
   { value: "CREDITO", label: "Crédito" },
-  { value: "BILLETERA_VIRTUAL", label: "Billetera Virtual" },
+  { value: "BILLETERA_VIRTUAL", label: "Transferencia" },
 ];
 
 export default function VentasPage() {
@@ -678,14 +678,26 @@ export default function VentasPage() {
           dialogStyle={{ maxWidth: "640px", width: "95%" }}
         >
           <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
-            <DialogTitle className="fw-semibold">Cuenta Destino y Método de Pago</DialogTitle>
+            <DialogTitle className="fw-semibold">Método de Pago y Cuenta Destino</DialogTitle>
             <DialogDescription className="mb-0">
-              Selecciona la cuenta destino y el método de pago para completar la venta
+              Selecciona el método de pago y la cuenta destino para completar la venta
             </DialogDescription>
           </DialogHeader>
 
           <div className="modal-body px-3 px-md-4">
-            {/* Selector de Cuenta Destino */}
+            <MetodoPagoSelector
+              sucursalId={me?.sucursalId}
+              metodoPagoId={metodoPagoId}
+              submetodoPagoId={submetodoPagoId}
+              onMetodoChange={(metodoId, submetodoId, metodoDisplay) => {
+                setMetodoPagoId(metodoId)
+                setSubmetodoPagoId(submetodoId)
+                setMetodoPago(metodoDisplay) // Para compatibilidad
+              }}
+              required={true}
+              showError={!metodoPagoId}
+            />
+
             <div className="mb-4">
               <label className="form-label fw-bold">
                 Cuenta Destino <span className="text-danger">*</span>
@@ -719,20 +731,6 @@ export default function VentasPage() {
                 </div>
               )}
             </div>
-
-            {/* Selector de Método de Pago Configurable */}
-            <MetodoPagoSelector
-              sucursalId={me?.sucursalId}
-              metodoPagoId={metodoPagoId}
-              submetodoPagoId={submetodoPagoId}
-              onMetodoChange={(metodoId, submetodoId, metodoDisplay) => {
-                setMetodoPagoId(metodoId)
-                setSubmetodoPagoId(submetodoId)
-                setMetodoPago(metodoDisplay) // Para compatibilidad
-              }}
-              required={true}
-              showError={!metodoPagoId}
-            />
           </div>
 
           <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">

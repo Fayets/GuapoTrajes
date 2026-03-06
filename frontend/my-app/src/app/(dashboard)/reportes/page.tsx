@@ -1313,9 +1313,7 @@ export default function ReportesPage() {
         ? "Débito"
         : item.metodo === "CREDITO"
         ? "Crédito"
-        : item.metodo === "BILLETERA_VIRTUAL"
-        ? "Billetera Virtual"
-        : item.metodo === "TRANSFERENCIA"
+        : item.metodo === "BILLETERA_VIRTUAL" || item.metodo === "TRANSFERENCIA"
         ? "Transferencia"
         : item.metodo,
       item.cantidad,
@@ -3597,9 +3595,7 @@ export default function ReportesPage() {
                                   ? "Débito"
                                   : item.metodo === "CREDITO"
                                   ? "Crédito"
-                                  : item.metodo === "BILLETERA_VIRTUAL"
-                                  ? "Billetera Virtual"
-                                  : item.metodo === "TRANSFERENCIA"
+                                  : item.metodo === "BILLETERA_VIRTUAL" || item.metodo === "TRANSFERENCIA"
                                   ? "Transferencia"
                                   : item.metodo === "SIN_METODO"
                                   ? "Sin Método"
@@ -3693,9 +3689,7 @@ export default function ReportesPage() {
                                     ? "Débito"
                                     : detalle.metodo_pago === "CREDITO"
                                     ? "Crédito"
-                                    : detalle.metodo_pago === "BILLETERA_VIRTUAL"
-                                    ? "Billetera Virtual"
-                                    : detalle.metodo_pago === "TRANSFERENCIA"
+                                    : detalle.metodo_pago === "BILLETERA_VIRTUAL" || detalle.metodo_pago === "TRANSFERENCIA"
                                     ? "Transferencia"
                                     : detalle.metodo_pago || "N/A"}
                                 </span>

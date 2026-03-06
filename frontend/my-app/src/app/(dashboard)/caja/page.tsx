@@ -27,7 +27,7 @@ const metodosPago = [
   { value: "EFECTIVO", label: "Efectivo" },
   { value: "DEBITO", label: "Débito" },
   { value: "CREDITO", label: "Crédito" },
-  { value: "BILLETERA_VIRTUAL", label: "Billetera Virtual" },
+  { value: "BILLETERA_VIRTUAL", label: "Transferencia" },
 ];
 
 export default function CajaPage() {

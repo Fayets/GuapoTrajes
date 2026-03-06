@@ -88,9 +88,13 @@ export default function OrdenesTrabajoPage() {
     { value: "EFECTIVO", label: "Efectivo" },
     { value: "DEBITO", label: "Débito" },
     { value: "CREDITO", label: "Crédito" },
-    { value: "BILLETERA_VIRTUAL", label: "Billetera Virtual" },
+    { value: "BILLETERA_VIRTUAL", label: "Transferencia" },
     { value: "TRANSFERENCIA", label: "Transferencia" },
   ];
+  const labelMetodoPago = (value: string) =>
+    value === "BILLETERA_VIRTUAL" || value === "TRANSFERENCIA"
+      ? "Transferencia"
+      : metodosPago.find((m) => m.value === value)?.label ?? value;
 
   const getEstadoClass = (estado: string) => {
     switch (estado.toLowerCase()) {
@@ -1275,6 +1279,19 @@ export default function OrdenesTrabajoPage() {
                       )}
                   </div>
 
+                  <MetodoPagoSelector
+                    sucursalId={me?.sucursalId}
+                    metodoPagoId={metodoPagoId}
+                    submetodoPagoId={submetodoPagoId}
+                    onMetodoChange={(metodoId, submetodoId, metodoDisplay) => {
+                      setMetodoPagoId(metodoId)
+                      setSubmetodoPagoId(submetodoId)
+                      setMetodoPago(metodoDisplay) // Para compatibilidad
+                    }}
+                    required={true}
+                    showError={!metodoPagoId}
+                  />
+
                   <div className="mb-4">
                     <label className="form-label fw-bold">
                       Cuenta Destino <span className="text-danger">*</span>
@@ -1302,19 +1319,6 @@ export default function OrdenesTrabajoPage() {
                       </div>
                     )}
                   </div>
-
-                  <MetodoPagoSelector
-                    sucursalId={me?.sucursalId}
-                    metodoPagoId={metodoPagoId}
-                    submetodoPagoId={submetodoPagoId}
-                    onMetodoChange={(metodoId, submetodoId, metodoDisplay) => {
-                      setMetodoPagoId(metodoId)
-                      setSubmetodoPagoId(submetodoId)
-                      setMetodoPago(metodoDisplay) // Para compatibilidad
-                    }}
-                    required={true}
-                    showError={!metodoPagoId}
-                  />
                 </div>
               </div>
             </div>
@@ -1610,11 +1614,7 @@ export default function OrdenesTrabajoPage() {
                                   })}
                                 </td>
                                 <td className="small">
-                                  {metodosPago.find(
-                                    (m) => m.value === seña.metodo_pago
-                                  )?.label ||
-                                    seña.metodo_pago ||
-                                    "N/A"}
+                                  {labelMetodoPago(seña.metodo_pago || "") || seña.metodo_pago || "N/A"}
                                 </td>
                                 <td className="small text-muted">
                                   {seña.usuario_nombre || "N/A"}

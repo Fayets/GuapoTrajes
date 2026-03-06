@@ -143,6 +143,18 @@ export function MetodoPagoSelector({
     }
   }
 
+  // Unificar "Billetera Virtual" y "Transferencia" en la UI: mostrar siempre "Transferencia"
+  const displayMetodoNombre = (nombre: string) =>
+    nombre === "Billetera Virtual" ? "Transferencia" : nombre
+  // Mostrar una sola opción: si existe "Transferencia", ocultar "Billetera Virtual"
+  const metodosParaMostrar = metodos.filter((m) => {
+    if (m.nombre === "Billetera Virtual") {
+      const hayTransferencia = metodos.some((x) => x.nombre === "Transferencia")
+      return !hayTransferencia
+    }
+    return true
+  })
+
   const metodoSeleccionado = metodos.find(m => m.id === metodoPagoId)
   const submetodosDisponibles = metodoSeleccionado?.tiene_submetodos 
     ? metodoSeleccionado.submétodos.filter(s => s.activo)
@@ -174,7 +186,7 @@ export function MetodoPagoSelector({
 
       {/* Selector de Método Principal */}
       <div className="row g-3 mt-1">
-        {metodos
+        {metodosParaMostrar
           .filter(m => m.activo)
           .sort((a, b) => a.orden - b.orden)
           .map((metodo) => {
@@ -203,7 +215,7 @@ export function MetodoPagoSelector({
                   </div>
                   <div>
                     <span className="fw-semibold d-block">
-                      {metodo.nombre}
+                      {displayMetodoNombre(metodo.nombre)}
                     </span>
                   </div>
                 </div>
@@ -216,7 +228,7 @@ export function MetodoPagoSelector({
       {metodoSeleccionado && metodoSeleccionado.tiene_submetodos && submetodosDisponibles.length > 0 && (
         <div className="mt-3">
           <label className="form-label fw-semibold">
-            Submétodo de {metodoSeleccionado.nombre} *
+            Submétodo de {displayMetodoNombre(metodoSeleccionado.nombre)} *
           </label>
           <div className="row g-3 mt-1">
             {submetodosDisponibles
@@ -247,7 +259,7 @@ export function MetodoPagoSelector({
                       </div>
                       <div>
                         <span className="fw-semibold d-block">
-                          {submetodo.nombre}
+                          {displayMetodoNombre(submetodo.nombre)}
                         </span>
                       </div>
                     </div>
@@ -257,7 +269,7 @@ export function MetodoPagoSelector({
           </div>
           {!submetodoPagoId && (
             <div className="text-danger small mt-2">
-              Debes seleccionar un submétodo de {metodoSeleccionado.nombre}
+              Debes seleccionar un submétodo de {displayMetodoNombre(metodoSeleccionado.nombre)}
             </div>
           )}
         </div>
