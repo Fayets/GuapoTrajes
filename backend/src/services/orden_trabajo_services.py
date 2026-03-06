@@ -104,15 +104,16 @@ class OrdenTrabajoServices:
                     extra_discount_created_at=presupuesto.extra_discount_created_at,
                 )
 
-                # Crear movimiento en cuenta corriente
-                CuentaCorriente(
-                    cliente=presupuesto.cliente,
-                    concepto=f"Seña inicial para presupuesto {presupuesto.numero}",
-                    tipo="credito",
-                    monto=seña_pagada,
-                    saldo_post=seña_pagada,  # o calcular con lógica de saldo acumulado
-                    referencia_orden=orden.id
-                )
+                # Crear movimiento en cuenta corriente solo si el presupuesto tiene cliente (no precliente)
+                if presupuesto.cliente:
+                    CuentaCorriente(
+                        cliente=presupuesto.cliente,
+                        concepto=f"Seña inicial para presupuesto {presupuesto.numero}",
+                        tipo="credito",
+                        monto=seña_pagada,
+                        saldo_post=seña_pagada,  # o calcular con lógica de saldo acumulado
+                        referencia_orden=orden.id
+                    )
 
                 # Crear movimiento en caja diaria para la seña pagada
                 if seña_pagada > 0:
@@ -210,7 +211,14 @@ class OrdenTrabajoServices:
                         "id": o.id,
                         "presupuesto_id": o.presupuesto.id,
                         "presupuesto_numero": o.presupuesto.numero,
-                        "cliente_nombre": f"{o.presupuesto.cliente.nombre} {o.presupuesto.cliente.apellido}",
+                        "cliente_nombre": (
+                            f"{o.presupuesto.precliente.apellido} {o.presupuesto.precliente.nombre}".strip()
+                            if o.presupuesto.precliente
+                            else f"{o.presupuesto.cliente.apellido} {o.presupuesto.cliente.nombre}".strip()
+                        ),
+                        "es_precliente": o.presupuesto.precliente is not None,
+                        "cliente_dni": o.presupuesto.cliente.dni if o.presupuesto.cliente else None,
+                        "cliente_direccion": o.presupuesto.cliente.direccion if o.presupuesto.cliente else None,
                         "fecha_evento": o.fecha_evento.isoformat(),
                         "fecha_creacion": o.fecha_creacion.isoformat() if o.fecha_creacion else "",
                         "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
@@ -277,10 +285,17 @@ class OrdenTrabajoServices:
                     "id": orden.id,
                     "presupuesto_id": orden.presupuesto.id,
                     "presupuesto_numero": orden.presupuesto.numero,
-                    "cliente_nombre": f"{orden.presupuesto.cliente.nombre} {orden.presupuesto.cliente.apellido}",
-                    "cliente_dni": orden.presupuesto.cliente.dni,
-                    "cliente_direccion": orden.presupuesto.cliente.direccion,
-                    "cliente_celular": orden.presupuesto.cliente.celular,
+                    "cliente_nombre": (
+                    f"{orden.presupuesto.precliente.apellido} {orden.presupuesto.precliente.nombre}".strip()
+                    if orden.presupuesto.precliente
+                    else f"{orden.presupuesto.cliente.apellido} {orden.presupuesto.cliente.nombre}".strip()
+                ),
+                    "es_precliente": orden.presupuesto.precliente is not None,
+                    "cliente_dni": orden.presupuesto.cliente.dni if orden.presupuesto.cliente else None,
+                    "cliente_direccion": orden.presupuesto.cliente.direccion if orden.presupuesto.cliente else None,
+                    "cliente_celular": (
+                    orden.presupuesto.precliente.celular if orden.presupuesto.precliente else orden.presupuesto.cliente.celular
+                ),
                     "fecha_evento": orden.fecha_evento.isoformat(),
                     "fecha_creacion": orden.fecha_creacion.isoformat() if orden.fecha_creacion else "",
                     "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
@@ -332,7 +347,11 @@ class OrdenTrabajoServices:
                         "id": o.id,
                         "presupuesto_id": o.presupuesto.id,
                         "presupuesto_numero": o.presupuesto.numero,
-                        "cliente_nombre": f"{o.presupuesto.cliente.nombre} {o.presupuesto.cliente.apellido}",
+                        "cliente_nombre": (
+                            f"{o.presupuesto.precliente.apellido} {o.presupuesto.precliente.nombre}".strip()
+                            if o.presupuesto.precliente
+                            else f"{o.presupuesto.cliente.apellido} {o.presupuesto.cliente.nombre}".strip()
+                        ),
                         "fecha_evento": o.fecha_evento.isoformat(),
                         "estado": o.estado,
                         "seña_pagada": o.seña_pagada,
@@ -454,18 +473,19 @@ class OrdenTrabajoServices:
                 nuevo_saldo_pendiente = orden.saldo_pendiente - monto_pagado
                 orden.saldo_pendiente = nuevo_saldo_pendiente
 
-                # Crear movimiento en cuenta corriente
-                movimiento_cc = CuentaCorriente(
-                    cliente=orden.presupuesto.cliente,
-                    concepto=f"Pago adicional para orden {orden.presupuesto.numero}",
-                    tipo="credito",
-                    monto=monto_pagado,
-                    saldo_post=monto_pagado,  # Aquí deberías calcular el saldo acumulado real
-                    referencia_orden=orden.id,
-                    metodo_pago_configurable=metodo_pago_configurable,
-                    submetodo_pago=submetodo_pago
-                )
-                flush()
+                # Crear movimiento en cuenta corriente solo si el presupuesto tiene cliente (no precliente)
+                if orden.presupuesto.cliente:
+                    movimiento_cc = CuentaCorriente(
+                        cliente=orden.presupuesto.cliente,
+                        concepto=f"Pago adicional para orden {orden.presupuesto.numero}",
+                        tipo="credito",
+                        monto=monto_pagado,
+                        saldo_post=monto_pagado,  # Aquí deberías calcular el saldo acumulado real
+                        referencia_orden=orden.id,
+                        metodo_pago_configurable=metodo_pago_configurable,
+                        submetodo_pago=submetodo_pago
+                    )
+                    flush()
 
                 # Crear movimiento en caja diaria
                 movimiento_caja = CajaMovimiento(
@@ -550,10 +570,15 @@ class OrdenTrabajoServices:
                     lambda cc: cc.referencia_orden == orden.id
                 ).order_by(CuentaCorriente.fecha))
 
+                cliente_nombre_hist = (
+                    f"{orden.presupuesto.precliente.apellido} {orden.presupuesto.precliente.nombre}".strip()
+                    if orden.presupuesto.precliente
+                    else f"{orden.presupuesto.cliente.nombre} {orden.presupuesto.cliente.apellido}"
+                )
                 historial = {
                     "orden_id": orden.id,
                     "presupuesto_numero": orden.presupuesto.numero,
-                    "cliente": f"{orden.presupuesto.cliente.nombre} {orden.presupuesto.cliente.apellido}",
+                    "cliente": cliente_nombre_hist,
                     "total_presupuesto": orden.presupuesto.total,
                     "seña_inicial": orden.seña_pagada,
                     "saldo_pendiente_actual": orden.saldo_pendiente,

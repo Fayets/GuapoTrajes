@@ -388,7 +388,10 @@ class ReportesServices:
                         cliente_nombre = "N/A"
                         cliente_dni = "N/A"
                         try:
-                            if presupuesto.cliente:
+                            if presupuesto.precliente:
+                                cliente_nombre = f"{presupuesto.precliente.apellido} {presupuesto.precliente.nombre}".strip()
+                                cliente_dni = "N/A"
+                            elif presupuesto.cliente:
                                 cliente_nombre = f"{presupuesto.cliente.nombre} {presupuesto.cliente.apellido}".strip()
                                 cliente_dni = presupuesto.cliente.dni or "N/A"
                         except Exception as e:
@@ -479,7 +482,10 @@ class ReportesServices:
                         cliente_nombre = "N/A"
                         cliente_dni = "N/A"
                         try:
-                            if presupuesto.cliente:
+                            if presupuesto.precliente:
+                                cliente_nombre = f"{presupuesto.precliente.apellido} {presupuesto.precliente.nombre}".strip()
+                                cliente_dni = "N/A"
+                            elif presupuesto.cliente:
                                 cliente_nombre = f"{presupuesto.cliente.nombre} {presupuesto.cliente.apellido}".strip()
                                 cliente_dni = presupuesto.cliente.dni or "N/A"
                         except Exception as e:

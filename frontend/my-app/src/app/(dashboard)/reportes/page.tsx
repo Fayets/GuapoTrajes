@@ -830,6 +830,13 @@ export default function ReportesPage() {
       const data = await response.json();
       const ordenCompleta = data.data || data;
 
+      if (ordenCompleta.es_precliente || !ordenCompleta.cliente_dni || !ordenCompleta.cliente_direccion) {
+        toast.error(
+          "Este presupuesto pertenece a un precliente. Para generar el contrato se requiere DNI y Dirección."
+        );
+        return;
+      }
+
       // Preparar datos para el contrato (igual que en la página de órdenes)
       const numeroContrato = contrato.numero.padStart(6, "0");
       const clienteNombre =

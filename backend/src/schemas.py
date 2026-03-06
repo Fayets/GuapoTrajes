@@ -367,7 +367,8 @@ class ItemPresupuestoIn(BaseModel):
     subtotal: float
 
 class PresupuestoCreate(BaseModel):
-    cliente_id: int
+    cliente_id: Optional[int] = None
+    precliente_id: Optional[int] = None
     fecha_evento: date
     fecha_retiro: Optional[date]
     fecha_devolucion: Optional[date]
@@ -380,6 +381,14 @@ class PresupuestoCreate(BaseModel):
     extra_discount_percentage: Optional[float] = None
     extra_discount_amount: Optional[float] = None
     extra_discount_reason: Optional[str] = None
+
+    @model_validator(mode="after")
+    def cliente_o_precliente(self):
+        if self.cliente_id is None and self.precliente_id is None:
+            raise ValueError("Se debe indicar cliente_id o precliente_id")
+        if self.cliente_id is not None and self.precliente_id is not None:
+            raise ValueError("Solo se debe indicar cliente_id o precliente_id, no ambos")
+        return self
 
 class ItemPresupuestoOut(BaseModel):
     producto_id: int
@@ -401,8 +410,13 @@ class ItemPresupuestoResponse(BaseModel):
 class PresupuestoResponse(BaseModel):
     id: int
     numero: str
-    cliente_id: int
+    cliente_id: Optional[int] = None
+    precliente_id: Optional[int] = None
     cliente_nombre: str
+    es_precliente: bool = False
+    cliente_dni: Optional[str] = None
+    cliente_direccion: Optional[str] = None
+    cliente_celular: Optional[str] = None
     fecha_evento: str
     fecha_retiro: Optional[str]
     fecha_devolucion: Optional[str]

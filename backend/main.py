@@ -115,6 +115,7 @@ app = FastAPI()
 # Las migraciones agregan las columnas necesarias antes de que Pony ORM verifique la estructura
 apply_schema_migrations()
 
+
 # Generar mapeo - las migraciones ya agregaron las columnas necesarias
 db.generate_mapping(create_tables=True, check_tables=False)
 

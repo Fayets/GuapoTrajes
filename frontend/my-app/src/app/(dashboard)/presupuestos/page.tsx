@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { flushSync } from "react-dom";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import PresupuestoModal from "@/components/modales/presupuestoModal";
@@ -26,6 +28,13 @@ type Cliente = {
   telefono?: string;
 };
 
+type Precliente = {
+  id: number;
+  nombre: string;
+  apellido: string;
+  celular: string;
+};
+
 type Producto = {
   id: number;
   descripcion: string;
@@ -48,8 +57,11 @@ type Presupuesto = {
   id: number;
   numero: string;
   fecha_evento: string;
-  cliente_id: number;
+  cliente_id?: number | null;
+  precliente_id?: number | null;
   cliente_nombre: string;
+  es_precliente?: boolean;
+  cliente_celular?: string | null;
   items: ItemPresupuesto[];
   total: number;
   estado:
@@ -72,8 +84,10 @@ type Presupuesto = {
 type PresupuestoResponse = {
   id: number;
   numero: string;
-  cliente_id: number;
+  cliente_id?: number | null;
+  precliente_id?: number | null;
   cliente_nombre: string;
+  es_precliente?: boolean;
   fecha_evento: string;
   fecha_retiro?: string;
   fecha_devolucion?: string;
@@ -131,8 +145,19 @@ export default function PresupuestosPage() {
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    clienteId: string;
+    preclienteId?: number | null;
+    observaciones: string;
+    fechaEvento: string;
+    fechaRetiro: string;
+    fechaDevolucion: string;
+    categoria: string;
+    agasajado: string;
+    lugar: string;
+  }>({
     clienteId: "",
+    preclienteId: null,
     observaciones: "",
     fechaEvento: "",
     fechaRetiro: "",
@@ -141,6 +166,17 @@ export default function PresupuestosPage() {
     agasajado: "",
     lugar: "",
   });
+
+  const [preclientes, setPreclientes] = useState<Precliente[]>([]);
+  const [modoClientePrecliente, setModoClientePrecliente] = useState<"cliente" | "precliente">("cliente");
+  const [preclienteForm, setPreclienteForm] = useState({ nombre: "", apellido: "", telefono: "" });
+  const [preclienteNombreSeleccionado, setPreclienteNombreSeleccionado] = useState<string | null>(null);
+  const preclienteIdRef = useRef<number | null>(null);
+
+  /** Fuente única de verdad: quién está seleccionado para este presupuesto (cliente o precliente). Usado en resumen, guardado y UI. */
+  const [clienteOPreclienteSeleccionado, setClienteOPreclienteSeleccionado] = useState<
+    { tipo: "cliente"; id: number; nombre: string } | { tipo: "precliente"; id: number; nombre: string } | null
+  >(null);
 
   const [items, setItems] = useState<ItemPresupuesto[]>([]);
   const [nuevoItem, setNuevoItem] = useState({
@@ -165,6 +201,19 @@ export default function PresupuestosPage() {
     fetchProductos();
     fetchPresupuestos();
   }, []);
+
+  // Mantener el ref sincronizado con el precliente seleccionado (por si el estado se pierde en algún render)
+  useEffect(() => {
+    if (formData.preclienteId != null && formData.preclienteId !== undefined) {
+      preclienteIdRef.current = Number(formData.preclienteId);
+    }
+  }, [formData.preclienteId]);
+
+  // Nombre para el resumen: fuente única clienteOPreclienteSeleccionado o presupuesto en vista
+  const resumenClienteNombre =
+    clienteOPreclienteSeleccionado?.nombre ??
+    presupuestoSeleccionado?.cliente_nombre ??
+    "-";
 
   const fetchClientes = async () => {
     try {
@@ -209,8 +258,126 @@ export default function PresupuestosPage() {
     }
   };
 
+  const fetchPreclientes = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/preclientes/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPreclientes(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Error fetching preclientes:", e);
+      setPreclientes([]);
+    }
+  };
+
   const handleClienteChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setFormData((prev) => ({ ...prev, clienteId: e.target.value }));
+    const raw = e.target.value;
+    if (!raw) {
+      preclienteIdRef.current = null;
+      setClienteOPreclienteSeleccionado(null);
+      setFormData((prev) => ({ ...prev, clienteId: "", preclienteId: null }));
+      setPreclienteNombreSeleccionado(null);
+      return;
+    }
+    if (raw.startsWith("p-")) {
+      const id = Number(raw.slice(2));
+      const p = preclientes.find((x) => Number(x.id) === id);
+      if (p) {
+        const nombre = `${p.apellido} ${p.nombre}`.trim();
+        preclienteIdRef.current = id;
+        setClienteOPreclienteSeleccionado({ tipo: "precliente", id, nombre });
+        setFormData((prev) => ({ ...prev, preclienteId: id, clienteId: "" }));
+        setPreclienteNombreSeleccionado(nombre);
+      }
+      return;
+    }
+    const idStr = raw.startsWith("c-") ? raw.slice(2) : raw;
+    preclienteIdRef.current = null;
+    setFormData((prev) => ({ ...prev, clienteId: idStr, preclienteId: null }));
+    setPreclienteNombreSeleccionado(null);
+    const c = clientes.find((x) => String(x.id) === idStr);
+    setClienteOPreclienteSeleccionado(
+      c ? { tipo: "cliente", id: c.id, nombre: `${c.apellido} ${c.nombre}`.trim() } : null
+    );
+  };
+
+  const selectClientePreclienteValue =
+    clienteOPreclienteSeleccionado?.tipo === "cliente"
+      ? `c-${clienteOPreclienteSeleccionado.id}`
+      : clienteOPreclienteSeleccionado?.tipo === "precliente"
+        ? `p-${clienteOPreclienteSeleccionado.id}`
+        : "";
+
+  const crearPreclienteYUsar = async () => {
+    const { nombre, apellido, telefono } = preclienteForm;
+    if (!nombre.trim() || !apellido.trim() || !telefono.trim()) {
+      toast.error("Completá nombre, apellido y teléfono del precliente.");
+      return;
+    }
+    const telNorm = telefono.replace(/\s/g, "");
+    const yaExiste = preclientes.some((p) => (p.celular || "").replace(/\s/g, "") === telNorm);
+    if (yaExiste) {
+      toast.error("Ya existe un precliente con este teléfono. Seleccionalo del listado.");
+      return;
+    }
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/preclientes/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          apellido: apellido.trim(),
+          celular: telefono.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!data.success || !data.data?.id) {
+        toast.error(data.message || "Error al crear el precliente.");
+        return;
+      }
+      const id = Number(data.data.id);
+      const nombreCompleto = `${apellido.trim()} ${nombre.trim()}`.trim();
+      const nuevoPrecliente: Precliente = {
+        id,
+        nombre: nombre.trim(),
+        apellido: apellido.trim(),
+        celular: telefono.trim(),
+      };
+      preclienteIdRef.current = id;
+      flushSync(() => {
+        setPreclientes((prev) => (prev.some((p) => Number(p.id) === id) ? prev : [...prev, nuevoPrecliente]));
+        setClienteOPreclienteSeleccionado({ tipo: "precliente", id, nombre: nombreCompleto });
+        setFormData((prev) => ({ ...prev, preclienteId: id, clienteId: "" }));
+        setPreclienteNombreSeleccionado(nombreCompleto);
+        setModoClientePrecliente("cliente");
+        setPreclienteForm({ nombre: "", apellido: "", telefono: "" });
+      });
+      fetchPreclientes().catch(() => {}); // actualizar en segundo plano; no mostrar error para no tapar el éxito
+      toast("Precliente creado", {
+        duration: 4000,
+        unstyled: true,
+        style: {
+          background: "#dcfce7",
+          borderLeft: "4px solid #16a34a",
+          color: "#166534",
+          padding: "12px 16px",
+          borderRadius: "8px",
+          fontWeight: 500,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+        },
+        className: "toast-precliente-ok",
+      });
+    } catch (e) {
+      console.error(e);
+      toast.error("Error de conexión al crear el precliente.");
+    }
   };
 
   const handleItemChange = (name: string, value: string | number) => {
@@ -285,8 +452,11 @@ export default function PresupuestosPage() {
   const nuevoPresupuesto = () => {
     setPresupuestoActual(null);
     setVerModoLectura(false);
+    preclienteIdRef.current = null;
+    setClienteOPreclienteSeleccionado(null);
     setFormData({
       clienteId: "",
+      preclienteId: null,
       observaciones: "",
       fechaEvento: "",
       fechaRetiro: "",
@@ -295,20 +465,28 @@ export default function PresupuestosPage() {
       agasajado: "",
       lugar: "",
     });
+    setPreclienteNombreSeleccionado(null);
+    setModoClientePrecliente("cliente");
+    setPreclienteForm({ nombre: "", apellido: "", telefono: "" });
     setItems([]);
     setTotalConDescuento(null);
     setPorcentajeDescuento(null);
     setShowModal(true);
+    fetchPreclientes();
   };
 
   const guardarPresupuesto = async () => {
-    if (
-      !formData.clienteId ||
-      items.length === 0 ||
-      !formData.fechaEvento ||
-      !formData.categoria
-    ) {
-      alert("Completa todos los campos requeridos");
+    const sel = clienteOPreclienteSeleccionado;
+    const tieneCliente = sel?.tipo === "cliente";
+    const tienePrecliente = sel?.tipo === "precliente";
+    const preclienteId = sel?.tipo === "precliente" ? sel.id : formData.preclienteId ?? preclienteIdRef.current;
+    const faltan: string[] = [];
+    if (!tieneCliente && !tienePrecliente) faltan.push("seleccioná un cliente o cargá/elegí un precliente");
+    if (items.length === 0) faltan.push("al menos un ítem");
+    if (!formData.fechaEvento) faltan.push("fecha del evento");
+    if (!formData.categoria) faltan.push("categoría del evento");
+    if (faltan.length > 0) {
+      toast.error("Completá lo que falta: " + faltan.join(", "));
       return;
     }
 
@@ -348,8 +526,7 @@ export default function PresupuestosPage() {
     const descuentoMaximoEstandar = esAdmin ? 50 : 15; // 50% para admin, 15% para empleados
     const tieneDescuentoExtra = porcentajeDescuento !== null && porcentajeDescuento > descuentoMaximoEstandar;
 
-    const payload = {
-      cliente_id: parseInt(formData.clienteId),
+    const payload: Record<string, unknown> = {
       fecha_evento: formData.fechaEvento,
       fecha_retiro: formData.fechaRetiro || null,
       fecha_devolucion: formData.fechaDevolucion || null,
@@ -363,19 +540,20 @@ export default function PresupuestosPage() {
         precio_unitario: item.precioUnitario,
         subtotal: item.subtotal,
       })),
-      // Campos de descuento extra
       extra_discount_percentage: tieneDescuentoExtra ? porcentajeDescuento : null,
       extra_discount_amount: tieneDescuentoExtra ? (totalOriginal - totalFinal) : null,
       extra_discount_reason: tieneDescuentoExtra ? motivoDescuentoExtra : null,
     };
-
-    console.log("Enviando payload:", payload);
-    console.log(
-      "Token:",
-      localStorage.getItem("token") ? "Presente" : "Ausente"
-    );
+    if (tienePrecliente && preclienteId != null) {
+      (payload as any).precliente_id = Number(preclienteId);
+    } else if (tieneCliente && sel?.tipo === "cliente") {
+      (payload as any).cliente_id = sel.id;
+    } else {
+      (payload as any).cliente_id = parseInt(formData.clienteId, 10);
+    }
 
     try {
+      toast.loading("Guardando presupuesto...", { id: "guardar-presupuesto" });
       const res = await fetch(`${API_BASE}/presupuestos/`, {
         method: "POST",
         headers: {
@@ -385,37 +563,43 @@ export default function PresupuestosPage() {
         body: JSON.stringify(payload),
       });
 
-      console.log("Status Code:", res.status);
-      console.log("Response Headers:", res.headers);
-      console.log("Response URL:", res.url);
+      const responseText = await res.text();
 
       if (res.ok) {
-        const responseData = await res.json();
-        console.log("Respuesta exitosa:", responseData);
+        try {
+          JSON.parse(responseText);
+        } catch {
+          // Respuesta OK pero no es JSON
+        }
+        toast.success("Presupuesto guardado exitosamente", { id: "guardar-presupuesto" });
+        preclienteIdRef.current = null;
+        setClienteOPreclienteSeleccionado(null);
         setShowModal(false);
         setTotalConDescuento(null);
         setPorcentajeDescuento(null);
         setMotivoDescuentoExtra("");
         fetchPresupuestos();
-        alert("Presupuesto guardado exitosamente");
       } else {
-        const errorText = await res.text();
-        console.error("Error al guardar presupuesto:", res.status, errorText);
-
+        let mensaje = "Error al guardar presupuesto";
         try {
-          const errorData = JSON.parse(errorText);
-          alert(
-            `Error al guardar presupuesto: ${
-              errorData.detail || errorData.message || "Error desconocido"
-            }`
-          );
+          const errorData = JSON.parse(responseText);
+          const detail = errorData.detail;
+          if (Array.isArray(detail) && detail.length > 0) {
+            mensaje = detail.map((d: { msg?: string; loc?: string[] }) => d.msg || (d.loc && d.loc.join(" ")) || "").filter(Boolean).join(". ") || mensaje;
+          } else if (detail && typeof detail === "string") {
+            mensaje = detail;
+          } else if (errorData.message) {
+            mensaje = errorData.message;
+          }
         } catch {
-          alert(`Error al guardar presupuesto: ${errorText}`);
+          if (responseText) mensaje = responseText.slice(0, 200);
         }
+        console.error("Error al guardar presupuesto:", res.status, responseText);
+        toast.error(mensaje, { id: "guardar-presupuesto" });
       }
     } catch (error) {
       console.error("Error de conexión:", error);
-      alert("Error de conexión al guardar presupuesto");
+      toast.error("Error de conexión al guardar presupuesto", { id: "guardar-presupuesto" });
     }
   };
 
@@ -541,9 +725,17 @@ export default function PresupuestosPage() {
 
   const abrirPresupuestoVista = (presupuesto: PresupuestoResponse) => {
     setPresupuestoSeleccionado(presupuesto);
-
+    const nombre = presupuesto.cliente_nombre?.trim();
+    if (presupuesto.es_precliente && presupuesto.precliente_id != null && nombre) {
+      setClienteOPreclienteSeleccionado({ tipo: "precliente", id: presupuesto.precliente_id, nombre });
+    } else if (presupuesto.cliente_id != null && nombre) {
+      setClienteOPreclienteSeleccionado({ tipo: "cliente", id: presupuesto.cliente_id, nombre });
+    } else {
+      setClienteOPreclienteSeleccionado(null);
+    }
     setFormData({
-      clienteId: presupuesto.cliente_id.toString(),
+      clienteId: presupuesto.cliente_id != null ? String(presupuesto.cliente_id) : "",
+      preclienteId: presupuesto.precliente_id ?? null,
       fechaEvento: presupuesto.fecha_evento,
       fechaRetiro: presupuesto.fecha_retiro || "",
       fechaDevolucion: presupuesto.fecha_devolucion || "",
@@ -684,19 +876,17 @@ export default function PresupuestosPage() {
   };
 
   const handleEnviarWhatsapp = (presupuesto: Presupuesto) => {
-    const cliente = clientes.find((c) => c.id === presupuesto.cliente_id);
+    const cliente = presupuesto.cliente_id != null ? clientes.find((c) => c.id === presupuesto.cliente_id) : null;
+    const telefonoCliente = (cliente?.celular || cliente?.telefono) ?? presupuesto.cliente_celular ?? null;
 
-    if (!cliente) {
-      alert("No se encontró información del cliente asociado al presupuesto.");
-      return;
-    }
-
-    const telefonoCliente = cliente.celular || cliente.telefono;
     if (!telefonoCliente) {
-      alert("El cliente no tiene un número de teléfono registrado.");
+      alert(
+        presupuesto.es_precliente
+          ? "No se encontró teléfono del precliente."
+          : "No se encontró información del cliente asociado al presupuesto."
+      );
       return;
     }
-
     const telefonoNormalizado = normalizarTelefono(telefonoCliente);
     if (!telefonoNormalizado) {
       alert("El número de teléfono del cliente es inválido.");
@@ -704,8 +894,9 @@ export default function PresupuestosPage() {
     }
 
     const nombreCliente =
-      `${cliente.apellido ?? ""} ${cliente.nombre ?? ""}`.trim() ||
-      presupuesto.cliente_nombre;
+      (cliente ? `${cliente.apellido ?? ""} ${cliente.nombre ?? ""}`.trim() : null) ||
+      presupuesto.cliente_nombre ||
+      "";
 
     const totalFormateado = presupuesto.total.toLocaleString("es-AR", {
       minimumFractionDigits: 2,
@@ -975,7 +1166,6 @@ export default function PresupuestosPage() {
           </div>
         </div>
       )}
-      {/* Modal */}
       <PresupuestoModal
         esAdmin={esAdmin}
         show={showModal}
@@ -987,6 +1177,31 @@ export default function PresupuestosPage() {
         clienteFiltro={clienteFiltro}
         setClienteFiltro={setClienteFiltro}
         handleClienteChange={handleClienteChange}
+        selectClientePreclienteValue={selectClientePreclienteValue}
+        modoClientePrecliente={modoClientePrecliente}
+        setModoClientePrecliente={setModoClientePrecliente}
+        preclienteForm={preclienteForm}
+        setPreclienteForm={setPreclienteForm}
+        preclienteNombreSeleccionado={preclienteNombreSeleccionado}
+        resumenClienteNombre={resumenClienteNombre}
+        clienteOPreclienteSeleccionado={clienteOPreclienteSeleccionado}
+        preclientes={preclientes}
+        onSelectPrecliente={(id, nombre) => {
+          preclienteIdRef.current = id;
+          setClienteOPreclienteSeleccionado({ tipo: "precliente", id, nombre });
+          setFormData((prev) => ({ ...prev, preclienteId: id, clienteId: "" }));
+          setPreclienteNombreSeleccionado(nombre);
+        }}
+        crearPreclienteYUsar={crearPreclienteYUsar}
+        onActualizarListas={async () => {
+          await Promise.all([fetchClientes(), fetchPreclientes()]);
+        }}
+        onClearPrecliente={() => {
+          preclienteIdRef.current = null;
+          setClienteOPreclienteSeleccionado(null);
+          setFormData((prev) => ({ ...prev, preclienteId: null }));
+          setPreclienteNombreSeleccionado(null);
+        }}
         productos={productos}
         productoFiltro={productoFiltro}
         setProductoFiltro={setProductoFiltro}

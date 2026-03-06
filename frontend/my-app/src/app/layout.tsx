@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import "./globals.css" // Importación correcta
 import { AuthProvider } from "@/context/auth-context"
 import { SucursalProvider } from "@/context/sucursal-context"
+import { ToasterProvider } from "@/components/toaster-provider"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -36,7 +37,10 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <AuthProvider>
-          <SucursalProvider>{children}</SucursalProvider>
+          <SucursalProvider>
+            {children}
+            <ToasterProvider />
+          </SucursalProvider>
         </AuthProvider>
 
         {/* Bootstrap JavaScript */}

@@ -74,20 +74,23 @@ class PagosServices:
                 if orden.saldo_pendiente == 0:
                     orden.estado = "Pagado"
 
-                # Obtenemos último saldo registrado
-                ultimo_mov = CuentaCorriente.select(lambda m: m.cliente.id == cliente.id).order_by(desc(CuentaCorriente.fecha)).first()
-                saldo_anterior = ultimo_mov.saldo_post if ultimo_mov else 0
+                # Solo crear movimiento en cuenta corriente si el presupuesto tiene cliente (no precliente)
+                movimiento = None
+                if cliente:
+                    # Obtenemos último saldo registrado
+                    ultimo_mov = CuentaCorriente.select(lambda m: m.cliente.id == cliente.id).order_by(desc(CuentaCorriente.fecha)).first()
+                    saldo_anterior = ultimo_mov.saldo_post if ultimo_mov else 0
 
-                # Creamos movimiento de cuenta corriente
-                movimiento = CuentaCorriente(
-                    cliente=cliente,
-                    concepto=data.concepto,
-                    tipo="credito",
-                    monto=data.monto,
-                    saldo_post=saldo_anterior + data.monto,
-                    referencia_orden=orden.id,
-                    fecha=datetime.now()
-                )
+                    # Creamos movimiento de cuenta corriente
+                    movimiento = CuentaCorriente(
+                        cliente=cliente,
+                        concepto=data.concepto,
+                        tipo="credito",
+                        monto=data.monto,
+                        saldo_post=saldo_anterior + data.monto,
+                        referencia_orden=orden.id,
+                        fecha=datetime.now()
+                    )
                 
                 # Validar y obtener método de pago (nuevo sistema o compatibilidad)
                 metodo_pago_configurable = None
@@ -121,14 +124,14 @@ class PagosServices:
                 }
                 caja_service.create_movimiento(movimiento_caja_data, usuario_id)
                 
-                # Actualizar movimiento de cuenta corriente con método de pago si se usa nuevo sistema
-                if metodo_pago_configurable:
+                # Actualizar movimiento de cuenta corriente con método de pago si se usa nuevo sistema (solo si existe)
+                if movimiento and metodo_pago_configurable:
                     movimiento.metodo_pago_configurable = metodo_pago_configurable
                     movimiento.submetodo_pago = submetodo_pago
 
                 return {
                     "mensaje": "Pago registrado correctamente",
-                    "nuevo_saldo": movimiento.saldo_post,
+                    "nuevo_saldo": movimiento.saldo_post if movimiento else 0,
                     "saldo_pendiente": orden.saldo_pendiente
                 }
             except HTTPException:

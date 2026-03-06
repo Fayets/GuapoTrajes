@@ -518,3 +518,38 @@ body {
   cursor: default;
   background-color: transparent;
 }
+
+/* Sonner: forzar toasts de éxito en verde (sobreescribe tema/richColors) */
+[data-rich-colors=true][data-sonner-toast][data-type="success"] {
+  background: #dcfce7 !important;
+  border-color: #16a34a !important;
+  color: #166534 !important;
+}
+[data-rich-colors=true][data-sonner-toast][data-type="success"] [data-title],
+[data-rich-colors=true][data-sonner-toast][data-type="success"] [data-close-button] {
+  color: #166534 !important;
+  background: #dcfce7 !important;
+  border-color: #16a34a !important;
+}
+
+/* Toast "Precliente creado": siempre verde, máxima prioridad */
+[data-sonner-toast].toast-precliente-ok {
+  background: #dcfce7 !important;
+  border: 1px solid #16a34a !important;
+  border-left-width: 4px !important;
+  color: #166534 !important;
+}
+[data-sonner-toast].toast-precliente-ok [data-title],
+[data-sonner-toast].toast-precliente-ok [data-close-button],
+[data-sonner-toast].toast-precliente-ok [data-icon],
+[data-sonner-toast].toast-precliente-ok [data-icon] svg,
+[data-sonner-toast].toast-precliente-ok * {
+  color: #166534 !important;
+  background-color: transparent !important;
+  border-color: #16a34a !important;
+  fill: #166534 !important;
+}
+[data-sonner-toast].toast-precliente-ok [data-close-button]:hover {
+  background-color: #bbf7d0 !important;
+  color: #166534 !important;
+}

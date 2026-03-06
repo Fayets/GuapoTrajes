@@ -1,9 +1,33 @@
 from pony.orm import db_session, select, flush, commit, Database, desc
 from datetime import datetime, date
 from fastapi import HTTPException
-from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, db
+from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, db
 from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse
 from src.services.disponibilidad_services import verificar_disponibilidad
+
+def _presupuesto_cliente_info(p):
+    """Devuelve cliente_id, precliente_id, cliente_nombre, es_precliente, cliente_dni, cliente_direccion, cliente_celular para un presupuesto."""
+    if p.precliente:
+        return {
+            "cliente_id": None,
+            "precliente_id": p.precliente.id,
+            "cliente_nombre": f"{p.precliente.apellido} {p.precliente.nombre}".strip(),
+            "es_precliente": True,
+            "cliente_dni": None,
+            "cliente_direccion": None,
+            "cliente_celular": p.precliente.celular,
+        }
+    c = p.cliente
+    return {
+        "cliente_id": c.id,
+        "precliente_id": None,
+        "cliente_nombre": f"{c.apellido} {c.nombre}".strip(),
+        "es_precliente": False,
+        "cliente_dni": c.dni,
+        "cliente_direccion": c.direccion,
+        "cliente_celular": c.celular,
+    }
+
 
 class PresupuestosServices:
     def __init__(self):
@@ -13,10 +37,17 @@ class PresupuestosServices:
         with db_session:
             try:
                 
-                # Verificar que el cliente existe
-                cliente = Cliente.get(id=data.cliente_id)
-                if not cliente:
-                    raise HTTPException(status_code=404, detail="Cliente no encontrado")
+                # Cliente o precliente
+                cliente = None
+                precliente = None
+                if data.cliente_id is not None:
+                    cliente = Cliente.get(id=data.cliente_id)
+                    if not cliente:
+                        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+                else:
+                    precliente = Precliente.get(id=data.precliente_id)
+                    if not precliente:
+                        raise HTTPException(status_code=404, detail="Precliente no encontrado")
                 
 
                 # Verificar que todos los productos existen y están disponibles
@@ -99,6 +130,7 @@ class PresupuestosServices:
                 presupuesto_args = {
                     "numero": numero,
                     "cliente": cliente,
+                    "precliente": precliente,
                     "fecha_evento": fecha_evento_presupuesto,
                     "fecha_retiro": data.fecha_retiro,
                     "fecha_devolucion": data.fecha_devolucion,
@@ -148,7 +180,8 @@ class PresupuestosServices:
                     "data": {
                         "id": presupuesto.id,
                         "numero": presupuesto.numero,
-                        "cliente_id": presupuesto.cliente.id,
+                        "cliente_id": presupuesto.cliente.id if presupuesto.cliente else None,
+                        "precliente_id": presupuesto.precliente.id if presupuesto.precliente else None,
                         "total": presupuesto.total,
                         "estado": presupuesto.estado
                     }
@@ -174,8 +207,7 @@ class PresupuestosServices:
                     PresupuestoResponse(
                         id=p.id,
                         numero=p.numero,
-                        cliente_id=p.cliente.id,
-                        cliente_nombre=f"{p.cliente.nombre} {p.cliente.apellido}",
+                        **_presupuesto_cliente_info(p),
                         fecha_evento=str(p.fecha_evento),
                         fecha_retiro=str(p.fecha_retiro) if p.fecha_retiro else None,
                         fecha_devolucion=str(p.fecha_devolucion) if p.fecha_devolucion else None,
@@ -225,10 +257,17 @@ class PresupuestosServices:
                 if presupuesto.orden_trabajo:
                     raise HTTPException(status_code=400, detail="No se puede editar: ya tiene orden de trabajo generada")
 
-                # Verificar cliente
-                cliente = Cliente.get(id=data.cliente_id)
-                if not cliente:
-                    raise HTTPException(status_code=404, detail="Cliente no encontrado")
+                # Cliente o precliente
+                cliente = None
+                precliente = None
+                if data.cliente_id is not None:
+                    cliente = Cliente.get(id=data.cliente_id)
+                    if not cliente:
+                        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+                else:
+                    precliente = Precliente.get(id=data.precliente_id)
+                    if not precliente:
+                        raise HTTPException(status_code=404, detail="Precliente no encontrado")
 
                 # Verificar productos y disponibilidad
                 fecha_retiro = data.fecha_retiro or data.fecha_evento
@@ -255,6 +294,7 @@ class PresupuestosServices:
 
                 # Actualizar presupuesto
                 presupuesto.cliente = cliente
+                presupuesto.precliente = precliente
                 presupuesto.fecha_evento = data.fecha_evento
                 presupuesto.fecha_retiro = data.fecha_retiro
                 presupuesto.fecha_devolucion = data.fecha_devolucion
@@ -381,8 +421,7 @@ class PresupuestosServices:
                 return PresupuestoResponse(
                     id=presupuesto.id,
                     numero=presupuesto.numero,
-                    cliente_id=presupuesto.cliente.id,
-                    cliente_nombre=f"{presupuesto.cliente.nombre} {presupuesto.cliente.apellido}",
+                    **_presupuesto_cliente_info(presupuesto),
                     fecha_evento=str(presupuesto.fecha_evento),
                     fecha_retiro=str(presupuesto.fecha_retiro) if presupuesto.fecha_retiro else None,
                     fecha_devolucion=str(presupuesto.fecha_devolucion) if presupuesto.fecha_devolucion else None,

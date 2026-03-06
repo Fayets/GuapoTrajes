@@ -914,11 +914,18 @@ class CajaServices:
                     )
                 )
                 
+                cliente_id = presupuesto.cliente.id if presupuesto.cliente else None
+                cliente_nombre = (
+                    f"{presupuesto.precliente.apellido} {presupuesto.precliente.nombre}".strip()
+                    if presupuesto.precliente
+                    else (f"{presupuesto.cliente.nombre} {presupuesto.cliente.apellido}" if presupuesto.cliente else "N/A")
+                )
+                cliente_dni = presupuesto.cliente.dni if presupuesto.cliente else None
                 saldos_pendientes.append({
                     "presupuesto_id": presupuesto.id,
-                    "cliente_id": presupuesto.cliente.id,
-                    "cliente_nombre": f"{presupuesto.cliente.nombre} {presupuesto.cliente.apellido}",
-                    "cliente_dni": presupuesto.cliente.dni,
+                    "cliente_id": cliente_id,
+                    "cliente_nombre": cliente_nombre,
+                    "cliente_dni": cliente_dni,
                     "fecha_creacion": presupuesto.fecha_creacion,
                     "total_presupuesto": presupuesto.total,
                     "pagos_realizados": pagos_realizados,

@@ -143,6 +143,7 @@ class Precliente(db.Entity):
     nombre = Required(str)
     apellido = Required(str)
     celular = Required(str)
+    presupuestos = Set("Presupuesto", reverse="precliente")
     _table_ = "Precliente"
 
 class Modista(db.Entity):
@@ -189,7 +190,8 @@ class ProductoLavanderia(db.Entity):
 class Presupuesto(db.Entity):
     id = PrimaryKey(int, auto=True)
     numero = Required(str)
-    cliente = Required(Cliente)
+    cliente = Optional(Cliente)
+    precliente = Optional(Precliente, reverse="presupuestos")
     fecha_evento = Required(date)
     fecha_retiro = Optional(date)
     fecha_devolucion = Optional(date)

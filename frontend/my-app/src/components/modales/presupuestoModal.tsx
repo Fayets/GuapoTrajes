@@ -13,6 +13,7 @@ import {
 import { getApiBaseUrl } from "@/lib/api-config";
 
 type Cliente = { id: number; nombre: string; apellido: string };
+type Precliente = { id: number; nombre: string; apellido: string; celular: string };
 type Producto = {
   id: number;
   descripcion: string;
@@ -38,6 +39,19 @@ type Props = {
   clienteFiltro: string;
   setClienteFiltro: (value: string) => void;
   handleClienteChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  selectClientePreclienteValue?: string;
+  modoClientePrecliente?: "cliente" | "precliente";
+  setModoClientePrecliente?: (v: "cliente" | "precliente") => void;
+  preclienteForm?: { nombre: string; apellido: string; telefono: string };
+  setPreclienteForm?: React.Dispatch<React.SetStateAction<{ nombre: string; apellido: string; telefono: string }>>;
+  preclienteNombreSeleccionado?: string | null;
+  resumenClienteNombre?: string;
+  clienteOPreclienteSeleccionado?: { tipo: "cliente" | "precliente"; id: number; nombre: string } | null;
+  preclientes?: Precliente[];
+  onSelectPrecliente?: (id: number, nombre: string) => void;
+  crearPreclienteYUsar?: () => Promise<void>;
+  onClearPrecliente?: () => void;
+  onActualizarListas?: () => void | Promise<void>;
   productos: Producto[];
   productoFiltro: string;
   setProductoFiltro: (value: string) => void;
@@ -67,6 +81,19 @@ export default function PresupuestoModal({
   clienteFiltro,
   setClienteFiltro,
   handleClienteChange,
+  selectClientePreclienteValue = "",
+  modoClientePrecliente = "cliente",
+  setModoClientePrecliente,
+  preclienteForm = { nombre: "", apellido: "", telefono: "" },
+  setPreclienteForm,
+  preclienteNombreSeleccionado = null,
+  resumenClienteNombre,
+  clienteOPreclienteSeleccionado = null,
+  preclientes = [],
+  onSelectPrecliente,
+  crearPreclienteYUsar,
+  onClearPrecliente,
+  onActualizarListas,
   productos,
   productoFiltro,
   setProductoFiltro,
@@ -83,9 +110,6 @@ export default function PresupuestoModal({
   aplicarDescuento,
   onClose,
 }: Props) {
-  {
-    console.log(items);
-  }
   const [eventos, setEventos] = React.useState<
     { id: number; nombre: string }[]
   >([]);
@@ -147,23 +171,27 @@ export default function PresupuestoModal({
     if (presupuestoSeleccionado?.cliente_nombre) {
       return presupuestoSeleccionado.cliente_nombre;
     }
+    if (preclienteNombreSeleccionado?.trim()) {
+      return preclienteNombreSeleccionado.trim();
+    }
     if (clienteSeleccionado) {
       return `${clienteSeleccionado.apellido} ${clienteSeleccionado.nombre}`.trim();
     }
     return "-";
-  }, [presupuestoSeleccionado, clienteSeleccionado]);
+  }, [presupuestoSeleccionado, clienteSeleccionado, formData.preclienteId, preclienteNombreSeleccionado]);
 
   const handleFechaChange = (key: string, value: string) => {
     const nuevaFecha = new Date(value);
-    const nuevaData = { ...formData, [key]: value };
+    setFormData((prev: any) => {
+      const nuevaData = { ...prev, [key]: value };
 
     if (key === "fechaEvento") {
-      if (formData.fechaRetiro && new Date(formData.fechaRetiro) > nuevaFecha) {
+      if (prev.fechaRetiro && new Date(prev.fechaRetiro) > nuevaFecha) {
         nuevaData.fechaRetiro = value;
       }
       if (
-        formData.fechaDevolucion &&
-        new Date(formData.fechaDevolucion) <= nuevaFecha
+        prev.fechaDevolucion &&
+        new Date(prev.fechaDevolucion) <= nuevaFecha
       ) {
         const siguiente = new Date(nuevaFecha);
         siguiente.setDate(siguiente.getDate() + 1);
@@ -172,12 +200,12 @@ export default function PresupuestoModal({
     }
 
     if (key === "fechaRetiro") {
-      if (formData.fechaEvento && nuevaFecha > new Date(formData.fechaEvento)) {
+      if (prev.fechaEvento && nuevaFecha > new Date(prev.fechaEvento)) {
         nuevaData.fechaEvento = value;
       }
       if (
-        formData.fechaDevolucion &&
-        nuevaFecha >= new Date(formData.fechaDevolucion)
+        prev.fechaDevolucion &&
+        nuevaFecha >= new Date(prev.fechaDevolucion)
       ) {
         const siguiente = new Date(nuevaFecha);
         siguiente.setDate(siguiente.getDate() + 1);
@@ -187,15 +215,13 @@ export default function PresupuestoModal({
 
     if (key === "fechaDevolucion") {
       const eventoOK =
-        formData.fechaEvento && nuevaFecha > new Date(formData.fechaEvento);
+        prev.fechaEvento && nuevaFecha > new Date(prev.fechaEvento);
       const retiroOK =
-        formData.fechaRetiro && nuevaFecha > new Date(formData.fechaRetiro);
+        prev.fechaRetiro && nuevaFecha > new Date(prev.fechaRetiro);
       if (!eventoOK || !retiroOK) {
-        // Se ajusta automáticamente a un día después del evento o retiro
-        const base =
-          fechaEvento && fechaRetiro
-            ? new Date(Math.max(+fechaEvento, +fechaRetiro))
-            : fechaEvento || fechaRetiro;
+        const fev = prev.fechaEvento ? new Date(prev.fechaEvento) : null;
+        const fret = prev.fechaRetiro ? new Date(prev.fechaRetiro) : null;
+        const base = fev && fret ? new Date(Math.max(+fev, +fret)) : fev || fret;
         if (base) {
           base.setDate(base.getDate() + 1);
           nuevaData.fechaDevolucion = formatDate(base);
@@ -215,7 +241,8 @@ export default function PresupuestoModal({
       }
     }
 
-    setFormData(nuevaData);
+    return nuevaData;
+    });
   };
 
   const totalMostrado =
@@ -254,38 +281,155 @@ export default function PresupuestoModal({
               </h6>
             </div>
             <div className="card-body p-4">
-              <label className="form-label fw-bold">Cliente</label>
+              <label className="form-label fw-bold" id="presupuesto-cliente-label">Cliente</label>
               {verModoLectura ? (
                 <div className="form-control-plaintext border rounded p-2 bg-light">
                   {presupuestoSeleccionado?.cliente_nombre || "No disponible"}
                 </div>
               ) : (
                 <>
-                  <input
-                    type="text"
-                    className="form-control mb-3"
-                    placeholder="Buscar por apellido o nombre"
-                    value={clienteFiltro}
-                    onChange={(e) => setClienteFiltro(e.target.value)}
-                  />
-                  <select
-                    className="form-select"
-                    value={formData.clienteId}
-                    onChange={handleClienteChange}
-                  >
-                    <option value="">Seleccionar cliente</option>
-                    {clientes
-                      .filter((c) =>
-                        `${c.apellido} ${c.nombre}`
-                          .toLowerCase()
-                          .includes(clienteFiltro.toLowerCase())
-                      )
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.apellido} {c.nombre}
-                        </option>
-                      ))}
-                  </select>
+                  {(clienteOPreclienteSeleccionado != null || formData.preclienteId != null || preclienteNombreSeleccionado) ? (
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <div className="form-control bg-light border-0">
+                        {clienteOPreclienteSeleccionado?.nombre ?? preclienteNombreSeleccionado ?? "Precliente seleccionado"}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={onClearPrecliente}
+                      >
+                        Cambiar
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="d-flex gap-2 mb-3">
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${modoClientePrecliente === "cliente" ? "btn-primary" : "btn-outline-primary"}`}
+                          onClick={() => setModoClientePrecliente?.("cliente")}
+                        >
+                          Seleccionar Cliente
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${modoClientePrecliente === "precliente" ? "btn-primary" : "btn-outline-primary"}`}
+                          onClick={() => setModoClientePrecliente?.("precliente")}
+                        >
+                          Cargar Precliente
+                        </button>
+                      </div>
+                      {modoClientePrecliente === "cliente" ? (
+                        <>
+                          <label className="visually-hidden" htmlFor="presupuesto-buscar-cliente">Buscar cliente</label>
+                          <input
+                            id="presupuesto-buscar-cliente"
+                            name="buscarCliente"
+                            type="text"
+                            className="form-control mb-3"
+                            placeholder="Buscar por apellido o nombre"
+                            value={clienteFiltro}
+                            onChange={(e) => setClienteFiltro(e.target.value)}
+                          />
+                          <div className="d-flex align-items-center gap-2 mb-2">
+                            {onActualizarListas && (
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={() => onActualizarListas()}
+                              >
+                                Actualizar
+                              </button>
+                            )}
+                          </div>
+                          <label className="visually-hidden" htmlFor="presupuesto-select-cliente">Seleccionar cliente o precliente</label>
+                          <select
+                            id="presupuesto-select-cliente"
+                            name="clienteId"
+                            className="form-select"
+                            value={selectClientePreclienteValue}
+                            onChange={handleClienteChange}
+                          >
+                            <option value="">Seleccionar cliente</option>
+                            <optgroup label="Clientes">
+                              {clientes
+                                .filter((c) =>
+                                  `${c.apellido} ${c.nombre}`
+                                    .toLowerCase()
+                                    .includes(clienteFiltro.toLowerCase())
+                                )
+                                .map((c) => (
+                                  <option key={`c-${c.id}`} value={`c-${c.id}`}>
+                                    {c.apellido} {c.nombre}
+                                  </option>
+                                ))}
+                            </optgroup>
+                            {preclientes.length > 0 && (
+                              <optgroup label="Preclientes">
+                                {preclientes
+                                  .filter((p) =>
+                                    `${p.apellido} ${p.nombre} ${p.celular || ""}`
+                                      .toLowerCase()
+                                      .includes(clienteFiltro.toLowerCase())
+                                  )
+                                  .map((p) => (
+                                    <option key={`p-${p.id}`} value={`p-${p.id}`}>
+                                      {p.apellido} {p.nombre} {p.celular ? `(${p.celular})` : ""}
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            )}
+                          </select>
+                        </>
+                      ) : (
+                        <div className="border rounded p-3 bg-light">
+                          <div className="mb-2">
+                            <label className="form-label small fw-bold mb-1" htmlFor="presupuesto-precliente-apellido">Apellido</label>
+                            <input
+                              id="presupuesto-precliente-apellido"
+                              name="preclienteApellido"
+                              type="text"
+                              className="form-control form-control-sm"
+                              placeholder="Apellido"
+                              value={preclienteForm.apellido}
+                              onChange={(e) => setPreclienteForm?.((p) => ({ ...p, apellido: e.target.value }))}
+                            />
+                          </div>
+                          <div className="mb-2">
+                            <label className="form-label small fw-bold mb-1" htmlFor="presupuesto-precliente-nombre">Nombre</label>
+                            <input
+                              id="presupuesto-precliente-nombre"
+                              name="preclienteNombre"
+                              type="text"
+                              className="form-control form-control-sm"
+                              placeholder="Nombre"
+                              value={preclienteForm.nombre}
+                              onChange={(e) => setPreclienteForm?.((p) => ({ ...p, nombre: e.target.value }))}
+                            />
+                          </div>
+                          <div className="mb-3">
+                            <label className="form-label small fw-bold mb-1" htmlFor="presupuesto-precliente-telefono">Teléfono</label>
+                            <input
+                              id="presupuesto-precliente-telefono"
+                              name="preclienteTelefono"
+                              type="text"
+                              className="form-control form-control-sm"
+                              placeholder="Teléfono"
+                              value={preclienteForm.telefono}
+                              onChange={(e) => setPreclienteForm?.((p) => ({ ...p, telefono: e.target.value }))}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={crearPreclienteYUsar}
+                          >
+                            Crear precliente
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -302,13 +446,15 @@ export default function PresupuestoModal({
               <div className="row g-3 g-md-4">
                 {/* Fecha del evento */}
                 <div className="col-12 col-md-4">
-                  <label className="form-label fw-bold">Fecha del evento</label>
+                  <label className="form-label fw-bold" htmlFor="presupuesto-fecha-evento">Fecha del evento</label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext border rounded p-2 bg-light">
                       {formData.fechaEvento}
                     </div>
                   ) : (
                     <input
+                      id="presupuesto-fecha-evento"
+                      name="fechaEvento"
                       type="date"
                       className="form-control"
                       value={formData.fechaEvento}
@@ -327,13 +473,15 @@ export default function PresupuestoModal({
 
                 {/* Fecha de retiro */}
                 <div className="col-12 col-md-4">
-                  <label className="form-label fw-bold">Fecha de retiro</label>
+                  <label className="form-label fw-bold" htmlFor="presupuesto-fecha-retiro">Fecha de retiro</label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext border rounded p-2 bg-light">
                       {formData.fechaRetiro}
                     </div>
                   ) : (
                     <input
+                      id="presupuesto-fecha-retiro"
+                      name="fechaRetiro"
                       type="date"
                       className="form-control"
                       value={formData.fechaRetiro}
@@ -347,7 +495,7 @@ export default function PresupuestoModal({
 
                 {/* Fecha de devolución */}
                 <div className="col-12 col-md-4">
-                  <label className="form-label fw-bold">
+                  <label className="form-label fw-bold" htmlFor="presupuesto-fecha-devolucion">
                     Fecha de devolución
                   </label>
                   {verModoLectura ? (
@@ -356,6 +504,8 @@ export default function PresupuestoModal({
                     </div>
                   ) : (
                     <input
+                      id="presupuesto-fecha-devolucion"
+                      name="fechaDevolucion"
                       type="date"
                       className="form-control"
                       value={formData.fechaDevolucion}
@@ -391,13 +541,15 @@ export default function PresupuestoModal({
             <div className="card-body p-4">
               <div className="row g-3 g-md-4">
                 <div className="col-12 col-md-6">
-                  <label className="form-label fw-bold">Categoría</label>
+                  <label className="form-label fw-bold" htmlFor="presupuesto-categoria">Categoría</label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext border rounded p-2 bg-light">
                       {formData.categoria}
                     </div>
                   ) : (
                     <select
+                      id="presupuesto-categoria"
+                      name="categoria"
                       className="form-select"
                       value={formData.categoria}
                       onChange={(e) =>
@@ -417,7 +569,7 @@ export default function PresupuestoModal({
                   )}
                 </div>
                 <div className="col-12 col-md-6">
-                  <label className="form-label fw-bold">
+                  <label className="form-label fw-bold" htmlFor="presupuesto-agasajado">
                     Nombre del agasajado
                   </label>
                   {verModoLectura ? (
@@ -426,6 +578,8 @@ export default function PresupuestoModal({
                     </div>
                   ) : (
                     <input
+                      id="presupuesto-agasajado"
+                      name="agasajado"
                       type="text"
                       className="form-control"
                       value={formData.agasajado}
@@ -439,13 +593,15 @@ export default function PresupuestoModal({
                   )}
                 </div>
                 <div className="col-12 col-md-6">
-                  <label className="form-label fw-bold">Lugar del evento</label>
+                  <label className="form-label fw-bold" htmlFor="presupuesto-lugar">Lugar del evento</label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext border rounded p-2 bg-light">
                       {formData.lugar}
                     </div>
                   ) : (
                     <input
+                      id="presupuesto-lugar"
+                      name="lugar"
                       type="text"
                       className="form-control"
                       value={formData.lugar}
@@ -459,13 +615,15 @@ export default function PresupuestoModal({
                   )}
                 </div>
                 <div className="col-12">
-                  <label className="form-label fw-bold">Observaciones</label>
+                  <label className="form-label fw-bold" htmlFor="presupuesto-observaciones">Observaciones</label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext border rounded p-2 bg-light">
                       {formData.observaciones}
                     </div>
                   ) : (
                     <textarea
+                      id="presupuesto-observaciones"
+                      name="observaciones"
                       className="form-control"
                       rows={3}
                       value={formData.observaciones}
@@ -493,7 +651,7 @@ export default function PresupuestoModal({
               <div className="d-flex flex-column gap-2">
                 <div className="d-flex justify-content-between">
                   <span className="text-muted">Cliente:</span>
-                  <strong>{nombreClienteResumen}</strong>
+                  <strong>{resumenClienteNombre ?? nombreClienteResumen}</strong>
                 </div>
                 <div className="d-flex justify-content-between">
                   <span className="text-muted">Fecha evento:</span>
@@ -891,12 +1049,12 @@ export default function PresupuestoModal({
         </div>
 
         <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
-          <button className="btn btn-secondary" onClick={onClose}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
             <i className="bi bi-x-circle me-1"></i>
             Cerrar
           </button>
           {!verModoLectura && (
-            <button className="btn btn-primary" onClick={guardarPresupuesto}>
+            <button type="button" className="btn btn-primary" onClick={guardarPresupuesto}>
               <i className="bi bi-check-circle me-1"></i>
               Guardar
             </button>

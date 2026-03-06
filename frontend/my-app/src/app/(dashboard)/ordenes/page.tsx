@@ -34,9 +34,10 @@ type OrdenTrabajo = {
   presupuesto_id: number;
   presupuesto_numero: string;
   cliente_nombre: string;
-  cliente_dni?: string;
-  cliente_direccion?: string;
-  cliente_celular?: string;
+  cliente_dni?: string | null;
+  cliente_direccion?: string | null;
+  cliente_celular?: string | null;
+  es_precliente?: boolean;
   fecha_evento: string;
   fecha_creacion: string;
   seña_pagada: number;
@@ -363,6 +364,12 @@ export default function OrdenesTrabajoPage() {
 
   const generarContrato = async () => {
     if (!ordenSeleccionada || ordenSeleccionada.saldo_pendiente !== 0) {
+      return;
+    }
+    if (ordenSeleccionada.es_precliente || !ordenSeleccionada.cliente_dni || !ordenSeleccionada.cliente_direccion) {
+      alert(
+        "Este presupuesto pertenece a un precliente.\nPara generar el contrato se requiere DNI y Dirección (el cliente debe estar registrado con esos datos)."
+      );
       return;
     }
 
@@ -1753,9 +1760,16 @@ export default function OrdenesTrabajoPage() {
               <button
                 className="btn btn-outline-primary"
                 onClick={generarContrato}
-                disabled={ordenSeleccionada.saldo_pendiente !== 0}
+                disabled={
+                  ordenSeleccionada.saldo_pendiente !== 0 ||
+                  !!ordenSeleccionada.es_precliente ||
+                  !ordenSeleccionada.cliente_dni ||
+                  !ordenSeleccionada.cliente_direccion
+                }
                 title={
-                  ordenSeleccionada.saldo_pendiente !== 0
+                  ordenSeleccionada.es_precliente || !ordenSeleccionada.cliente_dni || !ordenSeleccionada.cliente_direccion
+                    ? "Este presupuesto pertenece a un precliente. Para generar el contrato se requiere DNI y Dirección."
+                    : ordenSeleccionada.saldo_pendiente !== 0
                     ? "El saldo pendiente debe ser cero para generar el contrato"
                     : "Generar contrato de alquiler"
                 }
