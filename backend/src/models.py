@@ -111,7 +111,7 @@ class Producto(db.Entity):
     precio_de_venta_medio_uso = Required(float)
     precio_venta = Required(float)
     precio_liquidacion = Required(float)
-    stock = Required(int)
+    stock = Required(int, default=1)
     stock_minimo = Required(int)
     fecha_alta = Required(date)
     estado = Required(EstadoProducto)

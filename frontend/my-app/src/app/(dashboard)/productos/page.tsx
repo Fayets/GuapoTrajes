@@ -215,7 +215,7 @@ export default function ProductosPage() {
       precio_de_venta_medio_uso: productoSinId.precio_de_venta_medio_uso ?? 0,
       precio_venta: productoSinId.precio_venta ?? 0,
       precio_liquidacion: productoSinId.precio_liquidacion ?? 0,
-      stock: productoSinId.stock ?? 0,
+      stock: productoSinId.stock ?? 1,
       stock_minimo: productoSinId.stock_minimo ?? 0,
       fecha_alta:
         productoSinId.fecha_alta &&
@@ -375,7 +375,7 @@ export default function ProductosPage() {
     precio_de_venta_medio_uso: 0,
     precio_venta: 0,
     precio_liquidacion: 0,
-    stock: 0,
+    stock: 1,
     stock_minimo: 0,
     fecha_alta: new Date().toISOString().split("T")[0],
     estado: "SALON",
@@ -1147,23 +1147,6 @@ export default function ProductosPage() {
                           }
                         />
                       </div>
-                      <div className="col-12 col-sm-6">
-                        <label className="form-label fw-bold">Stock</label>
-                        <Input
-                          type="number"
-                          className="form-control w-100"
-                          value={Number.isFinite(productoActual?.stock as number) ? productoActual?.stock : ""}
-                          onChange={(e) =>
-                            setProductoActual({
-                              ...productoActual!,
-                              stock:
-                                e.target.value === ""
-                                  ? undefined
-                                  : parseInt(e.target.value, 10),
-                            })
-                          }
-                        />
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1370,18 +1353,6 @@ export default function ProductosPage() {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             }) || "0.00"}
-                          </div>
-                        </div>
-                        <div className="col-12 col-sm-6">
-                          <label className="form-label fw-bold">Stock</label>
-                          <div className="form-control bg-light border-0">
-                            {productoActual.stock || 0}
-                          </div>
-                        </div>
-                        <div className="col-12 col-sm-6">
-                          <label className="form-label fw-bold">Stock Mínimo</label>
-                          <div className="form-control bg-light border-0">
-                            {productoActual.stock_minimo || 0}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">
