@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/auth-context";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/RoleGate";
 import { MetodoPagoSelector } from "@/components/metodo-pago-selector";
@@ -56,9 +57,12 @@ type OrdenTrabajo = {
   // Totales
   total?: number;
   total_presupuesto?: number;
+  contrato_generado_at?: string | null;
+  precliente_id?: number | null;
+  cliente_id?: number | null;
 };
 
-export default function OrdenesTrabajoPage() {
+function OrdenesTrabajoContent() {
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [filtroMetodoPago, setFiltroMetodoPago] = useState("");
@@ -80,8 +84,25 @@ export default function OrdenesTrabajoPage() {
   const [mostrarModalRecibo, setMostrarModalRecibo] = useState(false);
   const [ordenParaRecibo, setOrdenParaRecibo] =
     useState<OrdenTrabajo | null>(null);
+  const [motivoRecibo, setMotivoRecibo] = useState("");
+  const [reciboRecienGenerado, setReciboRecienGenerado] = useState<{
+    recibo: { orden_id: number; fecha_hora: string; monto: number; motivo: string; cliente_nombre: string; presupuesto_numero: string };
+    orden: OrdenTrabajo;
+  } | null>(null);
+  const [historialRecibos, setHistorialRecibos] = useState<any[]>([]);
+  const [cargandoRecibos, setCargandoRecibos] = useState(false);
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [showModalCompletarContrato, setShowModalCompletarContrato] = useState(false);
+  const [ordenParaContrato, setOrdenParaContrato] = useState<OrdenTrabajo | null>(null);
+  const [dniCompletar, setDniCompletar] = useState("");
+  const [direccionCompletar, setDireccionCompletar] = useState("");
+  const [procesandoContrato, setProcesandoContrato] = useState(false);
+
+  const ORDENES_POR_PAGINA = 20;
+  const verContratoAbiertoRef = useRef<number | null>(null);
 
   const { me } = useAuth();
+  const searchParams = useSearchParams();
   const esAdmin = me?.role === "ADMIN";
 
   // Métodos de pago consistentes con ventas
@@ -199,6 +220,32 @@ export default function OrdenesTrabajoPage() {
     cargarCuentasDestino();
   }, [me]);
 
+  useEffect(() => {
+    const verContratoId = searchParams.get("verContrato");
+    if (!verContratoId) return;
+    const ordenId = parseInt(verContratoId, 10);
+    if (isNaN(ordenId)) return;
+    if (verContratoAbiertoRef.current === ordenId) return;
+    verContratoAbiertoRef.current = ordenId;
+    (async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/ordenes/${ordenId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        if (!res.ok) return;
+        const ordenCompleta = await res.json();
+        abrirVentanaContrato(ordenCompleta);
+        window.history.replaceState({}, "", "/ordenes");
+      } catch (e) {
+        console.error("Error al abrir contrato desde URL:", e);
+      }
+    })();
+  }, [searchParams]);
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [busqueda, filtroMetodoPago]);
+
   const fetchOrdenes = async () => {
     setCargando(true);
     try {
@@ -256,8 +303,9 @@ export default function OrdenesTrabajoPage() {
             monto_pagado: parseFloat(montoPago),
             metodo_pago_id: metodoPagoId,
             submetodo_pago_id: submetodoPagoId || null,
-            payment_method: null, // Ya no se usa, pero mantenido para compatibilidad
+            payment_method: null,
             cuenta_destino_id: cuentaDestinoId,
+            motivo_recibo: motivoRecibo.trim() || undefined,
           }),
         }
       );
@@ -268,8 +316,6 @@ export default function OrdenesTrabajoPage() {
       }
 
       const resultado = await res.json();
-      alert("Pago registrado exitosamente");
-
       await fetchOrdenes();
       setShowPagoModal(false);
       setMontoPago("");
@@ -277,10 +323,20 @@ export default function OrdenesTrabajoPage() {
       setMetodoPagoId(null);
       setSubmetodoPagoId(null);
       setCuentaDestinoId(null);
+      setMotivoRecibo("");
 
-      // Actualizar historial si el modal de detalle está abierto
+      if (ordenSeleccionada && resultado?.data?.recibo) {
+        setReciboRecienGenerado({
+          recibo: resultado.data.recibo,
+          orden: ordenSeleccionada,
+        });
+      } else {
+        toast.success("Pago registrado correctamente.");
+      }
+
       if (ordenSeleccionada && showViewModal) {
         await fetchHistorialSeñas(ordenSeleccionada.id);
+        fetchRecibosOrden(ordenSeleccionada.id);
       }
     } catch (err) {
       alert(
@@ -362,41 +418,109 @@ export default function OrdenesTrabajoPage() {
     }
   };
 
-  const generarContrato = async () => {
-    if (!ordenSeleccionada || ordenSeleccionada.saldo_pendiente !== 0) {
-      return;
-    }
-    if (ordenSeleccionada.es_precliente || !ordenSeleccionada.cliente_dni || !ordenSeleccionada.cliente_direccion) {
-      alert(
-        "Este presupuesto pertenece a un precliente.\nPara generar el contrato se requiere DNI y Dirección (el cliente debe estar registrado con esos datos)."
-      );
-      return;
-    }
-
+  const fetchRecibosOrden = async (ordenId: number) => {
+    setCargandoRecibos(true);
     try {
+      const res = await fetch(`${getApiBaseUrl()}/ordenes/${ordenId}/recibos`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHistorialRecibos(data?.data?.recibos ?? []);
+      } else {
+        setHistorialRecibos([]);
+      }
+    } catch {
+      setHistorialRecibos([]);
+    } finally {
+      setCargandoRecibos(false);
+    }
+  };
 
+  const normalizarTelefonoRecibo = (telefono?: string | null): string | null => {
+    if (!telefono) return null;
+    let limpio = String(telefono).replace(/\D/g, "");
+    if (!limpio) return null;
+    limpio = limpio.replace(/^0+/, "");
+    if (limpio.startsWith("54")) {
+      if (!limpio.startsWith("549")) limpio = `549${limpio.slice(2)}`;
+    } else {
+      if (limpio.startsWith("9")) limpio = limpio.slice(1);
+      limpio = `549${limpio}`;
+    }
+    return limpio;
+  };
+
+  const textoReciboParaWhatsApp = (recibo: { orden_id: number; presupuesto_numero: string; cliente_nombre: string; fecha_hora: string; monto: number; motivo: string }) => {
+    const fecha = recibo.fecha_hora ? format(new Date(recibo.fecha_hora), "dd/MM/yyyy HH:mm", { locale: es }) : format(new Date(), "dd/MM/yyyy", { locale: es });
+    return `*GUAPO TRAJES - Recibo*\n\nOrden N°: ${recibo.orden_id}\nPresupuesto: ${recibo.presupuesto_numero}\nCliente: ${recibo.cliente_nombre}\nFecha: ${fecha}\nMonto: $${Number(recibo.monto).toLocaleString("es-AR")}\nConcepto: ${recibo.motivo}`;
+  };
+
+  const imprimirReciboPago = (recibo: { orden_id: number; fecha_hora: string; monto: number; motivo: string; cliente_nombre: string; presupuesto_numero: string }) => {
+    const fechaRecibo = recibo.fecha_hora ? format(new Date(recibo.fecha_hora), "dd/MM/yyyy HH:mm", { locale: es }) : format(new Date(), "dd/MM/yyyy HH:mm", { locale: es });
+    const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Recibo - ${recibo.orden_id}</title>
+<style>@media print{body{margin:0}.no-print{display:none}} body{font-family:'Courier New',monospace;width:80mm;margin:0 auto;padding:8px;font-size:10px;}
+.info-row{display:flex;justify-content:space-between;margin-bottom:4px;}.header{text-align:center;border-bottom:1px dashed #000;padding-bottom:5px;margin-bottom:8px;}
+</style></head>
+<body>
+<div class="header"><h1>RECIBO</h1><div>GUAPO TRAJES</div></div>
+<div class="info-row"><span>Orden N°:</span><span>${recibo.orden_id}</span></div>
+<div class="info-row"><span>Presupuesto:</span><span>${recibo.presupuesto_numero}</span></div>
+<div class="info-row"><span>Cliente:</span><span>${recibo.cliente_nombre}</span></div>
+<div class="info-row"><span>Fecha:</span><span>${fechaRecibo}</span></div>
+<div class="info-row"><span>Monto:</span><span>$${Number(recibo.monto).toLocaleString("es-AR")}</span></div>
+<div class="info-row"><span>Concepto:</span><span>${recibo.motivo}</span></div>
+<div class="no-print" style="margin-top:15px;text-align:center;">
+<button onclick="window.print()">Imprimir</button><button onclick="window.close()">Cerrar</button>
+</div>
+</body></html>`;
+    const ventana = window.open("", "_blank", "width=320,height=420");
+    if (ventana) {
+      ventana.document.write(html);
+      ventana.document.close();
+      setTimeout(() => ventana.print(), 400);
+    } else {
+      toast.error("Permití ventanas emergentes para imprimir.");
+    }
+  };
+
+  const compartirReciboWhatsApp = (recibo: { orden_id: number; presupuesto_numero: string; cliente_nombre: string; fecha_hora: string; monto: number; motivo: string }, telefono: string | null) => {
+    const tel = normalizarTelefonoRecibo(telefono);
+    if (!tel) {
+      toast.error("No hay número de teléfono del cliente para enviar por WhatsApp.");
+      return;
+    }
+    const texto = textoReciboParaWhatsApp(recibo);
+    window.open(`https://api.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}`, "_blank");
+  };
+
+  const abrirVentanaContrato = (orden: OrdenTrabajo) => {
+    try {
       // Obtener información de la orden
-      const idContrato = ordenSeleccionada.id.toString().padStart(6, "0");
-      const clienteNombre = ordenSeleccionada.cliente_nombre || "";
-      const clienteDNI = ordenSeleccionada.cliente_dni || "____________________";
+      const idContrato = orden.id.toString().padStart(6, "0");
+      const clienteNombre = orden.cliente_nombre || "";
+      const clienteDNI = orden.cliente_dni || "____________________";
       const clienteDireccion =
-        ordenSeleccionada.cliente_direccion || "__________________________";
-      const fechaEvento = ordenSeleccionada.fecha_evento
+        orden.cliente_direccion || "__________________________";
+      const fechaEvento = orden.fecha_evento
         ? format(
-            new Date(ordenSeleccionada.fecha_evento + "T00:00:00"),
+            new Date(orden.fecha_evento + "T00:00:00"),
             "dd/MM/yyyy",
             { locale: es }
           )
         : "";
-      const fechaCreacion = ordenSeleccionada.fecha_creacion
-        ? format(new Date(ordenSeleccionada.fecha_creacion), "dd/MM/yyyy", {
+      const fechaCreacion = orden.fecha_creacion
+        ? format(new Date(orden.fecha_creacion), "dd/MM/yyyy", {
             locale: es,
           })
         : format(new Date(), "dd/MM/yyyy", { locale: es });
 
       // Obtener día y mes de la fecha de creación
-      const fechaCreacionDate = ordenSeleccionada.fecha_creacion
-        ? new Date(ordenSeleccionada.fecha_creacion)
+      const fechaCreacionDate = orden.fecha_creacion
+        ? new Date(orden.fecha_creacion)
         : new Date();
       const dia = fechaCreacionDate.getDate();
       const meses = [
@@ -417,8 +541,8 @@ export default function OrdenesTrabajoPage() {
       const año = fechaCreacionDate.getFullYear();
 
       // Calcular días de vigencia (diferencia entre fecha evento y fecha creación)
-      const fechaEventoDate = ordenSeleccionada.fecha_evento
-        ? new Date(ordenSeleccionada.fecha_evento + "T00:00:00")
+      const fechaEventoDate = orden.fecha_evento
+        ? new Date(orden.fecha_evento + "T00:00:00")
         : new Date();
       const diasVigencia = Math.max(
         1,
@@ -429,11 +553,10 @@ export default function OrdenesTrabajoPage() {
       );
 
       // Precio total del alquiler (para la tercera vigencia)
-      // Usar total_presupuesto que es el total original del presupuesto
       const precioTotal =
-        ordenSeleccionada.total_presupuesto ||
-        ordenSeleccionada.total ||
-        ordenSeleccionada.seña_pagada + ordenSeleccionada.saldo_pendiente;
+        orden.total_presupuesto ||
+        orden.total ||
+        orden.seña_pagada + orden.saldo_pendiente;
       const precioFormateado = precioTotal.toLocaleString("es-AR", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -453,8 +576,8 @@ export default function OrdenesTrabajoPage() {
       });
 
       // Lista de prendas
-      const listaPrendas = ordenSeleccionada.productos_reservados
-        .map((prod, index) => `${index + 1}. ${prod.producto_descripcion}`)
+      const listaPrendas = (orden.productos_reservados || [])
+        .map((prod: any, index: number) => `${index + 1}. ${prod.producto_descripcion || prod.producto_nombre || "Producto"}`)
         .join("<br>");
 
       // Fecha de vencimiento del pagaré (30 días después de la fecha de creación)
@@ -740,13 +863,159 @@ export default function OrdenesTrabajoPage() {
         ventanaContrato.document.write(contenidoContrato);
         ventanaContrato.document.close();
       } else {
-        alert(
-          "No se pudo abrir la ventana de contrato. Asegúrate de no tener bloqueadores de pop-ups."
-        );
+        toast.error("No se pudo abrir la ventana de contrato. Permití ventanas emergentes.");
       }
     } catch (error) {
       console.error("Error al generar contrato:", error);
-      alert("Error al generar el contrato. Por favor, intenta nuevamente.");
+      toast.error("Error al generar el contrato. Por favor, intenta nuevamente.");
+    }
+  };
+
+  const generarContratoDesdeFila = async (orden: OrdenTrabajo) => {
+    if (orden.saldo_pendiente !== 0) {
+      toast.error("El saldo pendiente debe ser cero para generar el contrato.");
+      return;
+    }
+    if (orden.es_precliente || !orden.cliente_dni || !orden.cliente_direccion) {
+      setOrdenParaContrato(orden);
+      setDniCompletar(orden.cliente_dni ?? "");
+      setDireccionCompletar(orden.cliente_direccion ?? "");
+      setShowModalCompletarContrato(true);
+      return;
+    }
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/ordenes/${orden.id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (!res.ok) {
+        toast.error("No se pudo cargar la orden.");
+        return;
+      }
+      const ordenCompleta = await res.json();
+      abrirVentanaContrato(ordenCompleta);
+      const reg = await fetch(`${getApiBaseUrl()}/ordenes/${orden.id}/registrar-contrato`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      if (reg.ok) {
+        toast.success("Contrato generado. Ya está disponible en la vista Contratos.");
+        fetchOrdenes();
+      } else {
+        const err = await reg.json().catch(() => ({}));
+        toast.error(err.detail || "No se pudo registrar el contrato.");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Error al generar el contrato.");
+    }
+  };
+
+  const generarContrato = () => {
+    if (!ordenSeleccionada) return;
+    if (ordenSeleccionada.saldo_pendiente !== 0 || ordenSeleccionada.es_precliente || !ordenSeleccionada.cliente_dni || !ordenSeleccionada.cliente_direccion) return;
+    abrirVentanaContrato(ordenSeleccionada);
+  };
+
+  const completarDatosYGenerarContrato = async () => {
+    if (!ordenParaContrato) return;
+    const dni = dniCompletar.trim();
+    const direccion = direccionCompletar.trim();
+    if (!dni || !direccion) {
+      toast.error("Completá DNI y dirección.");
+      return;
+    }
+    setProcesandoContrato(true);
+    try {
+      if (ordenParaContrato.precliente_id) {
+        const resConvert = await fetch(
+          `${getApiBaseUrl()}/preclientes/convertir/${ordenParaContrato.precliente_id}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            body: JSON.stringify({ dni, direccion }),
+          }
+        );
+        const dataConvert = await resConvert.json().catch(() => ({}));
+        if (!resConvert.ok || !dataConvert.success) {
+          toast.error(dataConvert.message || "Error al convertir precliente a cliente.");
+          return;
+        }
+      } else if (ordenParaContrato.cliente_id) {
+        const resCliente = await fetch(
+          `${getApiBaseUrl()}/clientes/get_by_id/${ordenParaContrato.cliente_id}`,
+          { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+        );
+        if (!resCliente.ok) {
+          toast.error("No se pudo cargar el cliente.");
+          return;
+        }
+        const cliente = await resCliente.json();
+        const resUpdate = await fetch(
+          `${getApiBaseUrl()}/clientes/update/${ordenParaContrato.cliente_id}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            body: JSON.stringify({
+              nombre: cliente.nombre,
+              apellido: cliente.apellido,
+              dni,
+              direccion,
+              celular: cliente.celular ?? "",
+              notas: cliente.notas ?? "",
+            }),
+          }
+        );
+        const dataUpdate = await resUpdate.json().catch(() => ({}));
+        if (!resUpdate.ok || !dataUpdate.success) {
+          toast.error(dataUpdate.message || "Error al actualizar cliente.");
+          return;
+        }
+      } else {
+        toast.error("No se puede completar: falta precliente o cliente.");
+        return;
+      }
+      await fetchOrdenes();
+      const resOrden = await fetch(`${getApiBaseUrl()}/ordenes/${ordenParaContrato.id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (!resOrden.ok) {
+        toast.error("No se pudo cargar la orden.");
+        return;
+      }
+      const ordenCompleta = await resOrden.json();
+      abrirVentanaContrato(ordenCompleta);
+      const reg = await fetch(`${getApiBaseUrl()}/ordenes/${ordenParaContrato.id}/registrar-contrato`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      if (reg.ok) {
+        toast.success("Contrato generado. Ya está disponible en la vista Contratos.");
+        fetchOrdenes();
+        setShowModalCompletarContrato(false);
+        setOrdenParaContrato(null);
+        setDniCompletar("");
+        setDireccionCompletar("");
+      } else {
+        const err = await reg.json().catch(() => ({}));
+        toast.error(err.detail || "No se pudo registrar el contrato.");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Error al completar datos o generar contrato.");
+    } finally {
+      setProcesandoContrato(false);
     }
   };
 
@@ -1025,6 +1294,17 @@ export default function OrdenesTrabajoPage() {
     return matchesBusqueda && matchesFiltroMetodoPago;
   });
 
+  const totalPaginas = Math.max(1, Math.ceil(ordenesFiltradas.length / ORDENES_POR_PAGINA));
+  const paginaSegura = Math.min(paginaActual, totalPaginas);
+  const indiceInicio = (paginaSegura - 1) * ORDENES_POR_PAGINA;
+  const ordenesEnPagina = ordenesFiltradas.slice(indiceInicio, indiceInicio + ORDENES_POR_PAGINA);
+
+  useEffect(() => {
+    if (paginaActual > totalPaginas && totalPaginas >= 1) {
+      setPaginaActual(totalPaginas);
+    }
+  }, [totalPaginas, paginaActual]);
+
   return (
     <div className="container-fluid px-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
@@ -1098,7 +1378,6 @@ export default function OrdenesTrabajoPage() {
                   <th className="text-nowrap">Presupuesto</th>
                   <th>Cliente</th>
                   <th className="text-nowrap">Fecha Evento</th>
-                  <th className="text-end">Seña Pagada</th>
                   <th className="text-end">Saldo Pendiente</th>
                   <th className="text-nowrap">Estado</th>
                   <th className="text-center text-nowrap">Método de Pago</th>
@@ -1106,8 +1385,8 @@ export default function OrdenesTrabajoPage() {
                 </tr>
               </thead>
               <tbody>
-                {ordenesFiltradas.length > 0 ? (
-                  ordenesFiltradas.map((orden) => (
+                {ordenesEnPagina.length > 0 ? (
+                  ordenesEnPagina.map((orden) => (
                     <tr key={orden.id}>
                       <td className="fw-semibold text-nowrap">{orden.id}</td>
                       <td className="text-muted text-uppercase">
@@ -1122,9 +1401,6 @@ export default function OrdenesTrabajoPage() {
                             locale: es,
                           }
                         )}
-                      </td>
-                      <td className="text-end">
-                        ${orden.seña_pagada.toLocaleString()}
                       </td>
                       <td className="text-end fw-semibold">
                         ${orden.saldo_pendiente.toLocaleString()}
@@ -1160,23 +1436,23 @@ export default function OrdenesTrabajoPage() {
                                   const ordenCompleta = await res.json();
                                   setOrdenSeleccionada(ordenCompleta);
                                   setShowViewModal(true);
-                                  // Cargar historial de señas
                                   fetchHistorialSeñas(orden.id);
+                                  fetchRecibosOrden(orden.id);
                                 } else {
-                                  // Si falla, usar los datos de la lista como fallback
                                   setOrdenSeleccionada(orden);
                                   setShowViewModal(true);
                                   fetchHistorialSeñas(orden.id);
+                                  fetchRecibosOrden(orden.id);
                                 }
                               } catch (error) {
                                 console.error(
                                   "Error al obtener orden completa:",
                                   error
                                 );
-                                // Si falla, usar los datos de la lista como fallback
                                 setOrdenSeleccionada(orden);
                                 setShowViewModal(true);
                                 fetchHistorialSeñas(orden.id);
+                                fetchRecibosOrden(orden.id);
                               }
                             }}
                           >
@@ -1192,12 +1468,11 @@ export default function OrdenesTrabajoPage() {
                             Pago
                           </button>
                           <button
-                            className="btn btn-sm btn-outline-info"
-                            onClick={() => abrirModalRecibo(orden)}
-                            title="Emitir recibo"
+                            className={`btn btn-sm ${orden.contrato_generado_at ? "btn-success" : "btn-outline-secondary"}`}
+                            onClick={() => generarContratoDesdeFila(orden)}
+                            title={orden.contrato_generado_at ? "Contrato generado - Ver en Contratos" : "Generar contrato (solo cliente con saldo cero)"}
                           >
-                            <i className="bi bi-receipt me-1"></i>
-                            Recibo
+                            <i className="bi bi-file-earmark-text"></i>
                           </button>
                           <RoleGate allow={["ADMIN"]}>
                             <button
@@ -1214,7 +1489,7 @@ export default function OrdenesTrabajoPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} className="text-center text-muted py-4">
+                    <td colSpan={8} className="text-center text-muted py-4">
                       No se encontraron órdenes.
                     </td>
                   </tr>
@@ -1222,6 +1497,34 @@ export default function OrdenesTrabajoPage() {
               </tbody>
             </table>
           </div>
+          {ordenesFiltradas.length > ORDENES_POR_PAGINA && (
+            <div className="card-footer d-flex flex-wrap align-items-center justify-content-between gap-2 py-3">
+              <span className="text-muted small">
+                Mostrando {indiceInicio + 1}–{Math.min(indiceInicio + ORDENES_POR_PAGINA, ordenesFiltradas.length)} de {ordenesFiltradas.length} órdenes
+              </span>
+              <div className="d-flex align-items-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
+                  disabled={paginaSegura <= 1}
+                >
+                  Anterior
+                </button>
+                <span className="small text-muted">
+                  Página {paginaSegura} de {totalPaginas}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+                  disabled={paginaSegura >= totalPaginas}
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1326,6 +1629,17 @@ export default function OrdenesTrabajoPage() {
                       </div>
                     )}
                   </div>
+
+                  <div className="mb-4">
+                    <label className="form-label fw-bold">Motivo del recibo</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Ej: Seña, Alquilado, Cancelación..."
+                      value={motivoRecibo}
+                      onChange={(e) => setMotivoRecibo(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1354,6 +1668,133 @@ export default function OrdenesTrabajoPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Modal: ¿Imprimir o compartir el recibo? (después de registrar pago) */}
+      <Dialog open={!!reciboRecienGenerado} onOpenChange={(open) => !open && setReciboRecienGenerado(null)}>
+        <DialogContent className="max-w-md rounded-3">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle className="mb-2">Recibo generado</DialogTitle>
+            <DialogDescription className="mb-0 pe-2">
+              ¿Desea imprimir o compartir el recibo por WhatsApp?
+            </DialogDescription>
+          </DialogHeader>
+          {reciboRecienGenerado && (
+            <div className="px-4 py-4 space-y-3 small text-muted border-top border-bottom">
+              <p className="mb-0 ps-0">Orden N° {reciboRecienGenerado.recibo.orden_id} · {reciboRecienGenerado.recibo.presupuesto_numero}</p>
+              <p className="mb-0">{reciboRecienGenerado.recibo.cliente_nombre} · ${reciboRecienGenerado.recibo.monto.toLocaleString("es-AR")} · {reciboRecienGenerado.recibo.motivo}</p>
+            </div>
+          )}
+          <DialogFooter className="gap-3 px-4 py-4">
+            <button
+              type="button"
+              className="btn btn-light border px-4 py-2"
+              onClick={() => setReciboRecienGenerado(null)}
+            >
+              Cerrar
+            </button>
+            {reciboRecienGenerado && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary px-4 py-2"
+                  onClick={() => {
+                    imprimirReciboPago(reciboRecienGenerado.recibo);
+                  }}
+                >
+                  Imprimir
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success px-4 py-2"
+                  onClick={() => {
+                    compartirReciboWhatsApp(
+                      reciboRecienGenerado.recibo,
+                      reciboRecienGenerado.orden.cliente_celular ?? null
+                    );
+                  }}
+                >
+                  <i className="bi bi-whatsapp me-2"></i>
+                  Compartir por WhatsApp
+                </button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Completar DNI y dirección para generar contrato (precliente o cliente sin datos) */}
+      <Dialog open={showModalCompletarContrato} onOpenChange={setShowModalCompletarContrato}>
+        <DialogContent className="w-full border-0 p-0 gap-0 overflow-hidden rounded-3" dialogStyle={{ maxWidth: "460px", width: "95%" }}>
+          <DialogHeader className="px-4 pt-4 pb-2 border-bottom">
+            <DialogTitle className="fw-semibold mb-2">Completar datos para el contrato</DialogTitle>
+            <DialogDescription className="text-muted small mb-0 lh-base">
+              {ordenParaContrato?.es_precliente
+                ? "El contrato requiere cliente con DNI y dirección. Completá los datos para convertir a cliente y generar el contrato."
+                : "Completá DNI y dirección del cliente para poder generar el contrato."}
+            </DialogDescription>
+          </DialogHeader>
+          {ordenParaContrato && (
+            <div className="px-4 py-4">
+              <p className="small text-muted mb-4">
+                Orden #{ordenParaContrato.id} · {ordenParaContrato.presupuesto_numero} · {ordenParaContrato.cliente_nombre}
+              </p>
+              <div className="mb-3">
+                <label className="form-label fw-semibold">DNI</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Ej: 12345678"
+                  value={dniCompletar}
+                  onChange={(e) => setDniCompletar(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label fw-semibold">Dirección</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Calle, número, localidad"
+                  value={direccionCompletar}
+                  onChange={(e) => setDireccionCompletar(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="px-4 py-4 border-top bg-light gap-3 d-flex justify-content-end">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setShowModalCompletarContrato(false);
+                setOrdenParaContrato(null);
+                setDniCompletar("");
+                setDireccionCompletar("");
+              }}
+              disabled={procesandoContrato}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={completarDatosYGenerarContrato}
+              disabled={procesandoContrato || !dniCompletar.trim() || !direccionCompletar.trim()}
+            >
+              {procesandoContrato ? (
+                <>
+                  <i className="bi bi-arrow-clockwise spin me-2"></i>
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-file-earmark-text me-2"></i>
+                  Completar y generar contrato
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {ordenSeleccionada && (
         <Dialog
@@ -1426,10 +1867,14 @@ export default function OrdenesTrabajoPage() {
                     </div>
                     <div className="col-12 col-md-6">
                       <span className="text-muted small d-block">
-                        Seña pagada
+                        Total del presupuesto
                       </span>
                       <span className="fw-semibold text-success">
-                        ${ordenSeleccionada.seña_pagada.toLocaleString()}
+                        ${(
+                          ordenSeleccionada.total_presupuesto ??
+                          ordenSeleccionada.total ??
+                          ordenSeleccionada.seña_pagada + ordenSeleccionada.saldo_pendiente
+                        ).toLocaleString()}
                       </span>
                     </div>
                     <div className="col-12 col-md-6">
@@ -1571,23 +2016,23 @@ export default function OrdenesTrabajoPage() {
                       No hay señas registradas
                     </div>
                   ) : (
-                    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                    <div style={{ maxHeight: "300px", overflowY: "auto", fontSize: "0.8rem" }} className="rounded">
                       <div className="table-responsive">
-                        <table className="table table-sm table-hover mb-0">
+                        <table className="table table-hover mb-0 align-middle">
                           <thead className="table-light sticky-top">
                             <tr>
-                              <th>Fecha</th>
-                              <th>Tipo</th>
-                              <th className="text-end">Monto</th>
-                              <th>Método de Pago</th>
-                              <th>Usuario</th>
-                              <th>Destino</th>
+                              <th className="px-2 py-1 text-nowrap">Fecha</th>
+                              <th className="px-2 py-1 text-nowrap">Tipo</th>
+                              <th className="px-2 py-1 text-end text-nowrap">Monto</th>
+                              <th className="px-2 py-1 text-nowrap" style={{ minWidth: "100px" }}>Método de Pago</th>
+                              <th className="px-2 py-1 text-nowrap text-center" style={{ minWidth: "40px" }} title="Usuario">Usuario</th>
+                              <th className="px-2 py-1 text-nowrap pe-2" style={{ minWidth: "80px" }}>Destino</th>
                             </tr>
                           </thead>
                           <tbody>
                             {historialSeñas.map((seña, index) => (
                               <tr key={index}>
-                                <td className="small">
+                                <td className="px-2 py-1 text-nowrap">
                                   {seña.fecha_hora
                                     ? format(
                                         new Date(seña.fecha_hora),
@@ -1602,31 +2047,42 @@ export default function OrdenesTrabajoPage() {
                                       )
                                     : "N/A"}
                                 </td>
-                                <td>
+                                <td className="px-2 py-1">
                                   <span
                                     className={`badge ${
                                       seña.tipo === "Seña inicial"
                                         ? "bg-primary"
                                         : "bg-success"
                                     }`}
+                                    style={{ fontSize: "0.75rem" }}
                                   >
                                     {seña.tipo}
                                   </span>
                                 </td>
-                                <td className="text-end fw-semibold text-success">
+                                <td className="text-end fw-semibold text-success px-2 py-1 text-nowrap">
                                   $
                                   {seña.monto.toLocaleString("es-AR", {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2,
                                   })}
                                 </td>
-                                <td className="small">
+                                <td className="px-2 py-1">
                                   {labelMetodoPago(seña.metodo_pago || "") || seña.metodo_pago || "N/A"}
                                 </td>
-                                <td className="small text-muted">
-                                  {seña.usuario_nombre || "N/A"}
+                                <td className="px-2 py-1 text-center">
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    className="d-inline-flex align-items-center justify-content-center rounded-circle bg-light text-secondary border"
+                                    style={{ width: "26px", height: "26px", cursor: "pointer", fontSize: "0.75rem" }}
+                                    title={seña.usuario_nombre ? `Usuario: ${seña.usuario_nombre}` : "Usuario no registrado"}
+                                    onClick={() => toast.info(seña.usuario_nombre ? `Usuario: ${seña.usuario_nombre}` : "Usuario no registrado", { duration: 2000 })}
+                                    onKeyDown={(e) => e.key === "Enter" && toast.info(seña.usuario_nombre ? `Usuario: ${seña.usuario_nombre}` : "Usuario no registrado", { duration: 2000 })}
+                                  >
+                                    <i className="bi bi-person-fill" aria-hidden></i>
+                                  </span>
                                 </td>
-                                <td className="small text-muted">
+                                <td className="text-muted px-2 py-1 pe-2">
                                   {seña.cuenta_destino_nombre || "N/A"}
                                 </td>
                               </tr>
@@ -1634,10 +2090,10 @@ export default function OrdenesTrabajoPage() {
                           </tbody>
                           <tfoot className="table-light">
                             <tr>
-                              <td colSpan={2} className="fw-bold">
+                              <td colSpan={2} className="fw-bold px-2 py-1 pt-2">
                                 Total:
                               </td>
-                              <td className="text-end fw-bold text-success">
+                              <td className="text-end fw-bold text-success px-2 py-1 pt-2">
                                 $
                                 {historialSeñas
                                   .reduce((sum, seña) => sum + seña.monto, 0)
@@ -1646,11 +2102,91 @@ export default function OrdenesTrabajoPage() {
                                     maximumFractionDigits: 2,
                                   })}
                               </td>
-                              <td colSpan={3}></td>
+                              <td colSpan={3} className="px-2 py-1 pt-2"></td>
                             </tr>
                           </tfoot>
                         </table>
                       </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Historial de recibos (siempre generados por el sistema) */}
+              <div className="card shadow-sm mb-4">
+                <div className="card-body p-4">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h6 className="fw-semibold mb-0">
+                      <i className="bi bi-receipt me-2 text-primary"></i>
+                      Historial de recibos
+                    </h6>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => ordenSeleccionada && fetchRecibosOrden(ordenSeleccionada.id)}
+                      disabled={cargandoRecibos}
+                    >
+                      {cargandoRecibos ? (
+                        <><i className="bi bi-arrow-clockwise spin me-1"></i> Cargando...</>
+                      ) : (
+                        <><i className="bi bi-arrow-clockwise me-1"></i> Actualizar</>
+                      )}
+                    </button>
+                  </div>
+                  {cargandoRecibos ? (
+                    <div className="text-center text-muted py-3 small">Cargando recibos...</div>
+                  ) : historialRecibos.length === 0 ? (
+                    <div className="text-muted text-center py-3 small">No hay recibos registrados</div>
+                  ) : (
+                    <div style={{ maxHeight: "280px", overflowY: "auto" }}>
+                      <ul className="list-group list-group-flush">
+                        {historialRecibos.map((recibo: any, index: number) => (
+                          <li key={recibo.id ?? `recibo-${index}`} className="list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 px-0 border-0 border-bottom">
+                            <div className="small">
+                              <span className="text-muted">
+                                {recibo.fecha_hora ? format(new Date(recibo.fecha_hora), "dd/MM/yyyy HH:mm", { locale: es }) : "N/A"}
+                              </span>
+                              {" · "}
+                              <strong>${Number(recibo.monto).toLocaleString("es-AR")}</strong>
+                              {" · "}
+                              <span>{recibo.motivo || "Pago"}</span>
+                            </div>
+                            <div className="d-flex gap-1">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => imprimirReciboPago({
+                                  orden_id: ordenSeleccionada!.id,
+                                  fecha_hora: recibo.fecha_hora,
+                                  monto: recibo.monto,
+                                  motivo: recibo.motivo || "Pago",
+                                  cliente_nombre: recibo.cliente_nombre,
+                                  presupuesto_numero: recibo.presupuesto_numero,
+                                })}
+                              >
+                                Imprimir
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-success"
+                                onClick={() => compartirReciboWhatsApp(
+                                  {
+                                    orden_id: ordenSeleccionada!.id,
+                                    presupuesto_numero: recibo.presupuesto_numero,
+                                    cliente_nombre: recibo.cliente_nombre,
+                                    fecha_hora: recibo.fecha_hora,
+                                    monto: recibo.monto,
+                                    motivo: recibo.motivo || "Pago",
+                                  },
+                                  ordenSeleccionada?.cliente_celular ?? null
+                                )}
+                              >
+                                <i className="bi bi-whatsapp"></i>
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                 </div>
@@ -1756,27 +2292,7 @@ export default function OrdenesTrabajoPage() {
                 )}
             </div>
 
-            <DialogFooter className="border-top pt-3 d-flex justify-content-between gap-2 px-3 px-md-4 pb-2">
-              <button
-                className="btn btn-outline-primary"
-                onClick={generarContrato}
-                disabled={
-                  ordenSeleccionada.saldo_pendiente !== 0 ||
-                  !!ordenSeleccionada.es_precliente ||
-                  !ordenSeleccionada.cliente_dni ||
-                  !ordenSeleccionada.cliente_direccion
-                }
-                title={
-                  ordenSeleccionada.es_precliente || !ordenSeleccionada.cliente_dni || !ordenSeleccionada.cliente_direccion
-                    ? "Este presupuesto pertenece a un precliente. Para generar el contrato se requiere DNI y Dirección."
-                    : ordenSeleccionada.saldo_pendiente !== 0
-                    ? "El saldo pendiente debe ser cero para generar el contrato"
-                    : "Generar contrato de alquiler"
-                }
-              >
-                <i className="bi bi-file-earmark-text me-2"></i>
-                Contrato
-              </button>
+            <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
               <button
                 className="btn btn-light border"
                 onClick={() => {
@@ -1892,5 +2408,21 @@ export default function OrdenesTrabajoPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function OrdenesTrabajoPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container py-4 d-flex justify-content-center align-items-center min-vh-50">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+        </div>
+      }
+    >
+      <OrdenesTrabajoContent />
+    </Suspense>
   );
 }

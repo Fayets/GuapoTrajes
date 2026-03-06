@@ -235,13 +235,28 @@ class OrdenTrabajo(db.Entity):
     metodo_pago_configurable = Optional("MetodoPagoConfigurable", column="metodo_pago_id")  # Nueva relación con método configurable
     submetodo_pago = Optional("SubmetodoPago", column="submetodo_pago_id")  # Nueva relación con submétodo
     productos_reservados = Set('ProductoReservado')
+    recibos = Set('ReciboOrden', reverse="orden_trabajo")
     # Campos de descuento extra
     extra_discount_percentage = Optional(float)
     extra_discount_amount = Optional(float)
     extra_discount_reason = Optional(str)
     extra_discount_applied_by = Optional(Usuario, reverse="ordenes_con_descuento_extra")
     extra_discount_created_at = Optional(datetime)
+    contrato_generado_at = Optional(datetime)  # Fecha en que se generó el contrato (manual)
     _table_ = "OrdenesTrabajo"
+
+class ReciboOrden(db.Entity):
+    """Recibo generado por cada pago (seña o adicional). Siempre se guarda para historial."""
+    id = PrimaryKey(int, auto=True)
+    orden_trabajo = Required(OrdenTrabajo, reverse="recibos")
+    fecha_hora = Required(datetime, default=lambda: datetime.now())
+    monto = Required(float)
+    motivo = Required(str, default="Pago")  # Seña, Alquilado, Cancelación, etc.
+    cliente_nombre = Required(str)
+    presupuesto_numero = Required(str)
+    movimiento_caja_id = Optional(int)  # Opcional: referencia al CajaMovimiento
+    _table_ = "RecibosOrden"
+
 
 class ProductoReservado(db.Entity):
     id = PrimaryKey(int, auto=True)

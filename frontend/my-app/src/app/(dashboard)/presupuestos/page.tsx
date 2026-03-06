@@ -60,6 +60,7 @@ type Presupuesto = {
   cliente_id?: number | null;
   precliente_id?: number | null;
   cliente_nombre: string;
+  cliente_dni?: string | null;
   es_precliente?: boolean;
   cliente_celular?: string | null;
   items: ItemPresupuesto[];
@@ -571,7 +572,7 @@ export default function PresupuestosPage() {
         } catch {
           // Respuesta OK pero no es JSON
         }
-        toast.success("Presupuesto guardado exitosamente", { id: "guardar-presupuesto" });
+        toast.success("Presupuesto generado correctamente", { id: "guardar-presupuesto" });
         preclienteIdRef.current = null;
         setClienteOPreclienteSeleccionado(null);
         setShowModal(false);
@@ -667,6 +668,36 @@ export default function PresupuestosPage() {
     }
   };
 
+  // Normalizar texto para búsqueda (minúsculas, sin acentos)
+  const normalizarParaBusqueda = (s: string): string =>
+    (s ?? "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .trim();
+
+  // Filtrar presupuestos por DNI, apellido solo, nombre solo o apellido + nombre
+  const presupuestosFiltrados = (() => {
+    const termino = normalizarParaBusqueda(busqueda);
+    if (!termino) return presupuestos;
+    return presupuestos.filter((p) => {
+      const nombreCompleto = (p.cliente_nombre ?? "").trim();
+      const dni = (p.cliente_dni ?? "").toString().trim();
+      if (normalizarParaBusqueda(dni).includes(termino)) return true;
+      const partes = nombreCompleto.split(/\s+/).filter(Boolean);
+      const apellido = partes[0] ?? "";
+      const nombre = partes.slice(1).join(" ") ?? "";
+      const apellidoNorm = normalizarParaBusqueda(apellido);
+      const nombreNorm = normalizarParaBusqueda(nombre);
+      const completoNorm = normalizarParaBusqueda(nombreCompleto);
+      return (
+        apellidoNorm.includes(termino) ||
+        nombreNorm.includes(termino) ||
+        completoNorm.includes(termino)
+      );
+    });
+  })();
+
   const getEstadoClass = (estado: string) => {
     switch (estado) {
       case "aprobado":
@@ -712,14 +743,14 @@ export default function PresupuestosPage() {
       });
 
       if (res.ok) {
-        alert("Orden de trabajo generada con éxito.");
+        toast.success("Orden de trabajo generada con éxito.");
       } else {
         const error = await res.json();
-        alert(`Error al generar orden: ${error.detail}`);
+        toast.error(`Error al generar orden: ${error.detail}`);
       }
     } catch (err) {
       console.error("Error al convertir en orden:", err);
-      alert("Error inesperado al generar orden.");
+      toast.error("Error inesperado al generar orden.");
     }
   };
 
@@ -810,7 +841,7 @@ export default function PresupuestosPage() {
       if (res.ok) {
         const data = await res.json();
         const orderId = data.id;
-        alert("Orden de trabajo generada con éxito.");
+        toast.success("Orden de trabajo generada con éxito.");
         setModalSeniaAbierto(false);
         setSenia("");
         setCuentaDestinoId(null);
@@ -820,11 +851,11 @@ export default function PresupuestosPage() {
         fetchPresupuestos();
       } else {
         const error = await res.json();
-        alert(`Error al generar orden: ${error.detail}`);
+        toast.error(`Error al generar orden: ${error.detail}`);
       }
     } catch (err) {
       console.error("Error al generar orden:", err);
-      alert("Error inesperado.");
+      toast.error("Error inesperado.");
     }
   };
 
@@ -1045,6 +1076,20 @@ export default function PresupuestosPage() {
         </div>
       ) : (
         <div className="card">
+          <div className="card-body border-bottom">
+            <label htmlFor="presupuestos-busqueda" className="form-label visually-hidden">
+              Buscar por DNI, apellido, nombre o apellido y nombre
+            </label>
+            <input
+              id="presupuestos-busqueda"
+              type="search"
+              className="form-control"
+              placeholder="Buscar por DNI, apellido, nombre o apellido y nombre..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              aria-label="Buscar presupuestos por cliente"
+            />
+          </div>
           <div className="table-responsive">
             <table className="table table-striped table-hover">
               <thead className="table-light">
@@ -1059,14 +1104,16 @@ export default function PresupuestosPage() {
               </thead>
 
               <tbody>
-                {presupuestos.length === 0 ? (
+                {presupuestosFiltrados.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center text-muted py-4">
-                      No hay presupuestos cargados.
+                      {presupuestos.length === 0
+                        ? "No hay presupuestos cargados."
+                        : "Ningún presupuesto coincide con la búsqueda."}
                     </td>
                   </tr>
                 ) : (
-                  presupuestos.map((p) => (
+                  presupuestosFiltrados.map((p) => (
                     <tr key={p.id}>
                       <td>{p.numero}</td>
                       <td>{p.cliente_nombre}</td>

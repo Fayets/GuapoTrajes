@@ -253,3 +253,188 @@
 2026-03-06 02:22:53,652 [INFO] guapotrajes: Usuario autenticado correctamente
 2026-03-06 02:25:24,222 [INFO] guapotrajes: Usuario autenticado correctamente
 2026-03-06 02:34:05,473 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 15:31:50,499 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 15:32:01,737 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 16:32:36,813 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 16:36:52,369 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 16:37:05,282 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 16:40:05,057 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 16:44:30,689 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 16:44:43,521 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 16:44:56,465 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 16:45:09,396 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 16:45:21,538 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 16:47:32,401 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 16:48:31,162 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 17:09:10,453 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:09:30,520 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:09:42,675 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:09:54,912 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:10:06,951 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:10:19,417 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:11:54,747 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 17:14:03,215 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 17:14:39,275 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 17:17:15,126 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 17:19:55,233 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:20:45,091 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:20:59,635 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 17:22:45,971 [WARNING] src.migrations: Error en migraciones (continuando): name '_ensure_contrato_generado_at_column' is not defined
+2026-03-06 17:22:53,082 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:22:58,228 [INFO] src.migrations: Columna contrato_generado_at aplicada en tabla OrdenesTrabajo
+2026-03-06 17:23:07,243 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:23:14,631 [WARNING] src.migrations: Error en migraciones (continuando): name '_ensure_contrato_generado_at_column' is not defined
+2026-03-06 17:23:22,172 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:23:26,452 [INFO] src.migrations: Columna contrato_generado_at OK en OrdenesTrabajo
+2026-03-06 17:23:35,424 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:23:48,769 [INFO] src.migrations: Columna contrato_generado_at OK en OrdenesTrabajo
+2026-03-06 17:23:48,881 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:24:02,122 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:24:02,229 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:25:37,435 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:25:37,538 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:26:00,561 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 17:29:08,430 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:29:08,541 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:29:31,914 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:29:32,023 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:29:45,075 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:29:45,182 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:29:46,582 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 17:31:12,609 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:31:12,721 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:31:25,824 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:31:25,929 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:42:31,530 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:42:31,640 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:42:44,898 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:42:45,007 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:42:58,189 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:42:58,296 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:43:13,997 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:43:14,111 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:43:26,432 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:43:26,542 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:43:43,882 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:43:43,983 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:50:10,125 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:50:10,236 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:50:23,681 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:50:23,789 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:50:39,988 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:50:40,092 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:50:52,500 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:50:52,608 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:55:55,653 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 17:55:55,761 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 17:56:12,706 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-06 18:07:02,493 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:07:02,610 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 18:07:16,080 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:07:16,193 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 18:09:32,080 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:09:32,193 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 18:10:39,429 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:10:39,539 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 18:11:09,259 [ERROR] src.services.precliente_services: Error al convertir precliente a cliente
+Traceback (most recent call last):
+  File "/Users/francoayet/Desktop/GuapoTrajes-master/backend/src/services/precliente_services.py", line 127, in convertir_a_cliente
+    for presupuesto in models.Presupuesto.select(lambda p: p.precliente == precliente):
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/core.py", line 4027, in select
+    if args: query = entity._query_from_args_(args, kwargs, frame_depth=cut_traceback_depth+1)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/core.py", line 4401, in _query_from_args_
+    return Query(code_key, inner_expr, globals, locals, cells)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/core.py", line 5717, in __init__
+    translator = translator_cls(tree_copy, None, code_key, filter_num, extractors, vars, vartypes.copy(), left_join=left_join)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 242, in __init__
+    translator.init(tree, parent_translator, code_key, filter_num, extractors, vars, vartypes, left_join, optimize)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 429, in init
+    translator.dispatch(if_)
+    ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 107, in dispatch
+    return ASTTranslator.dispatch(translator, node)  # default route
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/asttranslation.py", line 36, in dispatch
+    stop = translator.call(pre_method, node)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 195, in call
+    reraise(exc_class, exc, tb)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/utils/utils.py", line 88, in reraise
+    try: raise exc.with_traceback(tb)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 184, in call
+    monad = method(translator, node)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 980, in preCompare
+    monad = left.monad.cmp(op, right.monad)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 1453, in wrapper
+    return method(monad, *args, **kwargs)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 1481, in cmp
+    return CmpMonad(op, monad, monad2)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 2568, in __init__
+    check_comparable(left, right, op)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/sqltranslation.py", line 32, in check_comparable
+    throw(IncomparableTypesError, t1, t2)
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/utils/utils.py", line 99, in throw
+    raise exc
+pony.orm.sqltranslation.IncomparableTypesError: Incomparable types 'Precliente' and 'Precliente' in expression: p.precliente > precliente
+2026-03-06 18:11:43,097 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:11:43,209 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 18:11:53,719 [ERROR] src.services.precliente_services: Error al convertir precliente a cliente
+Traceback (most recent call last):
+  File "/Users/francoayet/Desktop/GuapoTrajes-master/backend/src/services/precliente_services.py", line 127, in convertir_a_cliente
+    for presupuesto in models.Presupuesto.select(lambda p: p.precliente is not None and p.precliente.id == precliente_id):
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/core.py", line 4027, in select
+    if args: query = entity._query_from_args_(args, kwargs, frame_depth=cut_traceback_depth+1)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/core.py", line 4379, in _query_from_args_
+    cond_expr, external_names, cells = decompile(func)
+                                       ~~~~~~~~~^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/decompiling.py", line 43, in decompile
+    decompiler = Decompiler(codeobject)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/decompiling.py", line 162, in __init__
+    decompiler.decompile()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/decompiling.py", line 313, in decompile
+    throw(DecompileError('Unsupported operation: %s' % opname))
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/utils/utils.py", line 99, in throw
+    raise exc
+pony.orm.decompiling.DecompileError: Unsupported operation: TO_BOOL
+2026-03-06 18:12:32,968 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:12:33,073 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 18:12:47,141 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:12:47,253 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 18:17:35,095 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:17:35,198 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 18:17:47,506 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:17:47,610 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-06 18:20:10,185 [ERROR] src.services.precliente_services: Error al convertir precliente a cliente
+Traceback (most recent call last):
+  File "/Users/francoayet/Desktop/GuapoTrajes-master/backend/src/services/precliente_services.py", line 122, in convertir_a_cliente
+    if list(models.Cliente.select(lambda c: str(c.dni or "").strip() == dni)):
+            ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/core.py", line 4027, in select
+    if args: query = entity._query_from_args_(args, kwargs, frame_depth=cut_traceback_depth+1)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/core.py", line 4379, in _query_from_args_
+    cond_expr, external_names, cells = decompile(func)
+                                       ~~~~~~~~~^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/decompiling.py", line 43, in decompile
+    decompiler = Decompiler(codeobject)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/decompiling.py", line 162, in __init__
+    decompiler.decompile()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/orm/decompiling.py", line 313, in decompile
+    throw(DecompileError('Unsupported operation: %s' % opname))
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/pony/utils/utils.py", line 99, in throw
+    raise exc
+pony.orm.decompiling.DecompileError: Unsupported operation: TO_BOOL
+2026-03-06 18:20:58,388 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-06 18:20:58,498 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe

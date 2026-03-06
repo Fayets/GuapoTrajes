@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 const SIDEBAR_BREAKPOINT = 992
 
 export default function DashboardPage({ children }: { children: ReactNode }) {
-  const { token } = useAuth()
+  const { token, loading: authLoading } = useAuth()
   const router = useRouter()
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -28,13 +28,24 @@ export default function DashboardPage({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    if (authLoading) return
     if (!token) {
       router.push('/login')
     }
-  }, [token])
+  }, [token, authLoading])
 
   const handleToggleSidebar = () => {
     setSidebarCollapsed((prev) => !prev)
+  }
+
+  if (authLoading) {
+    return (
+      <div className="d-flex justify-content-center align-items-center min-vh-100">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Cargando...</span>
+        </div>
+      </div>
+    )
   }
 
   if (!token) return null

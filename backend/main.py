@@ -26,7 +26,7 @@ from src.controllers.logs_controller import router as logs_router
 from src.controllers.usuario_controller import router as usuario_router
 from src.controllers.health_controller import router as health_router
 from src.controllers.config_productos_controller import router as config_productos_router
-from src.migrations import apply_schema_migrations
+from src.migrations import apply_schema_migrations, ensure_contrato_generado_at_column
 from src import schemas, models
 from src.services.usuario_services import UsuariosServices
 from pony.orm import db_session
@@ -118,6 +118,9 @@ apply_schema_migrations()
 
 # Generar mapeo - las migraciones ya agregaron las columnas necesarias
 db.generate_mapping(create_tables=True, check_tables=False)
+
+# Asegurar columna contrato_generado_at (necesaria para presupuestos/órdenes/contratos)
+ensure_contrato_generado_at_column()
 
 # Crear SUPER_ADMIN inicial si corresponde
 ensure_initial_super_admin()

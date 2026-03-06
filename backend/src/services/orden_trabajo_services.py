@@ -1,8 +1,25 @@
-from pony.orm import db_session, select, flush
+from pony.orm import db_session, select, flush, desc
 from fastapi import HTTPException
-from src.models import OrdenTrabajo, ProductoReservado, Presupuesto, Producto, CuentaCorriente, CajaMovimiento, MetodoPago
-from datetime import datetime, timedelta
+from src.models import (
+    OrdenTrabajo,
+    ProductoReservado,
+    Presupuesto,
+    Producto,
+    CuentaCorriente,
+    CajaMovimiento,
+    MetodoPago,
+    ReciboOrden,
+    EstadoProducto,
+    ProductoLavanderia,
+    ProductoModista,
+    Lavanderia,
+    Modista,
+)
+from datetime import datetime, timedelta, date
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 class OrdenTrabajoServices:
     def __init__(self):
@@ -180,7 +197,7 @@ class OrdenTrabajoServices:
     def listar_ordenes_trabajo(self) -> list:
         with db_session:
             try:
-                ordenes = list(OrdenTrabajo.select())
+                ordenes = list(OrdenTrabajo.select().order_by(desc(OrdenTrabajo.id)))
                 
                 if not ordenes:
                     return []
@@ -217,6 +234,8 @@ class OrdenTrabajoServices:
                             else f"{o.presupuesto.cliente.apellido} {o.presupuesto.cliente.nombre}".strip()
                         ),
                         "es_precliente": o.presupuesto.precliente is not None,
+                        "precliente_id": o.presupuesto.precliente.id if o.presupuesto.precliente else None,
+                        "cliente_id": o.presupuesto.cliente.id if o.presupuesto.cliente else None,
                         "cliente_dni": o.presupuesto.cliente.dni if o.presupuesto.cliente else None,
                         "cliente_direccion": o.presupuesto.cliente.direccion if o.presupuesto.cliente else None,
                         "fecha_evento": o.fecha_evento.isoformat(),
@@ -248,6 +267,7 @@ class OrdenTrabajoServices:
                         "extra_discount_applied_by_id": descuento_applied_by.id if descuento_applied_by else None,
                         "extra_discount_applied_by_nombre": f"{descuento_applied_by.nombre} {descuento_applied_by.apellido}" if descuento_applied_by else None,
                         "extra_discount_created_at": descuento_created_at.isoformat() if descuento_created_at else None,
+                        "contrato_generado_at": o.contrato_generado_at.isoformat() if o.contrato_generado_at else None,
                     })
                 
                 return resultado
@@ -291,6 +311,8 @@ class OrdenTrabajoServices:
                     else f"{orden.presupuesto.cliente.apellido} {orden.presupuesto.cliente.nombre}".strip()
                 ),
                     "es_precliente": orden.presupuesto.precliente is not None,
+                    "precliente_id": orden.presupuesto.precliente.id if orden.presupuesto.precliente else None,
+                    "cliente_id": orden.presupuesto.cliente.id if orden.presupuesto.cliente else None,
                     "cliente_dni": orden.presupuesto.cliente.dni if orden.presupuesto.cliente else None,
                     "cliente_direccion": orden.presupuesto.cliente.direccion if orden.presupuesto.cliente else None,
                     "cliente_celular": (
@@ -325,6 +347,7 @@ class OrdenTrabajoServices:
                     "extra_discount_applied_by_id": descuento_applied_by.id if descuento_applied_by else None,
                     "extra_discount_applied_by_nombre": f"{descuento_applied_by.nombre} {descuento_applied_by.apellido}" if descuento_applied_by else None,
                     "extra_discount_created_at": descuento_created_at.isoformat() if descuento_created_at else None,
+                    "contrato_generado_at": orden.contrato_generado_at.isoformat() if orden.contrato_generado_at else None,
                 }
             except HTTPException:
                 raise
@@ -399,7 +422,7 @@ class OrdenTrabajoServices:
             except Exception as e:
                 raise HTTPException(status_code=500, detail="Error al actualizar estado de orden: {str(e)}")
 
-    def registrar_pago_saldo(self, orden_id: int, monto_pagado: float, payment_method: str, usuario_id: int, cuenta_destino_id: int, metodo_pago_id: Optional[int] = None, submetodo_pago_id: Optional[int] = None) -> dict:
+    def registrar_pago_saldo(self, orden_id: int, monto_pagado: float, payment_method: str, usuario_id: int, cuenta_destino_id: int, metodo_pago_id: Optional[int] = None, submetodo_pago_id: Optional[int] = None, motivo_recibo: Optional[str] = None) -> dict:
         """Registrar un pago adicional del saldo pendiente de una orden de trabajo"""
         with db_session:
             try:
@@ -502,6 +525,24 @@ class OrdenTrabajoServices:
                     sucursal=sucursal,
                     cuenta_destino=cuenta_destino
                 )
+                flush()
+
+                cliente_nombre_recibo = (
+                    f"{orden.presupuesto.precliente.apellido} {orden.presupuesto.precliente.nombre}".strip()
+                    if orden.presupuesto.precliente
+                    else f"{orden.presupuesto.cliente.apellido} {orden.presupuesto.cliente.nombre}".strip()
+                )
+                motivo = (motivo_recibo or "Pago").strip() or "Pago"
+                recibo = ReciboOrden(
+                    orden_trabajo=orden,
+                    fecha_hora=datetime.now(),
+                    monto=monto_pagado,
+                    motivo=motivo,
+                    cliente_nombre=cliente_nombre_recibo,
+                    presupuesto_numero=orden.presupuesto.numero,
+                    movimiento_caja_id=movimiento_caja.id
+                )
+                flush()
 
                 # Si el saldo pendiente es 0, marcar como pagada
                 if nuevo_saldo_pendiente == 0:
@@ -516,7 +557,16 @@ class OrdenTrabajoServices:
                         "monto_pagado": monto_pagado,
                         "saldo_pendiente_anterior": orden.saldo_pendiente + monto_pagado,
                         "saldo_pendiente_actual": orden.saldo_pendiente,
-                        "estado": orden.estado
+                        "estado": orden.estado,
+                        "recibo": {
+                            "id": recibo.id,
+                            "orden_id": orden.id,
+                            "fecha_hora": recibo.fecha_hora.isoformat(),
+                            "monto": recibo.monto,
+                            "motivo": recibo.motivo,
+                            "cliente_nombre": recibo.cliente_nombre,
+                            "presupuesto_numero": recibo.presupuesto_numero,
+                        }
                     }
                 }
 
@@ -762,6 +812,128 @@ class OrdenTrabajoServices:
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al obtener historial de pagos: {str(e)}")
 
+    def listar_recibos_orden(self, orden_id: int) -> dict:
+        """Listar historial de recibos de una orden (seña inicial + recibos de pagos adicionales)."""
+        with db_session:
+            try:
+                orden = OrdenTrabajo.get(id=orden_id)
+                if not orden:
+                    raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
+                cliente_nombre = (
+                    f"{orden.presupuesto.precliente.apellido} {orden.presupuesto.precliente.nombre}".strip()
+                    if orden.presupuesto.precliente
+                    else f"{orden.presupuesto.cliente.apellido} {orden.presupuesto.cliente.nombre}".strip()
+                )
+                recibos = []
+                if orden.seña_pagada > 0:
+                    recibos.append({
+                        "id": None,
+                        "orden_id": orden.id,
+                        "tipo": "Seña inicial",
+                        "fecha_hora": orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
+                        "monto": orden.seña_pagada,
+                        "motivo": "Seña",
+                        "cliente_nombre": cliente_nombre,
+                        "presupuesto_numero": orden.presupuesto.numero,
+                    })
+                for r in sorted(orden.recibos, key=lambda r: r.fecha_hora):
+                    recibos.append({
+                        "id": r.id,
+                        "orden_id": orden.id,
+                        "tipo": "Pago adicional",
+                        "fecha_hora": r.fecha_hora.isoformat() if r.fecha_hora else None,
+                        "monto": r.monto,
+                        "motivo": r.motivo,
+                        "cliente_nombre": r.cliente_nombre,
+                        "presupuesto_numero": r.presupuesto_numero,
+                    })
+                recibos.sort(key=lambda x: x["fecha_hora"] or "")
+                return {
+                    "message": "Recibos obtenidos exitosamente",
+                    "success": True,
+                    "data": {"recibos": recibos}
+                }
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error al listar recibos: {str(e)}")
+
+    def registrar_contrato_generado(self, orden_id: int) -> dict:
+        """Registrar que se generó el contrato para esta orden (solo si es cliente y saldo 0)."""
+        with db_session:
+            try:
+                orden = OrdenTrabajo.get(id=orden_id)
+                if not orden:
+                    raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
+                if orden.presupuesto.precliente is not None:
+                    raise HTTPException(status_code=400, detail="Solo se puede generar contrato para órdenes de cliente (no precliente).")
+                if orden.saldo_pendiente != 0:
+                    raise HTTPException(status_code=400, detail="El saldo pendiente debe ser cero para generar el contrato.")
+                if not orden.presupuesto.cliente.dni or not orden.presupuesto.cliente.direccion:
+                    raise HTTPException(status_code=400, detail="El cliente debe tener DNI y Dirección para generar el contrato.")
+                orden.contrato_generado_at = datetime.now()
+                flush()
+                return {
+                    "message": "Contrato registrado correctamente",
+                    "success": True,
+                    "data": {
+                        "orden_id": orden.id,
+                        "contrato_generado_at": orden.contrato_generado_at.isoformat(),
+                    },
+                }
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error al registrar contrato: {str(e)}")
+
+    def listar_contratos(self) -> list:
+        """Listar órdenes que tienen contrato generado (para la vista Contratos)."""
+        with db_session:
+            try:
+                todas = list(OrdenTrabajo.select().order_by(desc(OrdenTrabajo.id)))
+                ordenes = [o for o in todas if getattr(o, "contrato_generado_at", None) is not None]
+                resultado = []
+                for o in ordenes:
+                    try:
+                        presupuesto = o.presupuesto
+                        if not presupuesto:
+                            continue
+                        if presupuesto.precliente:
+                            cliente_nombre = f"{presupuesto.precliente.apellido} {presupuesto.precliente.nombre}".strip()
+                        elif presupuesto.cliente:
+                            cliente_nombre = f"{presupuesto.cliente.apellido} {presupuesto.cliente.nombre}".strip()
+                        else:
+                            cliente_nombre = "—"
+                        cliente = getattr(presupuesto, "cliente", None)
+                        cliente_dni = getattr(cliente, "dni", None) if cliente else None
+                        cliente_direccion = getattr(cliente, "direccion", None) if cliente else None
+                        productos_reservados = []
+                        for pr in o.productos_reservados:
+                            prod = getattr(pr, "producto", None)
+                            if prod:
+                                productos_reservados.append({
+                                    "producto_id": getattr(prod, "id", None),
+                                    "producto_descripcion": getattr(prod, "descripcion", "") or "",
+                                })
+                        resultado.append({
+                            "orden_id": o.id,
+                            "presupuesto_numero": getattr(presupuesto, "numero", "") or "",
+                            "cliente_nombre": cliente_nombre,
+                            "cliente_dni": cliente_dni,
+                            "cliente_direccion": cliente_direccion,
+                            "fecha_evento": o.fecha_evento.isoformat() if o.fecha_evento else None,
+                            "fecha_creacion": o.fecha_creacion.isoformat() if o.fecha_creacion else None,
+                            "contrato_generado_at": o.contrato_generado_at.isoformat() if o.contrato_generado_at else None,
+                            "total": float(o.seña_pagada or 0) + float(o.saldo_pendiente or 0),
+                            "productos_reservados": productos_reservados,
+                        })
+                    except Exception as item_e:
+                        logger.warning("listar_contratos: omitiendo orden %s: %s", o.id, item_e)
+                        continue
+                return resultado
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Error al listar contratos: {str(e)}")
+
     def eliminar_orden_trabajo(self, orden_id: int) -> dict:
         """Eliminar una orden de trabajo y liberar los productos reservados"""
         with db_session:
@@ -806,37 +978,86 @@ class OrdenTrabajoServices:
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al eliminar orden de trabajo: {str(e)}")
 
-    def completar_devolucion(self, orden_id: int, usuario_id: int) -> dict:
-        """Completar la devolución de una orden. Libera todos los productos reservados y marca la orden como completada."""
+    def _aplicar_destino_productos(
+        self,
+        productos: list,
+        destino: str,
+        lavanderia_id: Optional[int],
+        modista_id: Optional[int],
+    ) -> None:
+        """Asigna cada producto al estado destino (SALON, LAVANDERIA o MODISTA)."""
+        if destino == "LAVANDERIA" and not lavanderia_id:
+            raise HTTPException(status_code=400, detail="Debe indicar lavanderia_id cuando destino es LAVANDERIA")
+        if destino == "MODISTA" and not modista_id:
+            raise HTTPException(status_code=400, detail="Debe indicar modista_id cuando destino es MODISTA")
+
+        lavanderia = None
+        modista = None
+        if destino == "LAVANDERIA":
+            lavanderia = Lavanderia.get(id=lavanderia_id)
+            if not lavanderia:
+                raise HTTPException(status_code=404, detail="Lavandería no encontrada")
+        if destino == "MODISTA":
+            modista = Modista.get(id=modista_id)
+            if not modista:
+                raise HTTPException(status_code=404, detail="Modista no encontrada")
+
+        estado_enum = getattr(EstadoProducto, destino, None) or EstadoProducto.SALON
+        hoy = date.today()
+
+        for pr in productos:
+            prod = getattr(pr, "producto", None)
+            if not prod:
+                continue
+            prod.estado = estado_enum
+            prod.inmovilizado = False
+            if destino == "LAVANDERIA" and lavanderia:
+                ProductoLavanderia(producto=prod, lavanderia=lavanderia, fecha_ingreso=hoy)
+            elif destino == "MODISTA" and modista:
+                ProductoModista(producto=prod, modista=modista, fecha_ingreso=hoy)
+
+    def completar_devolucion(
+        self,
+        orden_id: int,
+        usuario_id: int,
+        destino: str,
+        lavanderia_id: Optional[int] = None,
+        modista_id: Optional[int] = None,
+    ) -> dict:
+        """Completar la devolución. Los productos pasan al estado indicado (SALON, LAVANDERIA o MODISTA) y se liberan de la orden."""
         with db_session:
             try:
                 orden = OrdenTrabajo.get(id=orden_id)
                 if not orden:
                     raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
 
-                # Verificar que la orden no esté ya completada o cancelada
                 if orden.estado and orden.estado.lower() in ["completada", "cancelada"]:
                     raise HTTPException(
                         status_code=400,
                         detail=f"La orden ya está en estado '{orden.estado}' y no puede ser completada"
                     )
 
-                # Liberar todos los productos reservados
                 productos_reservados = list(orden.productos_reservados)
+                self._aplicar_destino_productos(
+                    productos_reservados,
+                    destino,
+                    lavanderia_id,
+                    modista_id,
+                )
                 for producto_reservado in productos_reservados:
                     producto_reservado.delete()
 
-                # Marcar la orden como completada
                 orden.estado = "Completada"
                 flush()
 
                 return {
-                    "message": "Devolución completada exitosamente. Todos los productos han sido liberados.",
+                    "message": f"Devolución completada. Productos enviados a {destino}.",
                     "success": True,
                     "data": {
                         "orden_id": orden.id,
                         "estado": orden.estado,
-                        "productos_liberados": len(productos_reservados)
+                        "productos_liberados": len(productos_reservados),
+                        "destino": destino,
                     }
                 }
 
@@ -852,9 +1073,12 @@ class OrdenTrabajoServices:
         orden_id: int,
         productos_ids: list,
         descripcion: str,
-        usuario_id: int
+        usuario_id: int,
+        destino: str,
+        lavanderia_id: Optional[int] = None,
+        modista_id: Optional[int] = None,
     ) -> dict:
-        """Registrar una devolución parcial. Los productos seleccionados quedan en revisión con la descripción proporcionada."""
+        """Registrar devolución parcial. Los productos seleccionados pasan al estado indicado (SALON, LAVANDERIA o MODISTA) y se liberan de la orden."""
         with db_session:
             try:
                 orden = OrdenTrabajo.get(id=orden_id)
@@ -867,48 +1091,40 @@ class OrdenTrabajoServices:
                         detail="Debe seleccionar al menos un producto para la devolución parcial"
                     )
 
-                # Verificar que los productos pertenezcan a la orden
-                productos_en_orden = {pr.producto.id for pr in orden.productos_reservados}
+                productos_en_orden = {pr.producto.id: pr for pr in orden.productos_reservados}
                 productos_invalidos = [pid for pid in productos_ids if pid not in productos_en_orden]
-                
                 if productos_invalidos:
                     raise HTTPException(
                         status_code=400,
                         detail=f"Los siguientes productos no pertenecen a esta orden: {productos_invalidos}"
                     )
 
-                # Actualizar los productos seleccionados con estado "EN_REVISION" y agregar observaciones
-                productos_actualizados = []
-                for producto_reservado in orden.productos_reservados:
-                    if producto_reservado.producto.id in productos_ids:
-                        producto_reservado.estado = "EN_REVISION"
-                        # Agregar la descripción a las observaciones
-                        observaciones_previas = producto_reservado.observaciones or ""
-                        nueva_observacion = f"[Devolución parcial - {datetime.now().strftime('%d/%m/%Y %H:%M')}] {descripcion}"
-                        producto_reservado.observaciones = (
-                            f"{observaciones_previas}\n{nueva_observacion}" if observaciones_previas
-                            else nueva_observacion
-                        )
-                        productos_actualizados.append(producto_reservado.producto.id)
+                # Productos reservados a devolver (pasar a destino y eliminar de la orden)
+                a_devolver = [productos_en_orden[pid] for pid in productos_ids]
+                self._aplicar_destino_productos(a_devolver, destino, lavanderia_id, modista_id)
 
-                # Si todos los productos fueron devueltos parcialmente, mantener la orden en proceso
-                # Si solo algunos, también mantener en proceso para permitir completar después
+                # Agregar observaciones en cada ProductoReservado antes de borrar (opcional, para historial)
+                for pr in a_devolver:
+                    observaciones_previas = pr.observaciones or ""
+                    nueva_observacion = f"[Devolución parcial - {datetime.now().strftime('%d/%m/%Y %H:%M')}] {descripcion}"
+                    pr.observaciones = f"{observaciones_previas}\n{nueva_observacion}".strip() if observaciones_previas else nueva_observacion
+                    pr.delete()
+
                 if orden.estado and orden.estado.lower() not in ["completada", "cancelada"]:
-                    # Mantener el estado actual o cambiarlo a "En proceso" si es necesario
                     if orden.estado.lower() not in ["en proceso", "entregada"]:
                         orden.estado = "En proceso"
 
                 flush()
 
                 return {
-                    "message": "Devolución parcial registrada exitosamente. Los productos seleccionados quedan en revisión.",
+                    "message": f"Devolución parcial registrada. Productos enviados a {destino}.",
                     "success": True,
                     "data": {
                         "orden_id": orden.id,
-                        "productos_en_revision": productos_actualizados,
+                        "productos_devueltos": productos_ids,
                         "descripcion": descripcion,
-                        "total_productos": len(orden.productos_reservados),
-                        "productos_en_revision_count": len(productos_actualizados)
+                        "destino": destino,
+                        "productos_devueltos_count": len(productos_ids),
                     }
                 }
 

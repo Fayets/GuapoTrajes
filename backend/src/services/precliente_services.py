@@ -2,7 +2,10 @@ from pony.orm import db_session
 from fastapi import HTTPException
 from typing import Optional
 from pony.orm.core import TransactionIntegrityError, flush
+import logging
 from src import models, schemas
+
+logger = logging.getLogger(__name__)
 
 class PreclientServices:
     def __init__(self):
@@ -104,21 +107,24 @@ class PreclientServices:
     def convertir_a_cliente(self, precliente_id: int, direccion: str, dni: str) -> dict:
         with db_session:
             try:
+                dni = (str(dni).strip() if dni is not None else "") or ""
+                direccion = (str(direccion).strip() if direccion is not None else "") or ""
+                if not dni:
+                    raise HTTPException(status_code=400, detail="El DNI es obligatorio")
+                if not direccion:
+                    raise HTTPException(status_code=400, detail="La dirección es obligatoria")
+
                 precliente = models.Precliente.get(id=precliente_id)
                 if not precliente:
                     raise HTTPException(status_code=404, detail="Precliente no encontrado")
 
-
-                # Validar duplicados por DNI (usar get con atributo directo)
-                cliente_existente_dni = models.Cliente.get(dni=dni)
-                if cliente_existente_dni:
+                # Comprobar DNI y celular en Python para evitar TO_BOOL de Pony (str/strip en lambda)
+                clientes_todos = list(models.Cliente.select())
+                if any(str(c.dni or "").strip() == dni for c in clientes_todos):
                     raise HTTPException(status_code=400, detail="Ya existe un cliente con ese DNI")
-
-                # Validar duplicados por celular (usar get con atributo directo)
-                cliente_existente_celular = models.Cliente.get(celular=precliente.celular)
-                if cliente_existente_celular:
+                celular_precliente = str(precliente.celular or "").strip()
+                if celular_precliente and any(str(c.celular or "").strip() == celular_precliente for c in clientes_todos):
                     raise HTTPException(status_code=400, detail="Ya existe un cliente con ese celular")
-
 
                 # Crear cliente completo
                 cliente = models.Cliente(
@@ -127,11 +133,15 @@ class PreclientServices:
                     celular=precliente.celular,
                     direccion=direccion,
                     dni=dni,
-                    notas=""  # Campo opcional, inicializar como string vacío
+                    notas=""
                 )
+                flush()
 
+                for presupuesto in list(precliente.presupuestos):
+                    presupuesto.cliente = cliente
+                    presupuesto.precliente = None
+                flush()
 
-                # Eliminar el precliente
                 precliente.delete()
 
                 return {
@@ -150,4 +160,8 @@ class PreclientServices:
             except HTTPException:
                 raise
             except Exception as e:
-                raise HTTPException(status_code=500, detail="Error inesperado al convertir precliente")
+                logger.exception("Error al convertir precliente a cliente")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error inesperado al convertir precliente: {str(e)}"
+                )

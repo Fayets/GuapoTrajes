@@ -76,6 +76,7 @@ export function Sidebar({ collapsed, toggleSidebar, mobileOpen = false, onMobile
     { title: "Productos", icon: "bi-box", href: "/productos" },
     { title: "Presupuestos", icon: "bi-file-text", href: "/presupuestos" },
     { title: "Órdenes de trabajo", icon: "bi-clipboard", href: "/ordenes" },
+    { title: "Contratos", icon: "bi-file-earmark-text", href: "/contratos" },
     {
       title: "Devoluciones",
       icon: "bi-arrow-return-left",

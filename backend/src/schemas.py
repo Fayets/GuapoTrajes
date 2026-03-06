@@ -501,6 +501,7 @@ class PagoSaldoPendienteSchema(BaseModel):
     metodo_pago_id: Optional[int] = Field(None, description="ID del método de pago configurable")
     submetodo_pago_id: Optional[int] = Field(None, description="ID del submétodo de pago (opcional)")
     cuenta_destino_id: int = Field(..., description="ID de la cuenta destino (obligatoria)")
+    motivo_recibo: Optional[str] = Field(None, description="Motivo del recibo: Seña, Alquilado, Cancelación, etc.")
 
     @model_validator(mode='after')
     def validate_payment_method_present(self):
@@ -521,15 +522,27 @@ class PagoSaldoPendienteSchema(BaseModel):
         }
     )
 
+class CompletarDevolucionSchema(BaseModel):
+    """Destino de los productos al completar la devolución."""
+    destino: Literal["SALON", "LAVANDERIA", "MODISTA"] = Field(..., description="Estado destino: SALON, LAVANDERIA o MODISTA")
+    lavanderia_id: Optional[int] = Field(None, description="ID de lavandería (obligatorio si destino=LAVANDERIA)")
+    modista_id: Optional[int] = Field(None, description="ID de modista (obligatorio si destino=MODISTA)")
+
+
 class DevolucionParcialSchema(BaseModel):
     productos_ids: List[int] = Field(..., description="Lista de IDs de productos a devolver parcialmente")
     descripcion: str = Field(..., min_length=1, description="Descripción del motivo de la devolución parcial")
+    destino: Literal["SALON", "LAVANDERIA", "MODISTA"] = Field(..., description="Estado destino de las prendas devueltas")
+    lavanderia_id: Optional[int] = Field(None, description="ID de lavandería (obligatorio si destino=LAVANDERIA)")
+    modista_id: Optional[int] = Field(None, description="ID de modista (obligatorio si destino=MODISTA)")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "productos_ids": [1, 2, 3],
-                "descripcion": "La camisa tiene una mancha que requiere revisión"
+                "descripcion": "La camisa tiene una mancha que requiere revisión",
+                "destino": "LAVANDERIA",
+                "lavanderia_id": 1
             }
         }
     )

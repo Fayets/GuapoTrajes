@@ -45,6 +45,7 @@ type OrdenTrabajo = {
   productos_reservados: ProductoReservado[];
   total?: number;
   total_presupuesto?: number;
+  contrato_generado_at?: string | null;
 };
 
 export default function DevolucionesPage() {
@@ -62,12 +63,50 @@ export default function DevolucionesPage() {
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
   const [filtroBusqueda, setFiltroBusqueda] = useState("");
+  const [destinoEstado, setDestinoEstado] = useState<"SALON" | "LAVANDERIA" | "MODISTA">("SALON");
+  const [lavanderiaId, setLavanderiaId] = useState<number | null>(null);
+  const [modistaId, setModistaId] = useState<number | null>(null);
+  const [lavanderias, setLavanderias] = useState<Array<{ id: number; nombre: string }>>([]);
+  const [modistas, setModistas] = useState<Array<{ id: number; nombre: string }>>([]);
 
   const { token } = useAuth();
 
   useEffect(() => {
     fetchOrdenes();
   }, []);
+
+  useEffect(() => {
+    const fetchLavanderias = async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/lavanderia/all`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setLavanderias(Array.isArray(data) ? data.map((l: any) => ({ id: l.id, nombre: l.nombre || String(l.id) })) : []);
+        }
+      } catch {
+        setLavanderias([]);
+      }
+    };
+    const fetchModistas = async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/modistas/all`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setModistas(Array.isArray(data) ? data.map((m: any) => ({ id: m.id, nombre: m.nombre || String(m.id) })) : []);
+        }
+      } catch {
+        setModistas([]);
+      }
+    };
+    if (token) {
+      fetchLavanderias();
+      fetchModistas();
+    }
+  }, [token]);
 
   useEffect(() => {
     filtrarOrdenesAbiertas();
@@ -110,6 +149,11 @@ export default function DevolucionesPage() {
     hoy.setHours(0, 0, 0, 0);
 
     const abiertas = ordenes.filter((orden) => {
+      // Solo órdenes con contrato generado (devoluciones son sobre contratos)
+      if (!orden.contrato_generado_at) {
+        return false;
+      }
+
       // Excluir órdenes canceladas o completadas
       if (
         orden.estado?.toLowerCase() === "cancelada" ||
@@ -569,6 +613,14 @@ export default function DevolucionesPage() {
 
   const handleCompletada = async () => {
     if (!ordenSeleccionada) return;
+    if (destinoEstado === "LAVANDERIA" && !lavanderiaId) {
+      toast.error("Seleccioná una lavandería");
+      return;
+    }
+    if (destinoEstado === "MODISTA" && !modistaId) {
+      toast.error("Seleccioná una modista");
+      return;
+    }
 
     setProcesando(true);
     try {
@@ -580,6 +632,11 @@ export default function DevolucionesPage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({
+            destino: destinoEstado,
+            lavanderia_id: destinoEstado === "LAVANDERIA" ? lavanderiaId : null,
+            modista_id: destinoEstado === "MODISTA" ? modistaId : null,
+          }),
         }
       );
 
@@ -595,6 +652,9 @@ export default function DevolucionesPage() {
         toast.success("Devolución completada correctamente");
         setShowCompletadaModal(false);
         setOrdenSeleccionada(null);
+        setDestinoEstado("SALON");
+        setLavanderiaId(null);
+        setModistaId(null);
         fetchOrdenes();
       } else {
         throw new Error(result.message || "Error al completar devolución");
@@ -617,6 +677,14 @@ export default function DevolucionesPage() {
       toast.error("Debes describir el motivo de la devolución parcial");
       return;
     }
+    if (destinoEstado === "LAVANDERIA" && !lavanderiaId) {
+      toast.error("Seleccioná una lavandería");
+      return;
+    }
+    if (destinoEstado === "MODISTA" && !modistaId) {
+      toast.error("Seleccioná una modista");
+      return;
+    }
 
     setProcesando(true);
     try {
@@ -631,6 +699,9 @@ export default function DevolucionesPage() {
           body: JSON.stringify({
             productos_ids: prendasSeleccionadas,
             descripcion: descripcionParcial,
+            destino: destinoEstado,
+            lavanderia_id: destinoEstado === "LAVANDERIA" ? lavanderiaId : null,
+            modista_id: destinoEstado === "MODISTA" ? modistaId : null,
           }),
         }
       );
@@ -649,6 +720,9 @@ export default function DevolucionesPage() {
         setOrdenSeleccionada(null);
         setPrendasSeleccionadas([]);
         setDescripcionParcial("");
+        setDestinoEstado("SALON");
+        setLavanderiaId(null);
+        setModistaId(null);
         fetchOrdenes();
       } else {
         throw new Error(result.message || "Error al procesar devolución parcial");
@@ -841,17 +915,65 @@ export default function DevolucionesPage() {
           </DialogHeader>
           <div className="modal-body px-3 px-md-4">
             {ordenSeleccionada && (
-              <div className="mb-3">
-                <p>
-                  <strong>Orden:</strong> #{ordenSeleccionada.id}
-                </p>
-                <p>
-                  <strong>Presupuesto:</strong> {ordenSeleccionada.presupuesto_numero}
-                </p>
-                <p>
-                  <strong>Cliente:</strong> {ordenSeleccionada.cliente_nombre}
-                </p>
-              </div>
+              <>
+                <div className="mb-3">
+                  <p>
+                    <strong>Orden:</strong> #{ordenSeleccionada.id}
+                  </p>
+                  <p>
+                    <strong>Presupuesto:</strong> {ordenSeleccionada.presupuesto_numero}
+                  </p>
+                  <p>
+                    <strong>Cliente:</strong> {ordenSeleccionada.cliente_nombre}
+                  </p>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Destino de las prendas</label>
+                  <select
+                    className="form-select"
+                    value={destinoEstado}
+                    onChange={(e) => {
+                      setDestinoEstado(e.target.value as "SALON" | "LAVANDERIA" | "MODISTA");
+                      setLavanderiaId(null);
+                      setModistaId(null);
+                    }}
+                  >
+                    <option value="SALON">Salón</option>
+                    <option value="LAVANDERIA">Lavandería</option>
+                    <option value="MODISTA">Modista</option>
+                  </select>
+                </div>
+                {destinoEstado === "LAVANDERIA" && (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Lavandería</label>
+                    <select
+                      className="form-select"
+                      value={lavanderiaId ?? ""}
+                      onChange={(e) => setLavanderiaId(e.target.value ? Number(e.target.value) : null)}
+                    >
+                      <option value="">Seleccionar lavandería...</option>
+                      {lavanderias.map((l) => (
+                        <option key={l.id} value={l.id}>{l.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {destinoEstado === "MODISTA" && (
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Modista</label>
+                    <select
+                      className="form-select"
+                      value={modistaId ?? ""}
+                      onChange={(e) => setModistaId(e.target.value ? Number(e.target.value) : null)}
+                    >
+                      <option value="">Seleccionar modista...</option>
+                      {modistas.map((m) => (
+                        <option key={m.id} value={m.id}>{m.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
@@ -860,6 +982,9 @@ export default function DevolucionesPage() {
               onClick={() => {
                 setShowCompletadaModal(false);
                 setOrdenSeleccionada(null);
+                setDestinoEstado("SALON");
+                setLavanderiaId(null);
+                setModistaId(null);
               }}
               disabled={procesando}
             >
@@ -947,6 +1072,52 @@ export default function DevolucionesPage() {
                     placeholder="Ej: La camisa tiene una mancha que requiere revisión y posible lavado..."
                   />
                 </div>
+                <div className="mt-3">
+                  <label className="form-label fw-semibold">Destino de las prendas devueltas</label>
+                  <select
+                    className="form-select"
+                    value={destinoEstado}
+                    onChange={(e) => {
+                      setDestinoEstado(e.target.value as "SALON" | "LAVANDERIA" | "MODISTA");
+                      setLavanderiaId(null);
+                      setModistaId(null);
+                    }}
+                  >
+                    <option value="SALON">Salón</option>
+                    <option value="LAVANDERIA">Lavandería</option>
+                    <option value="MODISTA">Modista</option>
+                  </select>
+                </div>
+                {destinoEstado === "LAVANDERIA" && (
+                  <div className="mt-3">
+                    <label className="form-label fw-semibold">Lavandería</label>
+                    <select
+                      className="form-select"
+                      value={lavanderiaId ?? ""}
+                      onChange={(e) => setLavanderiaId(e.target.value ? Number(e.target.value) : null)}
+                    >
+                      <option value="">Seleccionar lavandería...</option>
+                      {lavanderias.map((l) => (
+                        <option key={l.id} value={l.id}>{l.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {destinoEstado === "MODISTA" && (
+                  <div className="mt-3">
+                    <label className="form-label fw-semibold">Modista</label>
+                    <select
+                      className="form-select"
+                      value={modistaId ?? ""}
+                      onChange={(e) => setModistaId(e.target.value ? Number(e.target.value) : null)}
+                    >
+                      <option value="">Seleccionar modista...</option>
+                      {modistas.map((m) => (
+                        <option key={m.id} value={m.id}>{m.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -958,6 +1129,9 @@ export default function DevolucionesPage() {
                 setOrdenSeleccionada(null);
                 setPrendasSeleccionadas([]);
                 setDescripcionParcial("");
+                setDestinoEstado("SALON");
+                setLavanderiaId(null);
+                setModistaId(null);
               }}
               disabled={procesando}
             >

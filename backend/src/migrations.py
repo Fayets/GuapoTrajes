@@ -12,6 +12,27 @@ def _is_postgres() -> bool:
     return provider in {"postgres", "postgresql"}
 
 
+def ensure_contrato_generado_at_column() -> None:
+    """Añade la columna contrato_generado_at en la tabla de órdenes si no existe."""
+    if not _is_postgres():
+        return
+    from src.models import OrdenTrabajo
+    table_name = getattr(OrdenTrabajo, "_table_", "OrdenesTrabajo")
+    # Probar nombre del modelo y versión en minúsculas (PostgreSQL sin comillas crea en minúscula)
+    for name in (table_name, table_name.lower()):
+        try:
+            with db_session:
+                db.execute(f'ALTER TABLE "{name}" ADD COLUMN IF NOT EXISTS "contrato_generado_at" TIMESTAMP')
+            logger.info("Columna contrato_generado_at OK en tabla '%s'", name)
+            return
+        except Exception as e:
+            err = str(e).lower()
+            if "does not exist" in err or "no existe" in err:
+                continue
+            logger.warning("Error añadiendo contrato_generado_at en '%s': %s", name, e)
+    logger.warning("No se pudo añadir contrato_generado_at (probados: %s, %s)", table_name, table_name.lower())
+
+
 def apply_schema_migrations() -> None:
     """Aplica migraciones mínimas necesarias para el nuevo flujo financiero."""
     if not _is_postgres():
@@ -45,6 +66,7 @@ def apply_schema_migrations() -> None:
                 'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_reason" TEXT',
                 'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_applied_by" INTEGER',
                 'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_created_at" TIMESTAMP',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "contrato_generado_at" TIMESTAMP',
                 'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "extra_discount_percentage" DOUBLE PRECISION',
                 'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "extra_discount_amount" DOUBLE PRECISION',
                 'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "extra_discount_reason" TEXT',

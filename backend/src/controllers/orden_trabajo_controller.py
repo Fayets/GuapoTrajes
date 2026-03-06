@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from src.schemas import OrdenTrabajoCreateSchema, OrdenTrabajoResponseSchema, ProductoReservadoSchema, PagoSaldoPendienteSchema, OrdenTrabajoCreateSchemaTest, DevolucionParcialSchema
+from src.schemas import OrdenTrabajoCreateSchema, OrdenTrabajoResponseSchema, ProductoReservadoSchema, PagoSaldoPendienteSchema, OrdenTrabajoCreateSchemaTest, DevolucionParcialSchema, CompletarDevolucionSchema
 from src.services.orden_trabajo_services import OrdenTrabajoServices
 from pony.orm import db_session
 from src.controllers.auth_controller import get_current_user
@@ -172,6 +172,18 @@ def get_ordenes_trabajo(current_user=Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado al obtener órdenes de trabajo: {str(e)}")
 
+@router.get("/contratos")
+def get_contratos(current_user=Depends(get_current_user)):
+    """Listar contratos generados (órdenes con contrato_generado_at)."""
+    try:
+        return servicio.listar_contratos()
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Error al listar contratos")
+        return []  # Evitar 500: devolver lista vacía para que la vista cargue
+
 @router.get("/{orden_id}")
 def obtener_orden_por_id(orden_id: int, current_user=Depends(get_current_user)):
     try:
@@ -217,7 +229,8 @@ def pagar_saldo_pendiente(
             current_user.id,
             pago_data.cuenta_destino_id,
             pago_data.metodo_pago_id,  # Nuevo sistema
-            pago_data.submetodo_pago_id  # Nuevo sistema
+            pago_data.submetodo_pago_id,  # Nuevo sistema
+            pago_data.motivo_recibo,  # Motivo del recibo (Seña, Alquilado, etc.)
         )
     except HTTPException as e:
         raise e
@@ -234,6 +247,26 @@ def obtener_historial_pagos(orden_id: int, current_user=Depends(get_current_user
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado al obtener historial de pagos: {str(e)}")
 
+@router.get("/{orden_id}/recibos")
+def obtener_recibos_orden(orden_id: int, current_user=Depends(get_current_user)):
+    """Obtener el historial de recibos de una orden (siempre generados por el sistema)."""
+    try:
+        return servicio.listar_recibos_orden(orden_id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al obtener recibos: {str(e)}")
+
+@router.post("/{orden_id}/registrar-contrato")
+def registrar_contrato_generado(orden_id: int, current_user=Depends(get_current_user)):
+    """Registrar que se generó el contrato para esta orden (cliente, saldo 0, DNI y dirección)."""
+    try:
+        return servicio.registrar_contrato_generado(orden_id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al registrar contrato: {str(e)}")
+
 @router.delete("/{orden_id}", dependencies=[Depends(require_role("ADMIN"))])
 def eliminar_orden_trabajo(orden_id: int, current_user=Depends(get_current_user)):
     """Eliminar una orden de trabajo (solo ADMIN). Libera los productos reservados."""
@@ -245,10 +278,16 @@ def eliminar_orden_trabajo(orden_id: int, current_user=Depends(get_current_user)
         raise HTTPException(status_code=500, detail=f"Error inesperado al eliminar orden de trabajo: {str(e)}")
 
 @router.post("/{orden_id}/completar-devolucion")
-def completar_devolucion(orden_id: int, current_user=Depends(get_current_user)):
-    """Marcar una orden como devolución completada. Libera todos los productos reservados."""
+def completar_devolucion(orden_id: int, data: CompletarDevolucionSchema, current_user=Depends(get_current_user)):
+    """Marcar una orden como devolución completada. Los productos pasan al estado indicado (SALON, LAVANDERIA o MODISTA)."""
     try:
-        return servicio.completar_devolucion(orden_id, current_user.id)
+        return servicio.completar_devolucion(
+            orden_id,
+            current_user.id,
+            data.destino,
+            data.lavanderia_id,
+            data.modista_id,
+        )
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -260,13 +299,16 @@ def devolucion_parcial(
     data: DevolucionParcialSchema,
     current_user=Depends(get_current_user)
 ):
-    """Registrar una devolución parcial de productos. Los productos seleccionados quedan en revisión."""
+    """Registrar una devolución parcial. Los productos seleccionados pasan al estado indicado (SALON, LAVANDERIA o MODISTA)."""
     try:
         return servicio.registrar_devolucion_parcial(
             orden_id,
             data.productos_ids,
             data.descripcion,
-            current_user.id
+            current_user.id,
+            data.destino,
+            data.lavanderia_id,
+            data.modista_id,
         )
     except HTTPException as e:
         raise e
