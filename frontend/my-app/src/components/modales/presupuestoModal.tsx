@@ -148,7 +148,7 @@ export default function PresupuestoModal({
       return presupuestoSeleccionado.cliente_nombre;
     }
     if (clienteSeleccionado) {
-      return `${clienteSeleccionado.nombre} ${clienteSeleccionado.apellido}`.trim();
+      return `${clienteSeleccionado.apellido} ${clienteSeleccionado.nombre}`.trim();
     }
     return "-";
   }, [presupuestoSeleccionado, clienteSeleccionado]);
@@ -264,7 +264,7 @@ export default function PresupuestoModal({
                   <input
                     type="text"
                     className="form-control mb-3"
-                    placeholder="Buscar por nombre o apellido"
+                    placeholder="Buscar por apellido o nombre"
                     value={clienteFiltro}
                     onChange={(e) => setClienteFiltro(e.target.value)}
                   />
@@ -276,13 +276,13 @@ export default function PresupuestoModal({
                     <option value="">Seleccionar cliente</option>
                     {clientes
                       .filter((c) =>
-                        `${c.nombre} ${c.apellido}`
+                        `${c.apellido} ${c.nombre}`
                           .toLowerCase()
                           .includes(clienteFiltro.toLowerCase())
                       )
                       .map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.nombre} {c.apellido}
+                          {c.apellido} {c.nombre}
                         </option>
                       ))}
                   </select>

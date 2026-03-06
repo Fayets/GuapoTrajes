@@ -49,7 +49,7 @@ export default function ClienteModal({
                 </div>
               )}
               <form>
-                {["nombre", "apellido", "dni", "direccion", "celular", "notas"].map((campo) => (
+                {["apellido", "nombre", "dni", "direccion", "celular", "notas"].map((campo) => (
                   <div className="mb-3" key={campo}>
                     <label htmlFor={campo} className="form-label text-capitalize">
                       {campo}

@@ -795,7 +795,7 @@ export default function VentasPage() {
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="Buscar por nombre, apellido o DNI..."
+                        placeholder="Buscar por apellido, nombre o DNI..."
                         value={clienteFiltro}
                         onChange={(e) => setClienteFiltro(e.target.value)}
                       />
@@ -820,13 +820,13 @@ export default function VentasPage() {
                         <option value="">Seleccionar cliente</option>
                         {clientes
                           .filter((c) =>
-                            `${c.nombre} ${c.apellido} ${c.dni || ""}`
+                            `${c.apellido} ${c.nombre} ${c.dni || ""}`
                               .toLowerCase()
                               .includes(clienteFiltro.toLowerCase())
                           )
                           .map((c) => (
                             <option key={c.id} value={c.id}>
-                              {c.nombre} {c.apellido}{" "}
+                              {c.apellido} {c.nombre}{" "}
                               {c.dni ? `(DNI: ${c.dni})` : ""}
                             </option>
                           ))}

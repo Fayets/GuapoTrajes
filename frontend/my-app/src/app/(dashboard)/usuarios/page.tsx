@@ -234,8 +234,8 @@ export default function UsuariosPage() {
               <TableRow>
                 <TableHead>Usuario</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Nombre</TableHead>
                 <TableHead>Apellido</TableHead>
+                <TableHead>Nombre</TableHead>
                 <TableHead>Rol</TableHead>
                 <TableHead>Sucursal</TableHead>
                 <TableHead className="text-center">Acciones</TableHead>
@@ -248,8 +248,8 @@ export default function UsuariosPage() {
                   <TableRow key={u.id}>
                     <TableCell className="fw-semibold">{u.username}</TableCell>
                     <TableCell>{u.email}</TableCell>
-                    <TableCell>{u.nombre}</TableCell>
                     <TableCell>{u.apellido}</TableCell>
+                    <TableCell>{u.nombre}</TableCell>
                     <TableCell>
                       <span className="badge bg-secondary">{u.rol}</span>
                     </TableCell>
@@ -335,18 +335,6 @@ export default function UsuariosPage() {
                     />
                   </div>
                   <div className="col-12 col-md-6">
-                    <label className="form-label fw-bold">Nombre</label>
-                    <Input
-                      value={usuarioActual?.nombre || ""}
-                      onChange={(e) =>
-                        setUsuarioActual({
-                          ...usuarioActual!,
-                          nombre: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="col-12 col-md-6">
                     <label className="form-label fw-bold">Apellido</label>
                     <Input
                       value={usuarioActual?.apellido || ""}
@@ -354,6 +342,18 @@ export default function UsuariosPage() {
                         setUsuarioActual({
                           ...usuarioActual!,
                           apellido: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label fw-bold">Nombre</label>
+                    <Input
+                      value={usuarioActual?.nombre || ""}
+                      onChange={(e) =>
+                        setUsuarioActual({
+                          ...usuarioActual!,
+                          nombre: e.target.value,
                         })
                       }
                     />

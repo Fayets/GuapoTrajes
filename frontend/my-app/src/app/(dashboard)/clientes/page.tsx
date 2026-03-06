@@ -390,7 +390,7 @@ export default function ClientesPage() {
   };
 
   const clientesFiltrados = clientes.filter((cliente) =>
-    `${cliente.nombre} ${cliente.apellido}`
+    `${cliente.apellido} ${cliente.nombre}`
       .toLowerCase()
       .includes(busqueda.toLowerCase())
   );
@@ -441,8 +441,8 @@ export default function ClientesPage() {
             <Table className="align-middle mb-0">
               <TableHeader className="table-light">
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
                   <TableHead>Apellido</TableHead>
+                  <TableHead>Nombre</TableHead>
                   <TableHead>DNI</TableHead>
                   <TableHead>Dirección</TableHead>
                   <TableHead>Celular</TableHead>
@@ -454,8 +454,8 @@ export default function ClientesPage() {
                 {clientesPaginados.length > 0 ? (
                   clientesPaginados.map((cliente, index) => (
                     <TableRow key={cliente.id || index} className="align-middle">
-                      <TableCell className="fw-semibold">{cliente.nombre}</TableCell>
-                      <TableCell>{cliente.apellido}</TableCell>
+                      <TableCell className="fw-semibold">{cliente.apellido}</TableCell>
+                      <TableCell>{cliente.nombre}</TableCell>
                       <TableCell>{cliente.dni}</TableCell>
                       <TableCell>{cliente.direccion}</TableCell>
                       <TableCell className="text-nowrap">{cliente.celular}</TableCell>
@@ -561,7 +561,7 @@ export default function ClientesPage() {
               <p>
                 ¿Está seguro que desea eliminar al cliente{" "}
                 <strong>
-                  {clienteActual?.nombre} {clienteActual?.apellido}
+                  {clienteActual?.apellido} {clienteActual?.nombre}
                 </strong>
                 ?
               </p>

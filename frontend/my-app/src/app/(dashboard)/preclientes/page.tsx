@@ -241,7 +241,7 @@ export default function PreclientesPage() {
   };
 
   const clientesFiltrados = preclientes.filter((cliente) =>
-    `${cliente.nombre} ${cliente.apellido}`
+    `${cliente.apellido} ${cliente.nombre}`
       .toLowerCase()
       .includes(busqueda.toLowerCase())
   );
@@ -344,8 +344,8 @@ export default function PreclientesPage() {
             <Table className="align-middle mb-0">
               <TableHeader className="table-light">
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
                   <TableHead>Apellido</TableHead>
+                  <TableHead>Nombre</TableHead>
                   <TableHead>Celular</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
@@ -354,8 +354,8 @@ export default function PreclientesPage() {
                 {clientesPaginados.length > 0 ? (
                   clientesPaginados.map((cliente, index) => (
                     <TableRow key={cliente.id || `cliente-${index}`} className="align-middle">
-                      <TableCell className="fw-semibold">{cliente.nombre}</TableCell>
-                      <TableCell>{cliente.apellido}</TableCell>
+                      <TableCell className="fw-semibold">{cliente.apellido}</TableCell>
+                      <TableCell>{cliente.nombre}</TableCell>
                       <TableCell className="text-nowrap">{cliente.celular}</TableCell>
                       <TableCell>
                         <div className="d-flex justify-content-center gap-2">
@@ -446,12 +446,12 @@ export default function PreclientesPage() {
               <div className="card-body p-4">
                 <div className="row g-3">
                   <div className="col-12">
-                    <label className="form-label fw-bold">Nombre</label>
-                    <Input name="nombre" value={formData.nombre} onChange={handleChange} />
-                  </div>
-                  <div className="col-12">
                     <label className="form-label fw-bold">Apellido</label>
                     <Input name="apellido" value={formData.apellido} onChange={handleChange} />
+                  </div>
+                  <div className="col-12">
+                    <label className="form-label fw-bold">Nombre</label>
+                    <Input name="nombre" value={formData.nombre} onChange={handleChange} />
                   </div>
                   <div className="col-12">
                     <label className="form-label fw-bold">Celular</label>
@@ -483,7 +483,7 @@ export default function PreclientesPage() {
               ¿Está seguro que desea eliminar a
               {" "}
               <strong>
-                {clienteActual?.nombre} {clienteActual?.apellido}
+                {clienteActual?.apellido} {clienteActual?.nombre}
               </strong>
               ? Esta acción no se puede deshacer.
             </p>

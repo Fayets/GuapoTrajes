@@ -704,7 +704,7 @@ export default function PresupuestosPage() {
     }
 
     const nombreCliente =
-      `${cliente.nombre ?? ""} ${cliente.apellido ?? ""}`.trim() ||
+      `${cliente.apellido ?? ""} ${cliente.nombre ?? ""}`.trim() ||
       presupuesto.cliente_nombre;
 
     const totalFormateado = presupuesto.total.toLocaleString("es-AR", {
