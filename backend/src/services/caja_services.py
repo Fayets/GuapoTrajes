@@ -1,7 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from pony.orm import db_session, select, sum, count, flush
 from datetime import date, datetime
-from src.models import CajaMovimiento, Venta, Usuario, Sucursal, TipoMovimiento, MetodoPago, CuentaDestino, Presupuesto
+from src.models import CajaMovimiento, Venta, Usuario, Sucursal, TipoMovimiento, MetodoPago, CuentaDestino, Presupuesto, CierreCaja
 from fastapi import HTTPException
 from typing import List, Dict, Optional
 from src.services.caja_chica_services import CajaChicaService
@@ -501,6 +501,95 @@ class CajaServices:
         except Exception as e:
             print(f"❌ Error al obtener totales diarios: {e}")
             raise HTTPException(status_code=500, detail="Error al obtener totales diarios")
+
+    def _es_efectivo(self, cm) -> bool:
+        """Determina si un movimiento es en efectivo (para saldo de cierre)."""
+        if cm.metodo_pago_configurable:
+            nombre = (cm.metodo_pago_configurable.nombre or "").lower()
+            if cm.submetodo_pago and cm.submetodo_pago.nombre:
+                nombre = f"{nombre} - {(cm.submetodo_pago.nombre or '').lower()}"
+        elif cm.payment_method and hasattr(cm.payment_method, "value"):
+            nombre = (cm.payment_method.value or "").lower()
+        else:
+            nombre = ""
+        return "efectivo" in nombre
+
+    @db_session
+    def get_saldo_efectivo_dia(self, fecha: date, sucursal_id: int) -> float:
+        """Saldo de efectivo del día: ingresos efectivo - egresos efectivo."""
+        try:
+            all_movimientos = list(CajaMovimiento.select())
+            saldo = 0.0
+            for cm in all_movimientos:
+                if cm.fecha_hora.date() != fecha or cm.sucursal.id != sucursal_id:
+                    continue
+                if not self._es_efectivo(cm):
+                    continue
+                if cm.tipo == TipoMovimiento.INGRESO or (hasattr(cm.tipo, "value") and cm.tipo.value == "INGRESO"):
+                    saldo += cm.monto
+                else:
+                    saldo -= cm.monto
+            return round(saldo, 2)
+        except Exception as e:
+            print(f"❌ Error al obtener saldo efectivo: {e}")
+            return 0.0
+
+    @db_session
+    def existe_cierre(self, fecha: date, sucursal_id: int) -> bool:
+        """Indica si ya existe un cierre de caja para esa fecha y sucursal."""
+        try:
+            c = select(c for c in CierreCaja if c.fecha == fecha and c.sucursal.id == sucursal_id).first()
+            return c is not None
+        except Exception as e:
+            print(f"❌ Error al verificar cierre: {e}")
+            return False
+
+    @db_session
+    def registrar_cierre(self, fecha: date, sucursal_id: int, usuario_id: int) -> Dict:
+        """Registra el cierre de caja para la fecha y sucursal (efectivo en cero)."""
+        usuario = Usuario.get(id=usuario_id)
+        if not usuario:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        sucursal = Sucursal.get(id=sucursal_id)
+        if not sucursal:
+            raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+        if select(c for c in CierreCaja if c.fecha == fecha and c.sucursal.id == sucursal_id).first():
+            raise HTTPException(status_code=400, detail="Ya existe un cierre de caja para esta fecha y sucursal")
+        saldo = self.get_saldo_efectivo_dia(fecha, sucursal_id)
+        if abs(saldo) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede cerrar: aún hay ${saldo:,.2f} en efectivo. Distribuí el dinero (Caja Chica / Caja Concentradora) para dejar la caja en cero."
+            )
+        cierre = CierreCaja(fecha=fecha, sucursal=sucursal, usuario=usuario)
+        flush()
+        return {
+            "success": True,
+            "message": "Cierre de caja registrado correctamente",
+            "cierre_id": cierre.id,
+            "fecha": fecha.isoformat(),
+            "sucursal_id": sucursal_id,
+        }
+
+    @db_session
+    def get_cierres_pendientes(self, fecha_referencia: Optional[date] = None) -> List[Dict]:
+        """Para administrador: sucursales sin cierre de caja para la fecha (por defecto ayer)."""
+        from datetime import timedelta
+        try:
+            ref = fecha_referencia or (date.today() - timedelta(days=1))
+            sucursales = list(Sucursal.select())
+            pendientes = []
+            for s in sucursales:
+                if select(c for c in CierreCaja if c.fecha == ref and c.sucursal.id == s.id).first() is None:
+                    pendientes.append({
+                        "sucursal_id": s.id,
+                        "sucursal_nombre": s.nombre,
+                        "fecha": ref.isoformat(),
+                    })
+            return pendientes
+        except Exception as e:
+            print(f"❌ Error al obtener cierres pendientes: {e}")
+            return []
     
     @db_session
     def get_reporte_ingresos(self, fecha_desde: date, fecha_hasta: date, 

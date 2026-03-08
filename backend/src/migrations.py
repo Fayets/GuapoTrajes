@@ -185,6 +185,15 @@ def apply_schema_migrations() -> None:
                 'ALTER TABLE "ProductosModistas" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT',
                 'ALTER TABLE "productosmodistas" ADD COLUMN IF NOT EXISTS "cliente_nombre" TEXT',
                 'ALTER TABLE "productosmodistas" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT',
+                # Cierre de caja diaria (efectivo en cero)
+                'CREATE TABLE IF NOT EXISTS "CierresCaja" ('
+                '    "id" SERIAL PRIMARY KEY,'
+                '    "fecha" DATE NOT NULL,'
+                '    "sucursal" INTEGER NOT NULL REFERENCES "Sucursales"("id"),'
+                '    "usuario_id" INTEGER NOT NULL REFERENCES "Usuarios"("id"),'
+                '    "fecha_hora" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,'
+                '    UNIQUE("fecha", "sucursal")'
+                ')',
             ]
 
             for statement in alter_statements:

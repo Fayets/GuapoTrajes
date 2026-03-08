@@ -23,6 +23,7 @@ class Sucursal(db.Entity):
     caja_concentradora_movimientos = Set("CajaConcentradora")
     cuentas_destino = Set("CuentaDestino")  # UNA SUCURSAL TIENE VARIAS CUENTAS DESTINO
     metodos_pago = Set("MetodoPagoConfigurable")  # UNA SUCURSAL TIENE VARIOS MÉTODOS DE PAGO
+    cierres_caja = Set("CierreCaja")
     _table_ = "Sucursales"
 
 class CuentaDestino(db.Entity):
@@ -90,6 +91,7 @@ class Usuario(db.Entity):
     caja_concentradora_envios = Set("CajaConcentradora", reverse="usuario_envio")
     caja_concentradora_movimientos = Set("CajaConcentradora", reverse="usuario")
     caja_concentradora_vaciados = Set("CajaConcentradora", reverse="vaciado_por")
+    cierres_caja = Set("CierreCaja")
     presupuestos_con_descuento_extra = Set("Presupuesto", reverse="extra_discount_applied_by")
     ordenes_con_descuento_extra = Set("OrdenTrabajo", reverse="extra_discount_applied_by")
     ventas_con_descuento_extra = Set("Venta", reverse="extra_discount_applied_by")
@@ -445,6 +447,17 @@ class CajaConcentradora(db.Entity):
     movimiento_origen = Optional(CajaChica)
     caja_movimiento_id = Optional(int, column="caja_movimiento_id")  # Referencia al movimiento de caja diaria
     _table_ = "CajaConcentradora"
+
+
+class CierreCaja(db.Entity):
+    """Registro de cierre de caja diaria: la sucursal cerró con efectivo en cero."""
+    id = PrimaryKey(int, auto=True)
+    fecha = Required(date)  # Día que se cierra
+    sucursal = Required(Sucursal)
+    usuario = Required(Usuario, column="usuario_id")  # Quién cerró
+    fecha_hora = Required(datetime, default=lambda: datetime.now())  # Momento del cierre
+    _table_ = "CierresCaja"
+
 
 # Métodos de Pago Configurables
 class MetodoPagoConfigurable(db.Entity):

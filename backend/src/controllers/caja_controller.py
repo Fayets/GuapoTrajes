@@ -4,6 +4,7 @@ from typing import List, Optional
 from datetime import date
 from src.services.caja_services import CajaServices
 from src.controllers.auth_controller import get_current_user
+from src.deps import require_role
 from src.schemas import CajaReporteRequest, CajaReporteResponse, TransferenciaCajaChicaRequest
 
 router = APIRouter()
@@ -12,6 +13,8 @@ service = CajaServices()
 class CajaDiariaResponse(BaseModel):
     movimientos: List[dict]
     totales: dict
+    saldo_efectivo: Optional[float] = None
+    cierre_registrado: Optional[bool] = None
 
 @router.get("/diaria", response_model=CajaDiariaResponse)
 def get_caja_diaria(
@@ -23,15 +26,15 @@ def get_caja_diaria(
 ):
     """Obtener caja diaria con movimientos y totales"""
     try:
-        # Obtener movimientos del día
         movimientos = service.get_movimientos_diarios(fecha, sucursal_id, payment_method, cuenta_destino_id)
-        
-        # Obtener totales del día
         totales = service.get_totales_diarios(fecha, sucursal_id)
-        
+        saldo_efectivo = service.get_saldo_efectivo_dia(fecha, sucursal_id)
+        cierre_registrado = service.existe_cierre(fecha, sucursal_id)
         return CajaDiariaResponse(
             movimientos=movimientos,
-            totales=totales
+            totales=totales,
+            saldo_efectivo=saldo_efectivo,
+            cierre_registrado=cierre_registrado,
         )
         
     except HTTPException as e:
@@ -149,6 +152,40 @@ def transferir_a_caja_concentradora(
     except Exception as e:
         print(f"❌ Error al transferir efectivo a caja concentradora: {e}")
         raise HTTPException(status_code=500, detail="Error inesperado al transferir efectivo a Caja Concentradora")
+
+
+class CierreCajaRequest(BaseModel):
+    fecha: date
+    sucursal_id: int
+
+
+@router.post("/diaria/cierre")
+def registrar_cierre_caja(
+    payload: CierreCajaRequest,
+    current_user=Depends(get_current_user)
+):
+    """Registrar cierre de caja (efectivo en cero) para la fecha y sucursal."""
+    try:
+        return service.registrar_cierre(payload.fecha, payload.sucursal_id, current_user.id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Error al registrar cierre de caja: {e}")
+        raise HTTPException(status_code=500, detail="Error inesperado al registrar cierre de caja")
+
+
+@router.get("/cierres-pendientes")
+def get_cierres_pendientes(
+    fecha: Optional[date] = Query(None, description="Fecha a consultar (por defecto ayer)"),
+    current_user=Depends(require_role("ADMIN", "SUPER_ADMIN")),
+):
+    """Para administrador: sucursales sin cierre de caja para la fecha indicada."""
+    try:
+        return {"pendientes": service.get_cierres_pendientes(fecha)}
+    except Exception as e:
+        print(f"❌ Error al obtener cierres pendientes: {e}")
+        raise HTTPException(status_code=500, detail="Error inesperado")
+
 
 @router.get("/exportar-csv")
 def exportar_caja_csv(

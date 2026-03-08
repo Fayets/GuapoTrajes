@@ -33,7 +33,8 @@ const metodosPago = [
 ];
 
 export default function CajaPage() {
-  const { me } = useAuth();
+  const { me, isAdmin } = useAuth();
+  const esAdmin = isAdmin || me?.role === "SUPER_ADMIN";
 
   const getLocalDateString = () => {
     const now = new Date();
@@ -84,7 +85,13 @@ export default function CajaPage() {
     descripcion: "",
   });
   const [isSaving, setIsSaving] = useState(false);
-  
+  const [saldoEfectivo, setSaldoEfectivo] = useState(0);
+  const [cierreRegistrado, setCierreRegistrado] = useState(false);
+  const [showCierreModal, setShowCierreModal] = useState(false);
+  const [isCerrando, setIsCerrando] = useState(false);
+  const [cierresPendientes, setCierresPendientes] = useState<Array<{ sucursal_id: number; sucursal_nombre: string; fecha: string }>>([]);
+  const [cuentaRegresiva2359, setCuentaRegresiva2359] = useState<string>("");
+
   // Estado para la conexión del backend
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   // Para mostrar el toast de carga solo una vez al entrar a la página
@@ -182,6 +189,8 @@ export default function CajaPage() {
       if (data.movimientos && data.totales) {
         setMovimientos(data.movimientos);
         setTotales(data.totales);
+        setSaldoEfectivo(typeof data.saldo_efectivo === "number" ? data.saldo_efectivo : 0);
+        setCierreRegistrado(Boolean(data.cierre_registrado));
         if (!loadToastShownRef.current) {
           loadToastShownRef.current = true;
           toast.success(`Caja diaria cargada: ${data.movimientos.length} movimientos`);
@@ -428,6 +437,36 @@ export default function CajaPage() {
     }
   };
 
+  const confirmarCierreCaja = async () => {
+    if (Math.abs(saldoParaCierre) > 0.01) {
+      toast.error("El saldo en efectivo debe ser $0 para cerrar. Usá los botones de arriba para enviar dinero a Caja Chica o Caja Concentradora.");
+      return;
+    }
+    if (!sucursalId) {
+      toast.error("No hay sucursal seleccionada");
+      return;
+    }
+    setIsCerrando(true);
+    try {
+      const response = await fetch(`${API_BASE}/caja/diaria/cierre`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ fecha, sucursal_id: sucursalId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.detail || result.message || "Error al registrar cierre");
+      }
+      toast.success("Cierre de caja registrado correctamente");
+      setShowCierreModal(false);
+      await fetchCajaDiaria();
+    } catch (error: any) {
+      toast.error(error.message || "No se pudo registrar el cierre");
+    } finally {
+      setIsCerrando(false);
+    }
+  };
+
   const exportarCSV = async () => {
     try {
       const params = new URLSearchParams({
@@ -521,6 +560,48 @@ export default function CajaPage() {
 
   useEffect(() => {
     checkBackendConnection();
+  }, []);
+
+  useEffect(() => {
+    if (!esAdmin) return;
+    const fetchPendientes = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/caja/cierres-pendientes`, { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        setCierresPendientes(data.pendientes || []);
+      } catch {
+        setCierresPendientes([]);
+      }
+    };
+    fetchPendientes();
+  }, [esAdmin, fecha]);
+
+  // Contador en tiempo real hasta las 23:59
+  useEffect(() => {
+    const actualizar = () => {
+      const now = new Date();
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+      const ms = endOfDay.getTime() - now.getTime();
+      if (ms <= 0) {
+        setCuentaRegresiva2359("Hoy ya pasó las 23:59");
+        return;
+      }
+      const s = Math.floor((ms / 1000) % 60);
+      const m = Math.floor((ms / (1000 * 60)) % 60);
+      const h = Math.floor(ms / (1000 * 60 * 60));
+      if (h > 0) {
+        setCuentaRegresiva2359(`Faltan ${h}h ${m}m ${s}s para las 23:59`);
+      } else if (m > 0) {
+        setCuentaRegresiva2359(`Faltan ${m}m ${s}s para las 23:59`);
+      } else {
+        setCuentaRegresiva2359(`Faltan ${s}s para las 23:59`);
+      }
+    };
+    actualizar();
+    const id = setInterval(actualizar, 1000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -631,6 +712,16 @@ export default function CajaPage() {
     0
   );
 
+  // Saldo efectivo calculado desde los movimientos actuales (dinámico: se actualiza al transferir sin esperar refetch)
+  const saldoEfectivoCalculado = movimientos.reduce((acc, mov) => {
+    const esEfectivo =
+      mov.payment_method_type === "EFECTIVO" ||
+      (typeof mov.payment_method === "string" && /efectivo/i.test(mov.payment_method));
+    if (!esEfectivo) return acc;
+    return acc + (mov.tipo === "INGRESO" ? mov.monto : -mov.monto);
+  }, 0);
+  const saldoParaCierre = Math.round(saldoEfectivoCalculado * 100) / 100;
+
   const getMetodoPagoColor = (metodo: string | null) => {
     if (!metodo) return "bg-secondary";
     if (metodo === "TRANSFERENCIA") return "bg-warning"; // misma caja que Transferencia
@@ -712,6 +803,20 @@ export default function CajaPage() {
         </div>
       </div>
 
+      {/* Alerta administrador: cajas sin cerrar */}
+      {esAdmin && cierresPendientes.length > 0 && (
+        <div className="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4" role="alert">
+          <div className="d-flex align-items-center gap-2">
+            <i className="bi bi-exclamation-triangle-fill fs-4"></i>
+            <div>
+              <strong>Hay {cierresPendientes.length} sucursal{cierresPendientes.length !== 1 ? "es" : ""} con caja sin cerrar</strong>
+              <span className="d-block small">({cierresPendientes.map((p) => `${p.sucursal_nombre} (${p.fecha})`).join(", ")})</span>
+            </div>
+          </div>
+          <a href="/caja" className="btn btn-sm btn-outline-dark">Ir a Caja</a>
+        </div>
+      )}
+
       <div className="card">
         <div className="card-header">
           <ul className="nav nav-tabs card-header-tabs" role="tablist">
@@ -788,6 +893,50 @@ export default function CajaPage() {
                     {isLoading ? <i className="bi bi-arrow-clockwise spin me-2"></i> : <i className="bi bi-arrow-clockwise me-2"></i>}
                     Refrescar
                   </button>
+                </div>
+              </div>
+
+              {/* Cierre de caja: la caja debe quedar en cero (solo efectivo) */}
+              <div className="row mb-4">
+                <div className="col-12">
+                  <div className={`card border ${saldoParaCierre > 0 && !cierreRegistrado ? "border-warning" : "border-light"}`}>
+                    <div className="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                      <div className="d-flex align-items-center gap-3">
+                        <i className={`bi bi-cash-stack display-6 ${cierreRegistrado ? "text-success" : saldoParaCierre > 0 ? "text-warning" : "text-secondary"}`}></i>
+                        <div>
+                          {cierreRegistrado ? (
+                            <h6 className="mb-0 text-success">Caja cerrada para este día</h6>
+                          ) : saldoParaCierre > 0 ? (
+                            <>
+                              <h6 className="mb-0 text-warning">Falta para cierre: ${saldoParaCierre.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h6>
+                              <p className="small mb-0 mt-1">
+                                <i className="bi bi-clock me-1"></i>
+                                <span className="text-dark fw-medium">{cuentaRegresiva2359}</span>
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <h6 className="mb-0 text-muted">Saldo efectivo: $0 — Podés cerrar caja cuando corresponda.</h6>
+                              <p className="small mb-0 mt-1">
+                                <i className="bi bi-clock me-1"></i>
+                                <span className="text-secondary">{cuentaRegresiva2359}</span>
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {!cierreRegistrado && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary"
+                          onClick={() => setShowCierreModal(true)}
+                        >
+                          <i className="bi bi-lock me-2"></i>
+                          Cierre de caja
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1218,8 +1367,58 @@ export default function CajaPage() {
         </div>
       </div>
 
+      {/* Modal Cierre de caja */}
+      <div className={`modal fade ${showCierreModal ? "show" : ""}`} style={{ display: showCierreModal ? "block" : "none" }}>
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">
+                <i className="bi bi-lock me-2"></i>
+                Cierre de caja
+              </h5>
+              <button type="button" className="btn-close" onClick={() => setShowCierreModal(false)} disabled={isCerrando} aria-label="Cerrar"></button>
+            </div>
+            <div className="modal-body">
+              <p className="text-muted">
+                La caja debe quedar en <strong>cero</strong> (efectivo) antes del próximo día. Distribuí el dinero con los botones <strong>Transferir a Caja Chica</strong> y <strong>Enviar a Caja Concentradora</strong>.
+              </p>
+              <div className="alert alert-light border d-flex align-items-center gap-3">
+                <span className="text-muted">Saldo efectivo:</span>
+                <span className={`fw-bold fs-5 ${Math.abs(saldoParaCierre) < 0.01 ? "text-success" : "text-warning"}`}>
+                  ${saldoParaCierre.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              {Math.abs(saldoParaCierre) >= 0.01 && (
+                <p className="small text-warning mb-0">
+                  No se puede confirmar el cierre hasta que el saldo sea $0.
+                </p>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={confirmarCierreCaja}
+                disabled={isCerrando || Math.abs(saldoParaCierre) >= 0.01}
+              >
+                {isCerrando ? <i className="bi bi-arrow-clockwise spin me-2"></i> : null}
+                Confirmar cierre
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowCierreModal(false)}
+                disabled={isCerrando}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Overlay para modales */}
-      {(showIngresoModal || showTransferModal || showTransferConcentradoraModal) && (
+      {(showIngresoModal || showTransferModal || showTransferConcentradoraModal || showCierreModal) && (
         <div className="modal-backdrop fade show" style={{ display: "block" }}></div>
       )}
 

@@ -479,3 +479,5 @@ pony.orm.decompiling.DecompileError: Unsupported operation: TO_BOOL
 2026-03-08 19:03:21,222 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
 2026-03-08 19:10:19,473 [INFO] guapotrajes: Usuario autenticado correctamente
 2026-03-08 19:49:08,583 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-08 20:30:59,536 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-08 20:31:20,303 [INFO] guapotrajes: Usuario autenticado correctamente
