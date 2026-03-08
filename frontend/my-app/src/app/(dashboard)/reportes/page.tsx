@@ -862,12 +862,9 @@ export default function ReportesPage() {
             )
           : "";
 
-      const fechaCreacionDate =
-        ordenCompleta.fecha_creacion || contrato.fecha_creacion
-          ? new Date(ordenCompleta.fecha_creacion || contrato.fecha_creacion)
-          : new Date();
-
-      const dia = fechaCreacionDate.getDate();
+      // Fecha del contrato: al momento de generar el contrato de forma manual
+      const fechaContrato = new Date();
+      const dia = fechaContrato.getDate();
       const meses = [
         "enero",
         "febrero",
@@ -882,8 +879,13 @@ export default function ReportesPage() {
         "noviembre",
         "diciembre",
       ];
-      const mes = meses[fechaCreacionDate.getMonth()];
-      const año = fechaCreacionDate.getFullYear();
+      const mes = meses[fechaContrato.getMonth()];
+      const año = fechaContrato.getFullYear();
+
+      const fechaCreacionOrden =
+        ordenCompleta.fecha_creacion || contrato.fecha_creacion
+          ? new Date(ordenCompleta.fecha_creacion || contrato.fecha_creacion)
+          : new Date();
 
       // Calcular días de vigencia
       const fechaEventoDate =
@@ -896,7 +898,7 @@ export default function ReportesPage() {
       const diasVigencia = Math.max(
         1,
         Math.ceil(
-          (fechaEventoDate.getTime() - fechaCreacionDate.getTime()) /
+          (fechaEventoDate.getTime() - fechaCreacionOrden.getTime()) /
             (1000 * 60 * 60 * 24)
         )
       );
@@ -936,12 +938,7 @@ export default function ReportesPage() {
         maximumFractionDigits: 2,
       });
 
-      // Fecha de vencimiento del pagaré (30 días después)
-      const fechaVencimiento = new Date(fechaCreacionDate);
-      fechaVencimiento.setDate(fechaVencimiento.getDate() + 30);
-      const diaVencimiento = fechaVencimiento.getDate();
-      const mesVencimiento = meses[fechaVencimiento.getMonth()];
-      const añoVencimiento = fechaVencimiento.getFullYear();
+      // Fechas del pagaré: en blanco para rellenar manualmente (evitar vencimiento y ejecución)
 
       // Datos del firmante - deben quedar vacíos
       const firmante = "";
@@ -1029,6 +1026,10 @@ export default function ReportesPage() {
             display: inline-block;
             min-width: 120px;
         }
+        .pagare .underline.espacio-dia { min-width: 3.5em; }
+        .pagare .underline.espacio-mes { min-width: 11em; }
+        .pagare .underline.espacio-anio { min-width: 4.5em; }
+        .pagare .underline.espacio-firma { min-width: 20em; }
     </style>
 </head>
 <body>
@@ -1103,11 +1104,11 @@ export default function ReportesPage() {
             <h1>PAGARÉ</h1>
         </div>
         <div class="clausula">
-            La Rioja, <span class="underline">${dia}</span> de ${mes} de ${año}. Vence el <span class="underline">${diaVencimiento}</span> de <span class="underline">${mesVencimiento}</span> de ${añoVencimiento}. Pagaré $ <span class="underline">${valorPagareFormateado}</span> Sin Protesto (Art. 50 D. Ley 5965/63). A señor Schmira Ariel Fernando o a su orden. La cantidad de pesos <span class="underline">${valorPagareFormateado}</span>. Por igual valor recibido en prendas de vestir a su entera satisfacción. Pagadero en Santiago del Estero 83 de la Ciudad de La Rioja.
-            <div style="margin-top: 8px;">
-                <div style="margin-bottom: 3px;">Firmante: <span class="underline">${firmante}</span></div>
-                <div style="margin-bottom: 3px;">Aclaración: <span class="underline">${aclaracion}</span></div>
-                <div>Celular: <span class="underline">${celular}</span></div>
+            La Rioja, <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Vence el <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Pagaré $ <span class="underline">${valorPagareFormateado}</span> Sin Protesto (Art. 50 D. Ley 5965/63). A señor Schmira Ariel Fernando o a su orden. La cantidad de pesos <span class="underline">${valorPagareFormateado}</span>. Por igual valor recibido en prendas de vestir a su entera satisfacción. Pagadero en Santiago del Estero 83 de la Ciudad de La Rioja.
+            <div style="margin-top: 12px;">
+                <div style="margin-bottom: 6px;">Firmante: <span class="underline espacio-firma">${firmante}</span></div>
+                <div style="margin-bottom: 6px;">Aclaración: <span class="underline espacio-firma">${aclaracion}</span></div>
+                <div>Celular: <span class="underline espacio-firma">${celular}</span></div>
             </div>
         </div>
     </div>

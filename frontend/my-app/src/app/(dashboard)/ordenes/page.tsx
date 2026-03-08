@@ -518,11 +518,9 @@ function OrdenesTrabajoContent() {
           })
         : format(new Date(), "dd/MM/yyyy", { locale: es });
 
-      // Obtener día y mes de la fecha de creación
-      const fechaCreacionDate = orden.fecha_creacion
-        ? new Date(orden.fecha_creacion)
-        : new Date();
-      const dia = fechaCreacionDate.getDate();
+      // Fecha del contrato: al momento de generar el contrato de forma manual (no la de la orden)
+      const fechaContrato = new Date();
+      const dia = fechaContrato.getDate();
       const meses = [
         "enero",
         "febrero",
@@ -537,17 +535,18 @@ function OrdenesTrabajoContent() {
         "noviembre",
         "diciembre",
       ];
-      const mes = meses[fechaCreacionDate.getMonth()];
-      const año = fechaCreacionDate.getFullYear();
+      const mes = meses[fechaContrato.getMonth()];
+      const año = fechaContrato.getFullYear();
 
-      // Calcular días de vigencia (diferencia entre fecha evento y fecha creación)
+      // Calcular días de vigencia (diferencia entre fecha evento y fecha de creación de la orden)
+      const fechaCreacionOrden = orden.fecha_creacion ? new Date(orden.fecha_creacion) : new Date();
       const fechaEventoDate = orden.fecha_evento
         ? new Date(orden.fecha_evento + "T00:00:00")
         : new Date();
       const diasVigencia = Math.max(
         1,
         Math.ceil(
-          (fechaEventoDate.getTime() - fechaCreacionDate.getTime()) /
+          (fechaEventoDate.getTime() - fechaCreacionOrden.getTime()) /
             (1000 * 60 * 60 * 24)
         )
       );
@@ -580,12 +579,8 @@ function OrdenesTrabajoContent() {
         .map((prod: any, index: number) => `${index + 1}. ${prod.producto_descripcion || prod.producto_nombre || "Producto"}`)
         .join("<br>");
 
-      // Fecha de vencimiento del pagaré (30 días después de la fecha de creación)
-      const fechaVencimiento = new Date(fechaCreacionDate);
-      fechaVencimiento.setDate(fechaVencimiento.getDate() + 30);
-      const diaVencimiento = fechaVencimiento.getDate();
-      const mesVencimiento = meses[fechaVencimiento.getMonth()];
-      const añoVencimiento = fechaVencimiento.getFullYear();
+      // Fechas del pagaré: en blanco para rellenar manualmente (evitar vencimiento y ejecución)
+      // No se calculan diaVencimiento/mesVencimiento/añoVencimiento; se dejan vacíos en el HTML.
 
       // Datos del firmante - deben quedar vacíos
       const firmante = "";
@@ -770,6 +765,10 @@ function OrdenesTrabajoContent() {
             word-break: normal;
             line-height: inherit;
         }
+        .pagare .underline.espacio-dia { display: inline-block; min-width: 3.5em; }
+        .pagare .underline.espacio-mes { display: inline-block; min-width: 11em; }
+        .pagare .underline.espacio-anio { display: inline-block; min-width: 4.5em; }
+        .pagare .underline.espacio-firma { display: inline-block; min-width: 20em; }
     </style>
 </head>
 <body>
@@ -841,11 +840,11 @@ function OrdenesTrabajoContent() {
             <h1>PAGARÉ</h1>
         </div>
         <div class="clausula">
-            La Rioja, <span class="underline">${dia}</span> de ${mes} de ${año}. Vence el <span class="underline">${diaVencimiento}</span> de <span class="underline">${mesVencimiento}</span> de ${añoVencimiento}. Pagaré $ <span class="underline">${valorPagareFormateado}</span> Sin Protesto (Art. 50 D. Ley 5965/63). A señor Schmira Ariel Fernando o a su orden. La cantidad de pesos <span class="underline">${valorPagareFormateado}</span>. Por igual valor recibido en prendas de vestir a su entera satisfacción. Pagadero en Santiago del Estero 83 de la Ciudad de La Rioja.
-            <div style="margin-top: 8px;">
-                <div>Firmante: <span class="underline">${firmante}</span></div>
-                <div>Aclaración: <span class="underline">${aclaracion}</span></div>
-                <div>Celular: <span class="underline">${celular}</span></div>
+            La Rioja, <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Vence el <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Pagaré $ <span class="underline">${valorPagareFormateado}</span> Sin Protesto (Art. 50 D. Ley 5965/63). A señor Schmira Ariel Fernando o a su orden. La cantidad de pesos <span class="underline">${valorPagareFormateado}</span>. Por igual valor recibido en prendas de vestir a su entera satisfacción. Pagadero en Santiago del Estero 83 de la Ciudad de La Rioja.
+            <div style="margin-top: 12px;">
+                <div style="margin-bottom: 6px;">Firmante: <span class="underline espacio-firma">${firmante}</span></div>
+                <div style="margin-bottom: 6px;">Aclaración: <span class="underline espacio-firma">${aclaracion}</span></div>
+                <div>Celular: <span class="underline espacio-firma">${celular}</span></div>
             </div>
         </div>
     </div>
@@ -1597,6 +1596,10 @@ function OrdenesTrabajoContent() {
                       setMetodoPagoId(metodoId)
                       setSubmetodoPagoId(submetodoId)
                       setMetodoPago(metodoDisplay) // Para compatibilidad
+                      if (metodoDisplay && /efectivo/i.test(metodoDisplay.trim())) {
+                        const cuentaEfectivo = cuentasDestino.find(c => /efectivo/i.test((c.nombre_titular || "").trim()))
+                        if (cuentaEfectivo) setCuentaDestinoId(cuentaEfectivo.id)
+                      }
                     }}
                     required={true}
                     showError={!metodoPagoId}

@@ -1133,12 +1133,19 @@ export default function CajaPage() {
                 metodoPagoId={nuevoIngreso.metodoPagoId}
                 submetodoPagoId={nuevoIngreso.submetodoPagoId}
                 onMetodoChange={(metodoId, submetodoId, metodoDisplay) => {
-                  setNuevoIngreso(prev => ({
-                    ...prev,
-                    metodoPagoId: metodoId,
-                    submetodoPagoId: submetodoId,
-                    metodoPago: metodoDisplay
-                  }))
+                  setNuevoIngreso(prev => {
+                    const next = {
+                      ...prev,
+                      metodoPagoId: metodoId,
+                      submetodoPagoId: submetodoId,
+                      metodoPago: metodoDisplay
+                    };
+                    if (metodoDisplay && /efectivo/i.test(metodoDisplay.trim())) {
+                      const cuentaEfectivo = cuentasDestino.find(c => /efectivo/i.test((c.nombre_titular || "").trim()));
+                      if (cuentaEfectivo) next.cuentaDestinoId = cuentaEfectivo.id;
+                    }
+                    return next;
+                  });
                 }}
                 required={true}
                 showError={!nuevoIngreso.metodoPagoId}

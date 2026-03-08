@@ -698,6 +698,10 @@ export default function VentasPage() {
                 setMetodoPagoId(metodoId)
                 setSubmetodoPagoId(submetodoId)
                 setMetodoPago(metodoDisplay) // Para compatibilidad
+                if (metodoDisplay && /efectivo/i.test(metodoDisplay.trim())) {
+                  const cuentaEfectivo = cuentasDestino.find(c => /efectivo/i.test((c.nombre_titular || "").trim()))
+                  if (cuentaEfectivo) setCuentaDestinoId(cuentaEfectivo.id)
+                }
               }}
               required={true}
               showError={!metodoPagoId}
