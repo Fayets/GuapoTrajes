@@ -12,6 +12,14 @@ import {
 } from "@/components/ui/dialog";
 import { getApiBaseUrl } from "@/lib/api-config";
 
+/** Parsea "YYYY-MM-DD" en hora local para evitar que medianoche UTC se interprete como día anterior (ej. lunes → domingo en Argentina). */
+function parseDateLocal(s: string): Date {
+  const parts = s.split("-").map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return new Date(s);
+  const [y, m, d] = parts;
+  return new Date(y, m - 1, d);
+}
+
 type Cliente = { id: number; nombre: string; apellido: string };
 type Precliente = { id: number; nombre: string; apellido: string; celular: string };
 type Producto = {
@@ -150,15 +158,15 @@ export default function PresupuestoModal({
     fetchEventos();
   }, []);
 
-  // Agrega arriba del return, dentro del componente
+  // Agrega arriba del return, dentro del componente (parse local para evitar UTC → día anterior)
   const fechaEvento = formData.fechaEvento
-    ? new Date(formData.fechaEvento)
+    ? parseDateLocal(formData.fechaEvento)
     : null;
   const fechaRetiro = formData.fechaRetiro
-    ? new Date(formData.fechaRetiro)
+    ? parseDateLocal(formData.fechaRetiro)
     : null;
   const fechaDevolucion = formData.fechaDevolucion
-    ? new Date(formData.fechaDevolucion)
+    ? parseDateLocal(formData.fechaDevolucion)
     : null;
 
   const formatDate = (date: Date) => date.toISOString().split("T")[0];
@@ -181,17 +189,17 @@ export default function PresupuestoModal({
   }, [presupuestoSeleccionado, clienteSeleccionado, formData.preclienteId, preclienteNombreSeleccionado]);
 
   const handleFechaChange = (key: string, value: string) => {
-    const nuevaFecha = new Date(value);
+    const nuevaFecha = parseDateLocal(value);
     setFormData((prev: any) => {
       const nuevaData = { ...prev, [key]: value };
 
     if (key === "fechaEvento") {
-      if (prev.fechaRetiro && new Date(prev.fechaRetiro) > nuevaFecha) {
+      if (prev.fechaRetiro && parseDateLocal(prev.fechaRetiro) > nuevaFecha) {
         nuevaData.fechaRetiro = value;
       }
       if (
         prev.fechaDevolucion &&
-        new Date(prev.fechaDevolucion) <= nuevaFecha
+        parseDateLocal(prev.fechaDevolucion) <= nuevaFecha
       ) {
         const siguiente = new Date(nuevaFecha);
         siguiente.setDate(siguiente.getDate() + 1);
@@ -200,12 +208,12 @@ export default function PresupuestoModal({
     }
 
     if (key === "fechaRetiro") {
-      if (prev.fechaEvento && nuevaFecha > new Date(prev.fechaEvento)) {
+      if (prev.fechaEvento && nuevaFecha > parseDateLocal(prev.fechaEvento)) {
         nuevaData.fechaEvento = value;
       }
       if (
         prev.fechaDevolucion &&
-        nuevaFecha >= new Date(prev.fechaDevolucion)
+        nuevaFecha >= parseDateLocal(prev.fechaDevolucion)
       ) {
         const siguiente = new Date(nuevaFecha);
         siguiente.setDate(siguiente.getDate() + 1);
@@ -215,19 +223,19 @@ export default function PresupuestoModal({
 
     if (key === "fechaDevolucion") {
       const eventoOK =
-        prev.fechaEvento && nuevaFecha > new Date(prev.fechaEvento);
+        prev.fechaEvento && nuevaFecha > parseDateLocal(prev.fechaEvento);
       const retiroOK =
-        prev.fechaRetiro && nuevaFecha > new Date(prev.fechaRetiro);
+        prev.fechaRetiro && nuevaFecha > parseDateLocal(prev.fechaRetiro);
       if (!eventoOK || !retiroOK) {
-        const fev = prev.fechaEvento ? new Date(prev.fechaEvento) : null;
-        const fret = prev.fechaRetiro ? new Date(prev.fechaRetiro) : null;
+        const fev = prev.fechaEvento ? parseDateLocal(prev.fechaEvento) : null;
+        const fret = prev.fechaRetiro ? parseDateLocal(prev.fechaRetiro) : null;
         const base = fev && fret ? new Date(Math.max(+fev, +fret)) : fev || fret;
         if (base) {
           base.setDate(base.getDate() + 1);
           nuevaData.fechaDevolucion = formatDate(base);
         }
       } else {
-        // Validar que no sea domingo (0 = domingo en getDay())
+        // Validar que no sea domingo (0 = domingo en getDay()) — usando hora local
         const diaSemana = nuevaFecha.getDay();
         if (diaSemana === 0) {
           // Si es domingo, ajustar al lunes siguiente
@@ -515,8 +523,8 @@ export default function PresupuestoModal({
                         formatDate(
                           new Date(
                             Math.max(
-                              new Date(formData.fechaEvento).getTime(),
-                              new Date(formData.fechaRetiro).getTime()
+                              parseDateLocal(formData.fechaEvento).getTime(),
+                              parseDateLocal(formData.fechaRetiro).getTime()
                             ) + 86400000
                           )
                         )
