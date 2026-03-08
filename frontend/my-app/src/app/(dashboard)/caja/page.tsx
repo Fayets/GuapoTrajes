@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth-context";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -11,6 +11,8 @@ interface CajaMovimiento {
   origen: string;
   tipo: string;
   payment_method: string | null;
+  /** Tipo normalizado del backend (EFECTIVO, DEBITO, CREDITO, etc.) para las cajas */
+  payment_method_type?: string | null;
   categoria: string | null;
   monto: number;
   usuario_nombre: string;
@@ -85,6 +87,8 @@ export default function CajaPage() {
   
   // Estado para la conexión del backend
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  // Para mostrar el toast de carga solo una vez al entrar a la página
+  const loadToastShownRef = useRef(false);
 
   // Función de validación para formularios
   const isIngresoValid = (formData: { monto: string; concepto: string; metodoPagoId: number | null; categoria: string; cuentaDestinoId: number | null }) => {
@@ -178,7 +182,10 @@ export default function CajaPage() {
       if (data.movimientos && data.totales) {
         setMovimientos(data.movimientos);
         setTotales(data.totales);
-        toast.success(`Caja diaria cargada: ${data.movimientos.length} movimientos`);
+        if (!loadToastShownRef.current) {
+          loadToastShownRef.current = true;
+          toast.success(`Caja diaria cargada: ${data.movimientos.length} movimientos`);
+        }
       } else {
         throw new Error("Formato de respuesta inválido");
       }
@@ -494,9 +501,9 @@ export default function CajaPage() {
   };
 
   useEffect(() => {
+    if (!sucursalId) return;
     fetchCajaDiaria();
-    
-    // Cargar cuentas destino activas de la sucursal
+
     const cargarCuentasDestino = async () => {
       try {
         const res = await fetch(`${API_BASE}/cuentas-destino/sucursal/${sucursalId}?solo_activas=true`, {
@@ -509,15 +516,11 @@ export default function CajaPage() {
         console.error("Error al cargar cuentas destino:", error);
       }
     };
-    
     cargarCuentasDestino();
-    fetchCajaDiaria();
   }, [fecha, sucursalId, metodoFiltro, cuentaDestinoFiltro]);
 
-  // Cargar movimientos al montar el componente
   useEffect(() => {
     checkBackendConnection();
-    fetchCajaDiaria();
   }, []);
 
   useEffect(() => {
@@ -588,24 +591,27 @@ export default function CajaPage() {
     return metodo;
   };
 
-  // Función para calcular totales agrupados por método antiguo
-  // IMPORTANTE: se calcula en base a los movimientos visibles (ya filtrados por backend),
-  // para que el resumen coincida siempre con la tabla actual.
+  // Función para calcular totales agrupados por método antiguo.
+  // El panel superior solo suma INGRESOS; los egresos no se restan (no se descuentan del total).
   const calcularTotalesAgrupados = () => {
     const totalesAgrupados: { [key: string]: number } = {};
 
-    // Inicializar todos los métodos en cero
     metodosPago.forEach(m => {
       totalesAgrupados[m.value] = 0;
     });
 
-    // Agrupar totales a partir de los movimientos actualmente mostrados
     movimientos.forEach((mov) => {
-      const metodoEnum = mapearMetodoConfigurableAEnum(mov.payment_method || "");
+      if (mov.tipo !== "INGRESO") return;
+
+      let metodoEnum =
+        (mov.payment_method_type && metodosPago.some((m) => m.value === mov.payment_method_type))
+          ? mov.payment_method_type!
+          : mapearMetodoConfigurableAEnum(mov.payment_method || "");
+      if (metodoEnum === "TRANSFERENCIA") metodoEnum = "BILLETERA_VIRTUAL";
+
       if (!metodosPago.find((m) => m.value === metodoEnum)) return;
 
-      const factor = mov.tipo === "EGRESO" ? -1 : 1;
-      totalesAgrupados[metodoEnum] += mov.monto * factor;
+      totalesAgrupados[metodoEnum] += mov.monto;
     });
 
     return totalesAgrupados;
@@ -613,6 +619,8 @@ export default function CajaPage() {
 
   const getMetodoPagoLabel = (metodo: string | null) => {
     if (!metodo) return "N/A";
+    // Mostrar "Transferencia" cuando el backend envía TRANSFERENCIA
+    if (metodo === "TRANSFERENCIA") return "Transferencia";
     const metodoObj = metodosPago.find(m => m.value === metodo);
     return metodoObj?.label || metodo;
   };
@@ -625,7 +633,7 @@ export default function CajaPage() {
 
   const getMetodoPagoColor = (metodo: string | null) => {
     if (!metodo) return "bg-secondary";
-    
+    if (metodo === "TRANSFERENCIA") return "bg-warning"; // misma caja que Transferencia
     switch (metodo) {
       case "EFECTIVO":
         return "bg-success";
@@ -903,8 +911,8 @@ export default function CajaPage() {
                               </span>
                             </td>
                             <td>
-                              <span className={`badge ${getMetodoPagoColor(movimiento.payment_method)}`}>
-                                {getMetodoPagoLabel(movimiento.payment_method)}
+                              <span className={`badge ${getMetodoPagoColor(movimiento.payment_method_type || movimiento.payment_method)}`}>
+                                {movimiento.payment_method || "N/A"}
                               </span>
                             </td>
                             <td className="text-end fw-semibold">

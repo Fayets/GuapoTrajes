@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,6 +44,11 @@ interface Producto {
   inmovilizado: boolean;
   veces_alquilado?: number;
   sucursal?: { nombre: string };
+  destino_tipo?: string | null;
+  destino_nombre?: string | null;
+  destino_notas?: string | null;
+  destino_cliente_nombre?: string | null;
+  destino_cliente_celular?: string | null;
 }
 
 type EstadoKey = "SALON" | "CLIENTE" | "LAVANDERIA" | "MODISTA" | "VENDIDO";
@@ -87,6 +92,7 @@ export default function ProductosPage() {
   const [filtroTalleId, setFiltroTalleId] = useState<number | "">("");
   const [filtroTelaId, setFiltroTelaId] = useState<number | "">("");
   const [filtroColorId, setFiltroColorId] = useState<number | "">("");
+  const [productoExpandidoId, setProductoExpandidoId] = useState<number | null>(null);
 
   const API_BASE = getApiBaseUrl();
   const API_URL = `${API_BASE}/productos`;
@@ -560,14 +566,19 @@ export default function ProductosPage() {
                 </tr>
               ) : productosFiltrados.length > 0 ? (
                 productosFiltrados.map((producto) => (
-                  <tr key={producto.id}>
+                  <React.Fragment key={producto.id}>
+                    <tr
+                      onClick={() => setProductoExpandidoId((prev) => (prev === producto.id ? null : producto.id))}
+                      className={productoExpandidoId === producto.id ? "table-active" : ""}
+                      style={{ cursor: "pointer" }}
+                    >
                     <td className="fw-medium">{producto.codigo_barra}</td>
                     <td>{producto.descripcion}</td>
                     <td>{producto.linea_nombre ?? "-"}</td>
                     <td>{producto.talle_nombre ?? "-"}</td>
                     <td>{producto.color_nombre ?? "-"}</td>
                     <td>{producto.precio_alquiler_lista}</td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <select
                         value={producto.estado}
                         onChange={async (e) => {
@@ -615,7 +626,7 @@ export default function ProductosPage() {
                         ))}
                       </select>
                     </td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div className="d-flex flex-wrap gap-2">
                         <Button
                           className="btn btn-sm btn-light border"
@@ -660,6 +671,51 @@ export default function ProductosPage() {
                       </div>
                     </td>
                   </tr>
+                  {productoExpandidoId === producto.id && (
+                    <tr key={`${producto.id}-destino`}>
+                      <td colSpan={8} className="bg-light py-2 px-3 small">
+                        <div className="d-flex flex-column gap-1">
+                          <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <span className="text-muted">Información de devolución:</span>
+                            {producto.estado === "LAVANDERIA" && (
+                              <span>
+                                <i className="bi bi-droplet-half text-primary me-1"></i>
+                                <strong>Lavandería:</strong> {producto.destino_nombre ?? "—"}
+                              </span>
+                            )}
+                            {producto.estado === "MODISTA" && (
+                              <span>
+                                <i className="bi bi-scissors text-secondary me-1"></i>
+                                <strong>Modista:</strong> {producto.destino_nombre ?? "—"}
+                              </span>
+                            )}
+                            {(producto.estado !== "LAVANDERIA" && producto.estado !== "MODISTA") && (
+                              <span className="text-muted">Este producto no está en lavandería ni en modista.</span>
+                            )}
+                          </div>
+                          {(producto.estado === "LAVANDERIA" || producto.estado === "MODISTA") && (
+                            <>
+                              <div className="mt-1">
+                                <strong>Motivo:</strong>{" "}
+                                <span className="text-dark">{(producto.destino_notas ?? "").trim() || "—"}</span>
+                              </div>
+                              {((producto.destino_cliente_nombre ?? "").trim() || (producto.destino_cliente_celular ?? "").trim()) ? (
+                                <div className="mt-1 d-flex flex-wrap gap-3">
+                                  {(producto.destino_cliente_nombre ?? "").trim() ? (
+                                    <span><strong>Cliente:</strong> <span className="text-dark">{producto.destino_cliente_nombre}</span></span>
+                                  ) : null}
+                                  {(producto.destino_cliente_celular ?? "").trim() ? (
+                                    <span><strong>Teléfono:</strong> <span className="text-dark">{producto.destino_cliente_celular}</span></span>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
                 ))
               ) : (
                 <tr>

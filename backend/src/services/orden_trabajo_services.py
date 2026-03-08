@@ -978,14 +978,28 @@ class OrdenTrabajoServices:
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al eliminar orden de trabajo: {str(e)}")
 
+    def _obtener_cliente_orden(self, orden: "OrdenTrabajo") -> tuple:
+        """Obtiene nombre y celular del cliente/precliente de la orden."""
+        presupuesto = getattr(orden, "presupuesto", None)
+        if not presupuesto:
+            return None, None
+        if presupuesto.cliente:
+            return f"{presupuesto.cliente.nombre} {presupuesto.cliente.apellido}".strip(), presupuesto.cliente.celular or None
+        if presupuesto.precliente:
+            return f"{presupuesto.precliente.nombre} {presupuesto.precliente.apellido}".strip(), presupuesto.precliente.celular or None
+        return None, None
+
     def _aplicar_destino_productos(
         self,
         productos: list,
         destino: str,
         lavanderia_id: Optional[int],
         modista_id: Optional[int],
+        descripcion: Optional[str] = None,
+        cliente_nombre: Optional[str] = None,
+        cliente_celular: Optional[str] = None,
     ) -> None:
-        """Asigna cada producto al estado destino (SALON, LAVANDERIA o MODISTA)."""
+        """Asigna cada producto al estado destino (SALON, LAVANDERIA o MODISTA). Opcionalmente guarda descripcion y datos de cliente."""
         if destino == "LAVANDERIA" and not lavanderia_id:
             raise HTTPException(status_code=400, detail="Debe indicar lavanderia_id cuando destino es LAVANDERIA")
         if destino == "MODISTA" and not modista_id:
@@ -1004,6 +1018,9 @@ class OrdenTrabajoServices:
 
         estado_enum = getattr(EstadoProducto, destino, None) or EstadoProducto.SALON
         hoy = date.today()
+        notas = (descripcion or "").strip() or None
+        cli_nombre = (cliente_nombre or "").strip() or None
+        cli_celular = (cliente_celular or "").strip() or None
 
         for pr in productos:
             prod = getattr(pr, "producto", None)
@@ -1012,9 +1029,9 @@ class OrdenTrabajoServices:
             prod.estado = estado_enum
             prod.inmovilizado = False
             if destino == "LAVANDERIA" and lavanderia:
-                ProductoLavanderia(producto=prod, lavanderia=lavanderia, fecha_ingreso=hoy)
+                ProductoLavanderia(producto=prod, lavanderia=lavanderia, fecha_ingreso=hoy, notas=notas, cliente_nombre=cli_nombre, cliente_celular=cli_celular)
             elif destino == "MODISTA" and modista:
-                ProductoModista(producto=prod, modista=modista, fecha_ingreso=hoy)
+                ProductoModista(producto=prod, modista=modista, fecha_ingreso=hoy, notas=notas, cliente_nombre=cli_nombre, cliente_celular=cli_celular)
 
     def completar_devolucion(
         self,
@@ -1038,11 +1055,14 @@ class OrdenTrabajoServices:
                     )
 
                 productos_reservados = list(orden.productos_reservados)
+                cliente_nombre, cliente_celular = self._obtener_cliente_orden(orden)
                 self._aplicar_destino_productos(
                     productos_reservados,
                     destino,
                     lavanderia_id,
                     modista_id,
+                    cliente_nombre=cliente_nombre,
+                    cliente_celular=cliente_celular,
                 )
                 for producto_reservado in productos_reservados:
                     producto_reservado.delete()
@@ -1101,7 +1121,8 @@ class OrdenTrabajoServices:
 
                 # Productos reservados a devolver (pasar a destino y eliminar de la orden)
                 a_devolver = [productos_en_orden[pid] for pid in productos_ids]
-                self._aplicar_destino_productos(a_devolver, destino, lavanderia_id, modista_id)
+                cliente_nombre, cliente_celular = self._obtener_cliente_orden(orden)
+                self._aplicar_destino_productos(a_devolver, destino, lavanderia_id, modista_id, descripcion=descripcion, cliente_nombre=cliente_nombre, cliente_celular=cliente_celular)
 
                 # Agregar observaciones en cada ProductoReservado antes de borrar (opcional, para historial)
                 for pr in a_devolver:

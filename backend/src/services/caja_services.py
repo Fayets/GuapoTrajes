@@ -1,7 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from pony.orm import db_session, select, sum, count, flush
 from datetime import date, datetime
-from src.models import CajaMovimiento, Venta, Usuario, Sucursal, TipoMovimiento, MetodoPago, CuentaDestino
+from src.models import CajaMovimiento, Venta, Usuario, Sucursal, TipoMovimiento, MetodoPago, CuentaDestino, Presupuesto
 from fastapi import HTTPException
 from typing import List, Dict, Optional
 from src.services.caja_chica_services import CajaChicaService
@@ -339,23 +339,23 @@ class CajaServices:
                 if not metodo:
                     return None
                 metodo_lower = metodo.lower()
-                
+                # IMPORTANTE: comprobar "crédito" ANTES que "débito" para no clasificar mal
+                # ej. "Tarjeta Crédito" o "Débito - Crédito" deben ser CREDITO
                 if "efectivo" in metodo_lower:
                     return "EFECTIVO"
-                if "debito" in metodo_lower or "débito" in metodo_lower:
-                    return "DEBITO"
                 if "credito" in metodo_lower or "crédito" in metodo_lower:
                     return "CREDITO"
+                if "debito" in metodo_lower or "débito" in metodo_lower:
+                    return "DEBITO"
                 if (
-                    "billetera" in metodo_lower 
-                    or "mercado pago" in metodo_lower 
-                    or "naranja" in metodo_lower 
+                    "billetera" in metodo_lower
+                    or "mercado pago" in metodo_lower
+                    or "naranja" in metodo_lower
                     or "uala" in metodo_lower
                 ):
                     return "BILLETERA_VIRTUAL"
                 if "transferencia" in metodo_lower:
                     return "TRANSFERENCIA"
-                
                 # Si no coincide, devolver el original (para compatibilidad)
                 return metodo
             
@@ -408,6 +408,20 @@ class CajaServices:
                     else:
                         metodo_pago_display = str(cm.payment_method)
                 
+                # Tipo normalizado para las cajas (EFECTIVO, DEBITO, CREDITO, etc.): priorizar submetodo
+                payment_method_type = None
+                if cm.submetodo_pago and cm.submetodo_pago.nombre:
+                    sub_lower = cm.submetodo_pago.nombre.lower()
+                    if "credito" in sub_lower or "crédito" in sub_lower:
+                        payment_method_type = "CREDITO"
+                    elif "debito" in sub_lower or "débito" in sub_lower:
+                        payment_method_type = "DEBITO"
+                    # Marca de tarjeta (Visa, Master, etc.) sin "débito" explícito → Crédito
+                    elif any(x in sub_lower for x in ("visa", "master", "amex", "naranja", "cabal")):
+                        payment_method_type = "CREDITO"
+                if not payment_method_type:
+                    payment_method_type = _mapear_metodo_a_enum(metodo_pago_display) or "SIN_METODO"
+                
                 # Usar la categoría del modelo si existe, sino determinar automáticamente
                 categoria = cm.categoria if cm.categoria else self._determinar_categoria_automatica(cm.tipo, cm.origen)
                 
@@ -415,13 +429,17 @@ class CajaServices:
                 cuenta_destino_nombre = None
                 if cm.cuenta_destino:
                     cuenta_destino_nombre = cm.cuenta_destino.nombre_titular
+
+                # Origen para mostrar: si es presupuesto/orden, incluir cliente o precliente
+                origen_display = self._origen_con_cliente(cm.origen) if cm.origen else (cm.origen or "")
                 
                 movimientos.append({
                     "id": cm.id,
                     "hora": cm.fecha_hora.strftime("%H:%M"),
-                    "origen": cm.origen,
+                    "origen": origen_display,
                     "tipo": cm.tipo,
                     "payment_method": metodo_pago_display or "SIN_METODO",
+                    "payment_method_type": payment_method_type,
                     "categoria": categoria,
                     "monto": cm.monto,
                     "usuario_nombre": f"{cm.usuario.nombre} {cm.usuario.apellido}",
@@ -640,10 +658,11 @@ class CajaServices:
                     else:
                         metodo_pago_display = str(cm.payment_method)
                 
+                origen_display = self._origen_con_cliente(cm.origen) if cm.origen else (cm.origen or "")
                 movimientos.append({
                     "id": cm.id,
                     "hora": cm.fecha_hora.strftime("%H:%M"),
-                    "origen": cm.origen,
+                    "origen": origen_display,
                     "tipo": cm.tipo,
                     "payment_method": metodo_pago_display,
                     "monto": cm.monto,
@@ -667,6 +686,33 @@ class CajaServices:
             return f"Pago adicional - Presupuesto {numero_presupuesto}"
         else:
             return origen
+
+    def _nombre_cliente_presupuesto(self, presupuesto) -> str:
+        """Nombre del cliente o precliente del presupuesto."""
+        if not presupuesto:
+            return ""
+        if presupuesto.cliente:
+            return f"{presupuesto.cliente.apellido} {presupuesto.cliente.nombre}".strip()
+        if presupuesto.precliente:
+            return f"{presupuesto.precliente.apellido} {presupuesto.precliente.nombre}".strip()
+        return ""
+
+    def _origen_con_cliente(self, origen: str) -> str:
+        """Si el origen es SEÑA_PRESUPUESTO o PAGO_ADICIONAL_ORDEN, devuelve 'número - Nombre cliente'. Sino, el origen tal cual."""
+        if not origen or not isinstance(origen, str):
+            return origen or ""
+        numero = None
+        if origen.startswith("SEÑA_PRESUPUESTO:"):
+            numero = origen.replace("SEÑA_PRESUPUESTO:", "").strip()
+        elif origen.startswith("PAGO_ADICIONAL_ORDEN:"):
+            numero = origen.replace("PAGO_ADICIONAL_ORDEN:", "").strip()
+        if not numero:
+            return origen
+        presupuesto = Presupuesto.get(numero=numero)
+        if not presupuesto:
+            return origen
+        nombre = self._nombre_cliente_presupuesto(presupuesto)
+        return f"{numero} - {nombre}" if nombre else numero
 
     @db_session
     def buscar_movimientos_por_texto(self, texto_busqueda: str, sucursal_id: int, 
@@ -734,19 +780,20 @@ class CajaServices:
                     else:
                         metodo_pago_display = str(cm.payment_method)
                 
+                origen_display = self._origen_con_cliente(cm.origen) if cm.origen else (cm.origen or "")
                 movimientos.append({
                     "id": cm.id,
                     "fecha_hora": cm.fecha_hora,
                     "fecha": cm.fecha_hora.strftime("%Y-%m-%d"),
                     "hora": cm.fecha_hora.strftime("%H:%M"),
-                    "origen": cm.origen,
+                    "origen": origen_display,
                     "tipo": cm.tipo,
                     "payment_method": metodo_pago_display,
                     "monto": cm.monto,
                     "usuario_nombre": f"{cm.usuario.nombre} {cm.usuario.apellido}",
                     "sucursal_nombre": cm.sucursal.nombre,
                     "cuenta_destino_nombre": cuenta_destino_nombre,
-                    "descripcion": self._get_descripcion_movimiento_presupuesto(cm.origen) if cm.origen.startswith(("SEÑA_PRESUPUESTO:", "PAGO_ADICIONAL_ORDEN:")) else cm.origen
+                    "descripcion": self._get_descripcion_movimiento_presupuesto(cm.origen) if cm.origen and cm.origen.startswith(("SEÑA_PRESUPUESTO:", "PAGO_ADICIONAL_ORDEN:")) else (cm.origen or "")
                 })
             
             return movimientos

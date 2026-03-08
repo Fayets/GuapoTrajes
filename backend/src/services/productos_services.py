@@ -75,6 +75,11 @@ def _row_to_producto_dict(row) -> dict:
         "tela_nombre": row[23],
         "color_id": row[24],
         "color_nombre": row[25],
+        "destino_tipo": None,
+        "destino_nombre": None,
+        "destino_notas": None,
+        "destino_cliente_nombre": None,
+        "destino_cliente_celular": None,
     }
 
 
@@ -323,6 +328,39 @@ class ProductoServices:
                 rows = cur.fetchall()
                 cur.close()
                 result = [_row_to_producto_dict(row) for row in rows]
+                # Enriquecer con destino (lavandería/modista) cargando por producto para evitar problemas de sesión
+                for r in result:
+                    estado = (r.get("estado") or "").strip().upper()
+                    if estado == "LAVANDERIA":
+                        r["destino_tipo"] = "LAVANDERIA"
+                        p = models.Producto.get(id=r["id"])
+                        if p:
+                            activos = sorted(
+                                [pl for pl in p.productos_lavanderias if pl.fecha_salida is None],
+                                key=lambda pl: (pl.fecha_ingreso, pl.id),
+                                reverse=True,
+                            )
+                            if activos:
+                                pl = activos[0]
+                                r["destino_nombre"] = pl.lavanderia.nombre
+                                r["destino_notas"] = getattr(pl, "notas", None)
+                                r["destino_cliente_nombre"] = getattr(pl, "cliente_nombre", None)
+                                r["destino_cliente_celular"] = getattr(pl, "cliente_celular", None)
+                    elif estado == "MODISTA":
+                        r["destino_tipo"] = "MODISTA"
+                        p = models.Producto.get(id=r["id"])
+                        if p:
+                            activos = sorted(
+                                [pm for pm in p.productos_modistas if pm.fecha_salida is None],
+                                key=lambda pm: (pm.fecha_ingreso, pm.id),
+                                reverse=True,
+                            )
+                            if activos:
+                                pm = activos[0]
+                                r["destino_nombre"] = pm.modista.nombre
+                                r["destino_notas"] = getattr(pm, "notas", None)
+                                r["destino_cliente_nombre"] = getattr(pm, "cliente_nombre", None)
+                                r["destino_cliente_celular"] = getattr(pm, "cliente_celular", None)
                 return result, total
 
             except HTTPException:

@@ -438,3 +438,44 @@ Traceback (most recent call last):
 pony.orm.decompiling.DecompileError: Unsupported operation: TO_BOOL
 2026-03-06 18:20:58,388 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
 2026-03-06 18:20:58,498 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:23:20,212 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:23:20,339 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:23:23,460 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-08 18:27:44,038 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-08 18:38:02,108 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:38:02,216 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:38:14,668 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:38:14,773 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:40:53,926 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-08 18:42:47,006 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:42:47,114 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:43:13,183 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:43:13,294 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:43:13,857 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-08 18:43:14,193 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-08 18:47:25,808 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:47:25,915 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:47:38,428 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:47:38,537 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:47:59,821 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-08 18:49:56,558 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:49:56,866 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:57:04,967 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:57:05,076 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 18:57:35,854 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 18:57:35,970 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 19:00:59,344 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 19:00:59,446 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 19:01:12,028 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 19:01:12,130 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 19:01:24,868 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 19:01:24,972 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 19:01:52,620 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 19:01:52,727 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 19:02:05,576 [INFO] src.migrations: Columna contrato_generado_at OK en tabla 'OrdenesTrabajo'
+2026-03-08 19:02:05,786 [INFO] src.migrations: Columna 'notas' OK en tabla 'ProductosLavanderias'
+2026-03-08 19:02:05,894 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 19:03:21,117 [INFO] src.migrations: Columna 'notas' OK en tabla 'ProductosLavanderias'
+2026-03-08 19:03:21,222 [INFO] guapotrajes: Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe
+2026-03-08 19:10:19,473 [INFO] guapotrajes: Usuario autenticado correctamente
+2026-03-08 19:49:08,583 [INFO] guapotrajes: Usuario autenticado correctamente

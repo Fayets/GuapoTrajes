@@ -816,14 +816,13 @@ export default function DevolucionesPage() {
                     <th>Cliente</th>
                     <th>Fecha Evento</th>
                     <th>Fecha Devolución</th>
-                    <th>Estado</th>
                     <th className="text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ordenesAbiertasFiltradas.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center text-muted py-4">
+                      <td colSpan={6} className="text-center text-muted py-4">
                         <i className="bi bi-search me-2"></i>
                         No se encontraron órdenes que coincidan con la búsqueda
                       </td>
@@ -854,9 +853,6 @@ export default function DevolucionesPage() {
                         <td>{orden.cliente_nombre}</td>
                         <td>{fechaEventoFormateada}</td>
                         <td>{fechaDevolucionFormateada}</td>
-                        <td>
-                          <span className="badge bg-info">{orden.estado}</span>
-                        </td>
                         <td className="text-center">
                           <div className="btn-group" role="group">
                             <button

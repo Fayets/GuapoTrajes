@@ -26,7 +26,7 @@ from src.controllers.logs_controller import router as logs_router
 from src.controllers.usuario_controller import router as usuario_router
 from src.controllers.health_controller import router as health_router
 from src.controllers.config_productos_controller import router as config_productos_router
-from src.migrations import apply_schema_migrations, ensure_contrato_generado_at_column
+from src.migrations import apply_schema_migrations, ensure_contrato_generado_at_column, ensure_notas_productos_lavanderias, ensure_cliente_columnas_lavanderia_modista
 from src import schemas, models
 from src.services.usuario_services import UsuariosServices
 from pony.orm import db_session
@@ -65,10 +65,10 @@ def ensure_initial_super_admin():
         
         if existing_by_username or existing_by_email:
             if existing_by_username and existing_by_username.rol == models.Roles.SUPER_ADMIN:
-                logger.info("Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe")
+                logger.debug("Usuario SUPER_ADMIN 'DesarrolloGuapo' ya existe")
                 return
             if existing_by_email and existing_by_email.rol == models.Roles.SUPER_ADMIN:
-                logger.info("Usuario SUPER_ADMIN con email 'desarrollo@guapotrajes.com' ya existe")
+                logger.debug("Usuario SUPER_ADMIN con email 'desarrollo@guapotrajes.com' ya existe")
                 return
 
         # Determinar sucursal
@@ -101,7 +101,7 @@ def ensure_initial_super_admin():
         )
         try:
             servicio.crear_usuario(user_data)
-            logger.info(
+            logger.debug(
                 "Usuario SUPER_ADMIN inicial creado",
                 extra={"username": "DesarrolloGuapo", "sucursal_id": sucursal.id},
             )
@@ -121,6 +121,10 @@ db.generate_mapping(create_tables=True, check_tables=False)
 
 # Asegurar columna contrato_generado_at (necesaria para presupuestos/órdenes/contratos)
 ensure_contrato_generado_at_column()
+# Asegurar columna notas en ProductosLavanderias (motivo de devolución)
+ensure_notas_productos_lavanderias()
+# Asegurar columnas cliente_nombre y cliente_celular en lavandería/modista
+ensure_cliente_columnas_lavanderia_modista()
 
 # Crear SUPER_ADMIN inicial si corresponde
 ensure_initial_super_admin()

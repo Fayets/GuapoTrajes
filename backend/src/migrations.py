@@ -23,14 +23,62 @@ def ensure_contrato_generado_at_column() -> None:
         try:
             with db_session:
                 db.execute(f'ALTER TABLE "{name}" ADD COLUMN IF NOT EXISTS "contrato_generado_at" TIMESTAMP')
-            logger.info("Columna contrato_generado_at OK en tabla '%s'", name)
+            logger.debug("Columna contrato_generado_at OK en tabla '%s'", name)
             return
         except Exception as e:
             err = str(e).lower()
             if "does not exist" in err or "no existe" in err:
                 continue
-            logger.warning("Error añadiendo contrato_generado_at en '%s': %s", name, e)
-    logger.warning("No se pudo añadir contrato_generado_at (probados: %s, %s)", table_name, table_name.lower())
+            logger.debug("Error añadiendo contrato_generado_at en '%s': %s", name, e)
+    logger.debug("No se pudo añadir contrato_generado_at (probados: %s, %s)", table_name, table_name.lower())
+
+
+def ensure_notas_productos_lavanderias() -> None:
+    """Asegura que la tabla de productos en lavandería tenga columna notas (motivo de devolución)."""
+    if not _is_postgres():
+        return
+    for name in ("ProductosLavanderias", "productoslavanderias"):
+        try:
+            with db_session:
+                db.execute(f'ALTER TABLE "{name}" ADD COLUMN IF NOT EXISTS "notas" TEXT')
+            logger.debug("Columna 'notas' OK en tabla '%s'", name)
+            return
+        except Exception as e:
+            err = str(e).lower()
+            if "does not exist" in err or "no existe" in err or "no exist" in err:
+                continue
+            logger.debug("Error añadiendo notas en '%s': %s", name, e)
+    logger.debug("No se pudo añadir columna notas en tabla de lavandería (probados: ProductosLavanderias, productoslavanderias)")
+
+
+def ensure_cliente_columnas_lavanderia_modista() -> None:
+    """Asegura que las tablas de lavandería y modista tengan columnas cliente_nombre y cliente_celular."""
+    if not _is_postgres():
+        return
+    for table in ("ProductosLavanderias", "productoslavanderias"):
+        try:
+            with db_session:
+                db.execute(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "cliente_nombre" TEXT')
+                db.execute(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT')
+            logger.debug("Columnas cliente_nombre/cliente_celular OK en tabla '%s'", table)
+            break
+        except Exception as e:
+            err = str(e).lower()
+            if "does not exist" in err or "no existe" in err or "no exist" in err:
+                continue
+            logger.debug("Error en tabla lavandería '%s': %s", table, e)
+    for table in ("ProductosModistas", "productosmodistas"):
+        try:
+            with db_session:
+                db.execute(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "cliente_nombre" TEXT')
+                db.execute(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT')
+            logger.debug("Columnas cliente_nombre/cliente_celular OK en tabla '%s'", table)
+            break
+        except Exception as e:
+            err = str(e).lower()
+            if "does not exist" in err or "no existe" in err or "no exist" in err:
+                continue
+            logger.debug("Error en tabla modista '%s': %s", table, e)
 
 
 def apply_schema_migrations() -> None:
@@ -123,6 +171,20 @@ def apply_schema_migrations() -> None:
                 'ALTER TABLE "ProductoTalles" ADD COLUMN IF NOT EXISTS "codigo" VARCHAR(2)',
                 'ALTER TABLE "ProductoTelas" ADD COLUMN IF NOT EXISTS "codigo" VARCHAR(2)',
                 'ALTER TABLE "ProductoColores" ADD COLUMN IF NOT EXISTS "codigo" VARCHAR(2)',
+                # Motivo en devoluciones a lavandería/modista (probamos ambos nombres por si PostgreSQL tiene la tabla en minúsculas)
+                'ALTER TABLE "ProductosLavanderias" ADD COLUMN IF NOT EXISTS "notas" TEXT',
+                'ALTER TABLE "productoslavanderias" ADD COLUMN IF NOT EXISTS "notas" TEXT',
+                'ALTER TABLE "ProductosModistas" ADD COLUMN IF NOT EXISTS "notas" TEXT',
+                'ALTER TABLE "productosmodistas" ADD COLUMN IF NOT EXISTS "notas" TEXT',
+                # Cliente en devoluciones (lavandería/modista; probar ambos nombres de tabla)
+                'ALTER TABLE "ProductosLavanderias" ADD COLUMN IF NOT EXISTS "cliente_nombre" TEXT',
+                'ALTER TABLE "ProductosLavanderias" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT',
+                'ALTER TABLE "productoslavanderias" ADD COLUMN IF NOT EXISTS "cliente_nombre" TEXT',
+                'ALTER TABLE "productoslavanderias" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT',
+                'ALTER TABLE "ProductosModistas" ADD COLUMN IF NOT EXISTS "cliente_nombre" TEXT',
+                'ALTER TABLE "ProductosModistas" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT',
+                'ALTER TABLE "productosmodistas" ADD COLUMN IF NOT EXISTS "cliente_nombre" TEXT',
+                'ALTER TABLE "productosmodistas" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT',
             ]
 
             for statement in alter_statements:

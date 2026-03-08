@@ -251,6 +251,11 @@ class ProductResponse(ProductBase):
     talle_nombre: Optional[str] = None
     tela_nombre: Optional[str] = None
     color_nombre: Optional[str] = None
+    destino_tipo: Optional[str] = None
+    destino_nombre: Optional[str] = None
+    destino_notas: Optional[str] = None
+    destino_cliente_nombre: Optional[str] = None
+    destino_cliente_celular: Optional[str] = None
 
 class ProductUpdateResponse(BaseModel):
     message: str

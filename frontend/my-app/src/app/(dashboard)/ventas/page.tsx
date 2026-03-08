@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -128,6 +128,8 @@ export default function VentasPage() {
     }>
   >([]);
 
+  const loadToastShownRef = useRef(false);
+
   const API_BASE = getApiBaseUrl();
   const API_URL = `${API_BASE}/ventas`;
 
@@ -167,7 +169,10 @@ export default function VentasPage() {
           cuenta_destino_nombre: v.cuenta_destino_nombre ?? null
         }));
         setVentas(ventasNormalizadas);
-        toast.success("Ventas cargadas correctamente");
+        if (!loadToastShownRef.current) {
+          loadToastShownRef.current = true;
+          toast.success("Ventas cargadas correctamente");
+        }
       } else {
         throw new Error("Formato inesperado de respuesta");
       }

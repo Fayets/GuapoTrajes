@@ -174,6 +174,8 @@ class ProductoModista(db.Entity):
     fecha_ingreso = Required(date, default=lambda: date.today())
     fecha_salida = Optional(date)
     notas = Optional(str)
+    cliente_nombre = Optional(str)
+    cliente_celular = Optional(str)
     _table_ = "ProductosModistas"
 
 class ProductoLavanderia(db.Entity):
@@ -183,6 +185,8 @@ class ProductoLavanderia(db.Entity):
     fecha_ingreso = Required(date, default=lambda: date.today())
     fecha_salida = Optional(date)
     notas = Optional(str)
+    cliente_nombre = Optional(str)
+    cliente_celular = Optional(str)
     _table_ = "ProductosLavanderias"
 
 #Presupuestos
