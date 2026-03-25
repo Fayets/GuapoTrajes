@@ -101,8 +101,8 @@ class OrdenTrabajoServices:
                 # Debug: verificar la fecha antes de guardar
                 print(f"🔍 DEBUG - Presupuesto fecha_evento: {presupuesto.fecha_evento} (tipo: {type(presupuesto.fecha_evento)})")
                 print(f"🔍 DEBUG - Orden fecha_evento a guardar: {fecha_evento_orden} (tipo: {type(fecha_evento_orden)})")
-                
-                fecha_bloqueo = fecha_evento_orden - timedelta(days=5)
+
+                fecha_retiro_reserva = presupuesto.fecha_retiro or presupuesto.fecha_evento
 
                 orden = OrdenTrabajo(
                     presupuesto=presupuesto,
@@ -120,6 +120,7 @@ class OrdenTrabajoServices:
                     extra_discount_applied_by=presupuesto.extra_discount_applied_by,
                     extra_discount_created_at=presupuesto.extra_discount_created_at,
                 )
+                flush()
 
                 # Crear movimiento en cuenta corriente solo si el presupuesto tiene cliente (no precliente)
                 if presupuesto.cliente:
@@ -153,7 +154,7 @@ class OrdenTrabajoServices:
                 # Reservar productos
                 for item in presupuesto.items:
                     producto = item.producto
-                    fecha_bloqueo = presupuesto.fecha_evento - timedelta(days=5)
+                    fecha_bloqueo = fecha_retiro_reserva - timedelta(days=5)
 
                     if producto.estado in ("lavanderia", "alquilado"):
                         estado = "no disponible"
@@ -872,6 +873,10 @@ class OrdenTrabajoServices:
                 if not orden.presupuesto.cliente.dni or not orden.presupuesto.cliente.direccion:
                     raise HTTPException(status_code=400, detail="El cliente debe tener DNI y Dirección para generar el contrato.")
                 orden.contrato_generado_at = datetime.now()
+                for pr in list(orden.productos_reservados):
+                    prod = getattr(pr, "producto", None)
+                    if prod:
+                        prod.estado = EstadoProducto.CLIENTE
                 flush()
                 return {
                     "message": "Contrato registrado correctamente",

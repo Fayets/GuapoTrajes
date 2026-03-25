@@ -1,0 +1,4 @@
+# Complemento para CI/local: tras instalar dependencias de la app (ver README).
+# Si `psycopg2` falla al compilar: pip install psycopg2-binary
+pytest>=8.0
+httpx>=0.27
