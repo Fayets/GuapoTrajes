@@ -17,6 +17,10 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/context/auth-context";
 import { MetodoPagoSelector } from "@/components/metodo-pago-selector";
+import {
+  GUAPO_PENDING_BARCODE_KEY,
+  GUAPO_BARCODE_SCAN_EVENT,
+} from "@/lib/barcode-scan";
 
 // Tipos
 
@@ -195,6 +199,10 @@ export default function PresupuestosPage() {
     cliente: string;
   } | null>(null);
 
+  const nuevoPresupuestoRef = useRef<() => void>(() => {});
+  const barcodeProcessLockRef = useRef(false);
+  const cargarEscaneoRef = useRef<((code: string) => Promise<void>) | null>(null);
+
   const API_BASE = getApiBaseUrl();
 
   useEffect(() => {
@@ -209,6 +217,39 @@ export default function PresupuestosPage() {
       preclienteIdRef.current = Number(formData.preclienteId);
     }
   }, [formData.preclienteId]);
+
+  useEffect(() => {
+    let code = "";
+    try {
+      code = sessionStorage.getItem(GUAPO_PENDING_BARCODE_KEY) || "";
+    } catch {
+      /* ignore */
+    }
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    try {
+      sessionStorage.removeItem(GUAPO_PENDING_BARCODE_KEY);
+    } catch {
+      /* ignore */
+    }
+    void cargarEscaneoRef.current?.(trimmed);
+  }, []);
+
+  useEffect(() => {
+    const onScan = (ev: Event) => {
+      const ce = ev as CustomEvent<{ code?: string }>;
+      const c = ce.detail?.code;
+      if (typeof c !== "string" || !c.trim()) return;
+      try {
+        sessionStorage.removeItem(GUAPO_PENDING_BARCODE_KEY);
+      } catch {
+        /* ignore */
+      }
+      void cargarEscaneoRef.current?.(c.trim());
+    };
+    window.addEventListener(GUAPO_BARCODE_SCAN_EVENT, onScan);
+    return () => window.removeEventListener(GUAPO_BARCODE_SCAN_EVENT, onScan);
+  }, []);
 
   // Nombre para el resumen: fuente única clienteOPreclienteSeleccionado o presupuesto en vista
   const resumenClienteNombre =
@@ -241,7 +282,7 @@ export default function PresupuestosPage() {
   const fetchProductos = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/productos/all`, {
+      const res = await fetch(`${API_BASE}/productos/all?page=1&size=200`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -252,7 +293,6 @@ export default function PresupuestosPage() {
       if (!res.ok) throw new Error("Error al obtener productos");
 
       const data = await res.json();
-      console.log("Productos cargados:", data);
       setProductos(data);
     } catch (error) {
       console.error("Error fetching productos:", error);
@@ -470,11 +510,68 @@ export default function PresupuestosPage() {
     setModoClientePrecliente("cliente");
     setPreclienteForm({ nombre: "", apellido: "", telefono: "" });
     setItems([]);
+    setProductoFiltro("");
+    setNuevoItem({ productoId: "", cantidad: 1, porcentaje: "" });
     setTotalConDescuento(null);
     setPorcentajeDescuento(null);
     setShowModal(true);
     fetchPreclientes();
   };
+
+  nuevoPresupuestoRef.current = nuevoPresupuesto;
+
+  const mapApiToProducto = (p: Record<string, unknown>): Producto => ({
+    id: Number(p.id),
+    descripcion: String(p.descripcion ?? ""),
+    codigo_barra: String(p.codigo_barra ?? ""),
+    precio_alquiler_efectivo: Number(p.precio_alquiler_efectivo ?? 0),
+    inmovilizado: Boolean(p.inmovilizado),
+    estado: p.estado != null ? String(p.estado) : undefined,
+  });
+
+  const cargarPresupuestoDesdeEscaneo = async (rawCode: string) => {
+    const code = rawCode.trim();
+    if (!code || barcodeProcessLockRef.current) return;
+    barcodeProcessLockRef.current = true;
+    try {
+      nuevoPresupuestoRef.current();
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `${API_BASE}/productos/get/${encodeURIComponent(code)}`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!res.ok) {
+        toast.error("Código no encontrado.");
+        return;
+      }
+      const p = (await res.json()) as Record<string, unknown>;
+      const producto = mapApiToProducto(p);
+      setProductos((prev) =>
+        prev.some((x) => x.id === producto.id) ? prev : [...prev, producto]
+      );
+      setProductoFiltro(producto.codigo_barra || producto.descripcion);
+      setNuevoItem((prev) => ({
+        ...prev,
+        productoId: String(producto.id),
+        cantidad: prev.cantidad > 0 ? prev.cantidad : 1,
+      }));
+      toast.success(
+        "Producto cargado; completá cliente y fechas para agregarlo a la lista."
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("No se pudo cargar el producto escaneado.");
+    } finally {
+      barcodeProcessLockRef.current = false;
+    }
+  };
+
+  cargarEscaneoRef.current = cargarPresupuestoDesdeEscaneo;
 
   const guardarPresupuesto = async () => {
     const sel = clienteOPreclienteSeleccionado;
