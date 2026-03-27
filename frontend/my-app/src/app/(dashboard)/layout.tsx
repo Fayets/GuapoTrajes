@@ -5,14 +5,11 @@ import { Sidebar } from "@/components/ui/sidebar"
 import { useEffect, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { useBarcodeScanToPresupuestos } from "@/hooks/use-barcode-scan"
-
 const SIDEBAR_BREAKPOINT = 992
 
 export default function DashboardPage({ children }: { children: ReactNode }) {
   const { token, loading: authLoading } = useAuth()
   const router = useRouter()
-  useBarcodeScanToPresupuestos()
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)

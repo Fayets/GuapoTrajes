@@ -4,6 +4,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getApiBaseUrl } from "@/lib/api-config";
+import { clearScanQueue } from "@/lib/scan-queue";
 
 type Rol = "ADMIN" | "EMPLEADO" | "SUPER_ADMIN";
 type Me = {
@@ -74,6 +75,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } catch {
         // token inválido/expirado
         localStorage.removeItem("token");
+        clearScanQueue();
         setToken(null);
         setMe(null);
       } finally {
@@ -107,6 +109,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = () => {
     localStorage.removeItem("token");
+    clearScanQueue();
     setToken(null);
     setMe(null);
     router.push("/login");

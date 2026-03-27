@@ -1,11 +1,3 @@
-/** Clave en sessionStorage para código pendiente (navegación a presupuestos). */
-export const GUAPO_PENDING_BARCODE_KEY = "guapo_pending_barcode";
-
-/** Nombre del evento cuando se leyó un código (misma ruta /presupuestos sin remount). */
-export const GUAPO_BARCODE_SCAN_EVENT = "guapo:barcode-scan";
-
-export type GuapoBarcodeScanDetail = { code: string };
-
 export function isPlausibleProductBarcode(code: string): boolean {
   const t = code.trim();
   if (t.length < 6 || t.length > 48) return false;

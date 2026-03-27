@@ -311,9 +311,13 @@ export default function ProductosPage() {
             {
               format: "CODE128",
               lineColor: "#000",
-              width: 2,
-              height: 80,
+              background: "#ffffff",
+              width: 1.15,
+              height: 30,
+              margin: 0,
               displayValue: true,
+              fontSize: 7,
+              textMargin: 1,
             }
           );
         }
@@ -767,25 +771,27 @@ export default function ProductosPage() {
       <Dialog open={isModalEtiquetaOpen} onOpenChange={setIsModalEtiquetaOpen}>
         <DialogContent className="sm:max-w-md text-center">
           <DialogHeader>
-            <DialogTitle>Etiqueta del Producto</DialogTitle>
+            <DialogTitle>Etiqueta (50×25 mm)</DialogTitle>
           </DialogHeader>
           {productoEtiqueta && (
             <div className="space-y-4">
-              <div>
-                <p className="font-semibold">Nombre del Producto:</p>
-                <p>{productoEtiqueta.descripcion}</p>
-              </div>
-              <div>
-                <p className="font-semibold">Código de Barra:</p>
-                <p>{productoEtiqueta.codigo_barra}</p>
-              </div>
-              <div>
-                <p className="font-semibold">Código de Barra:</p>
-                <svg ref={barcodeRef} id="etiqueta-impresion"></svg>
+              <div className="overflow-hidden rounded border bg-white p-2 text-center">
+                <p className="mb-1.5 px-0.5 text-xs font-semibold leading-tight">
+                  {productoEtiqueta.descripcion}
+                </p>
+                <div className="flex justify-center">
+                  <svg
+                    ref={barcodeRef}
+                    id="etiqueta-impresion"
+                    className="max-h-[100px] w-full max-w-[280px]"
+                  />
+                </div>
               </div>
               <Button
                 variant="secondary"
-                onClick={() => imprimirEtiqueta(barcodeRef)}
+                onClick={() =>
+                  imprimirEtiqueta(barcodeRef, productoEtiqueta.descripcion ?? "")
+                }
               >
                 Imprimir
               </Button>
@@ -1441,29 +1447,140 @@ export default function ProductosPage() {
   );
 }
 
-// helper
 function imprimirEtiqueta(
-  barcodeRef: React.RefObject<SVGSVGElement | null>
+  barcodeRef: React.RefObject<SVGSVGElement | null>,
+  nombreProducto: string
 ) {
   const etiqueta = document.getElementById("etiqueta-impresion");
-  const svg = (etiqueta ? etiqueta : barcodeRef.current) as HTMLElement | null;
+  const svg = (etiqueta ? etiqueta : barcodeRef.current) as SVGSVGElement | null;
   if (!svg) return;
 
-  const ventana = window.open("", "_blank", "width=300,height=400");
-  if (!ventana) return;
+  const contenido = svg.cloneNode(true) as SVGSVGElement;
+  contenido.style.display = "block";
+  contenido.style.marginInline = "auto";
 
-  const contenido = svg.cloneNode(true) as HTMLElement;
-  const style = `
-    <style>
-      body { margin: 0; padding: 10px; font-family: sans-serif; text-align: center; }
-      svg { display: block; margin: 0 auto; }
-    </style>
-  `;
-  ventana.document.body.innerHTML = style;
-  ventana.document.body.appendChild(contenido);
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title></title>
+  <style>
+    @page {
+      size: 50mm 25mm;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 50mm;
+      height: 25mm;
+      background: #fff;
+      overflow: hidden;
+      direction: ltr;
+    }
+    body {
+      display: block;
+    }
+    /* text-align:center + inline-flex centra bien en vista previa / impresión térmica */
+    .wrap {
+      width: 50mm;
+      height: 25mm;
+      margin: 0;
+      padding: 0.4mm 1mm 0.3mm;
+      text-align: center;
+      overflow: hidden;
+    }
+    .inner {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      vertical-align: top;
+      max-width: 48mm;
+      gap: 0.35mm;
+      text-align: center;
+    }
+    .product-name {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      max-width: 48mm;
+      text-align: center;
+      font: 600 5.5pt/1.15 system-ui, sans-serif;
+      color: #000;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      word-break: break-word;
+      hyphens: auto;
+    }
+    .barcode-slot {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      width: 100%;
+    }
+    .barcode-slot svg {
+      display: block;
+      margin-inline: auto;
+      max-width: 47mm;
+      max-height: 17mm;
+      width: auto;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap"><div class="inner"></div></div>
+</body>
+</html>`;
+
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  Object.assign(iframe.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    width: "50mm",
+    height: "25mm",
+    border: "none",
+    opacity: "0",
+    pointerEvents: "none",
+  } as Partial<CSSStyleDeclaration>);
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument;
+  const win = iframe.contentWindow;
+  if (!doc || !win) {
+    iframe.remove();
+    return;
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const inner = doc.querySelector(".inner");
+  if (inner) {
+    const titulo = doc.createElement("p");
+    titulo.className = "product-name";
+    titulo.textContent = nombreProducto.trim() || "\u00A0";
+    const slot = doc.createElement("div");
+    slot.className = "barcode-slot";
+    slot.appendChild(contenido);
+    inner.appendChild(titulo);
+    inner.appendChild(slot);
+  }
 
   setTimeout(() => {
-    ventana.print();
-    ventana.close();
-  }, 300);
+    win.focus();
+    win.print();
+    iframe.remove();
+  }, 250);
 }

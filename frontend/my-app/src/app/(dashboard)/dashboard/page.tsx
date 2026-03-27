@@ -1,21 +1,57 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
+import { getApiBaseUrl } from "@/lib/api-config";
+import { useScanQueueWithScanner } from "@/hooks/use-scan-queue-with-scanner";
+import { ScanQueueModal } from "@/components/scan-queue-modal";
 
 type Rol = "ADMIN" | "EMPLEADO";
 
-type ModuleItem = {
-  title: string;
-  description: string;
-  icon: string;
-  href: string;
-  color: string;
-  allow?: Rol[]; // si no se define, se muestra a ambos roles
-};
-
 export default function Dashboard() {
   const { me, loading } = useAuth();
+  const [scanModalOpen, setScanModalOpen] = useState(false);
+  const { items: scanQueueItems, clearAll, removeLine } =
+    useScanQueueWithScanner({ listen: true });
+  const totalCola = scanQueueItems.length;
+
+  const handleLoteCambiarEstado = async (
+    estado: "LAVANDERIA" | "MODISTA"
+  ): Promise<{ ok: boolean; message?: string }> => {
+    const api = getApiBaseUrl();
+    const token = localStorage.getItem("token");
+    const rows = [...scanQueueItems];
+    for (const row of rows) {
+      const res = await fetch(`${api}/productos/estado/${row.productoId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+        body: JSON.stringify({ estado }),
+      });
+      let data: { message?: string; success?: boolean } = {};
+      try {
+        data = (await res.json()) as typeof data;
+      } catch {
+        /* ignore */
+      }
+      const failed =
+        !res.ok ||
+        (typeof data.success === "boolean" && data.success === false);
+      if (failed) {
+        return {
+          ok: false,
+          message:
+            (typeof data.message === "string" && data.message) ||
+            `Error al actualizar «${row.descripcion}»`,
+        };
+      }
+    }
+    clearAll();
+    return { ok: true };
+  };
 
   const modules = [
     {
@@ -108,12 +144,36 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h1 className="fw-bold">Dashboard</h1>
-        <p className="text-muted">
-          Bienvenido al sistema de administración de Guapo Trajes
-        </p>
+      <div className="mb-4 d-flex flex-wrap align-items-start justify-content-between gap-3">
+        <div>
+          <h1 className="fw-bold">Dashboard</h1>
+          <p className="text-muted mb-0">
+            Bienvenido al sistema de administración de Guapo Trajes
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline-primary position-relative"
+          onClick={() => setScanModalOpen(true)}
+        >
+          <i className="bi bi-upc-scan me-1" aria-hidden />
+          Cola de escaneo
+          {totalCola > 0 ? (
+            <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+              {totalCola}
+            </span>
+          ) : null}
+        </button>
       </div>
+
+      <ScanQueueModal
+        open={scanModalOpen}
+        onClose={() => setScanModalOpen(false)}
+        items={scanQueueItems}
+        onClearAll={clearAll}
+        onRemoveLine={removeLine}
+        onLoteCambiarEstado={handleLoteCambiarEstado}
+      />
 
       <div className="row g-4">
         {visibleModules.map((module) => (

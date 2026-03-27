@@ -26,6 +26,11 @@ import { toast } from "sonner";
 import { Loader2, Eye, Trash2, Plus } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { useAuth } from "@/context/auth-context";
+import {
+  GUAPO_VENTA_IMPORT_PAYLOAD,
+  clearScanQueue,
+  type ScanQueueRow,
+} from "@/lib/scan-queue";
 
 interface ProductoVenta {
   producto_id: number;
@@ -59,6 +64,7 @@ interface Cliente {
 interface Producto {
   id: number;
   codigo?: string;
+  codigo_barra?: string;
   descripcion: string;
   estado?: string;
   precio_venta_nuevo_lista?: number;
@@ -129,6 +135,9 @@ export default function VentasPage() {
   >([]);
 
   const loadToastShownRef = useRef(false);
+  const pendingVentaImportRef = useRef<ScanQueueRow[] | null>(null);
+  /** Si la venta se armó desde la cola del Dashboard; al guardar OK se vacía localStorage. */
+  const importedFromQueueRef = useRef(false);
 
   const API_BASE = getApiBaseUrl();
   const API_URL = `${API_BASE}/ventas`;
@@ -273,6 +282,55 @@ export default function VentasPage() {
     }
   }, [me]);
 
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(GUAPO_VENTA_IMPORT_PAYLOAD);
+    } catch {
+      /* ignore */
+    }
+    if (!raw?.trim()) return;
+    try {
+      sessionStorage.removeItem(GUAPO_VENTA_IMPORT_PAYLOAD);
+    } catch {
+      /* ignore */
+    }
+    let parsed: { items?: ScanQueueRow[] };
+    try {
+      parsed = JSON.parse(raw) as { items?: ScanQueueRow[] };
+    } catch {
+      return;
+    }
+    const rows = parsed?.items;
+    if (!Array.isArray(rows) || rows.length === 0) return;
+
+    pendingVentaImportRef.current = rows;
+    setVentaActual({
+      fecha_hora: new Date().toISOString().split("T")[0],
+      cliente_id: undefined,
+      producto_id: undefined,
+      cantidad: 1,
+      tipo_precio: "",
+      total: 0,
+    });
+    setSearchTerm("");
+    setShowProductDropdown(false);
+    setProductoFiltro("");
+    setClienteFiltro("");
+    setMetodoPago("");
+    setMetodoPagoId(null);
+    setSubmetodoPagoId(null);
+    setCuentaDestinoId(null);
+    setNuevoItem({
+      productoId: "",
+      cantidad: 1,
+      tipo_precio: "",
+    });
+    setItems([]);
+    setShowMetodoPagoModal(true);
+    toast.info("Desde la cola: elegí método de pago y cuenta destino; después se cargan las prendas.");
+  }, []);
+
   const isFormValid =
     !!ventaActual?.cliente_id &&
     !!ventaActual?.producto_id &&
@@ -373,6 +431,10 @@ export default function VentasPage() {
       }
 
       toast.success("Venta registrada correctamente");
+      if (importedFromQueueRef.current) {
+        clearScanQueue();
+        importedFromQueueRef.current = false;
+      }
       setIsModalOpen(false);
       // Limpiar el estado
       setItems([]);
@@ -745,24 +807,73 @@ export default function VentasPage() {
           <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
             <button
               className="btn btn-light border"
-              onClick={() => setShowMetodoPagoModal(false)}
+              onClick={() => {
+                pendingVentaImportRef.current = null;
+                setShowMetodoPagoModal(false);
+              }}
             >
               Cancelar
             </button>
             <button
               className="btn btn-primary"
-              onClick={() => {
-                if (metodoPagoId && cuentaDestinoId) {
-                  setShowMetodoPagoModal(false);
-                  setIsModalOpen(true);
-                } else {
+              onClick={async () => {
+                if (!metodoPagoId || !cuentaDestinoId) {
                   if (!cuentaDestinoId) {
                     toast.error("Debes seleccionar una cuenta destino");
                   }
                   if (!metodoPagoId) {
                     toast.error("Debes seleccionar un método de pago");
                   }
+                  return;
                 }
+                const pending = pendingVentaImportRef.current;
+                let list = productos;
+                if (pending?.length && list.length === 0) {
+                  try {
+                    const res = await fetch(`${API_BASE}/productos/all`, {
+                      headers: getAuthHeaders(),
+                    });
+                    if (res.ok) {
+                      list = await res.json();
+                      setProductos(list);
+                    }
+                  } catch {
+                    /* ignore */
+                  }
+                }
+                if (pending?.length) {
+                  if (list.length === 0) {
+                    toast.error(
+                      "No se pudieron cargar los productos. Intentá de nuevo en unos segundos."
+                    );
+                    return;
+                  }
+                  const defaultTipo = "Efectivo";
+                  const newItems = pending.map((row) => {
+                    const p = list.find((pr) => pr.id === row.productoId);
+                    const precio_unitario = p
+                      ? p.precio_venta_nuevo_efectivo || 0
+                      : 0;
+                    const cod =
+                      p?.codigo ??
+                      p?.codigo_barra ??
+                      row.codigoBarra;
+                    return {
+                      productoId: row.productoId,
+                      productoNombre: p?.descripcion ?? row.descripcion,
+                      productoCodigo: cod,
+                      cantidad: 1,
+                      precio_unitario,
+                      subtotal: precio_unitario,
+                      tipo_precio: defaultTipo,
+                    };
+                  });
+                  setItems(newItems);
+                  importedFromQueueRef.current = true;
+                  pendingVentaImportRef.current = null;
+                }
+                setShowMetodoPagoModal(false);
+                setIsModalOpen(true);
               }}
               disabled={!metodoPagoId || !cuentaDestinoId}
             >

@@ -18,9 +18,10 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { MetodoPagoSelector } from "@/components/metodo-pago-selector";
 import {
-  GUAPO_PENDING_BARCODE_KEY,
-  GUAPO_BARCODE_SCAN_EVENT,
-} from "@/lib/barcode-scan";
+  GUAPO_PRESUPUESTO_IMPORT_PAYLOAD,
+  clearScanQueue,
+  type ScanQueueRow,
+} from "@/lib/scan-queue";
 
 // Tipos
 
@@ -199,9 +200,9 @@ export default function PresupuestosPage() {
     cliente: string;
   } | null>(null);
 
+  /** True si el modal se abrió importando ítems desde la cola del dashboard; al guardar OK se vacía localStorage. */
+  const importedFromQueueRef = useRef(false);
   const nuevoPresupuestoRef = useRef<() => void>(() => {});
-  const barcodeProcessLockRef = useRef(false);
-  const cargarEscaneoRef = useRef<((code: string) => Promise<void>) | null>(null);
 
   const API_BASE = getApiBaseUrl();
 
@@ -217,39 +218,6 @@ export default function PresupuestosPage() {
       preclienteIdRef.current = Number(formData.preclienteId);
     }
   }, [formData.preclienteId]);
-
-  useEffect(() => {
-    let code = "";
-    try {
-      code = sessionStorage.getItem(GUAPO_PENDING_BARCODE_KEY) || "";
-    } catch {
-      /* ignore */
-    }
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    try {
-      sessionStorage.removeItem(GUAPO_PENDING_BARCODE_KEY);
-    } catch {
-      /* ignore */
-    }
-    void cargarEscaneoRef.current?.(trimmed);
-  }, []);
-
-  useEffect(() => {
-    const onScan = (ev: Event) => {
-      const ce = ev as CustomEvent<{ code?: string }>;
-      const c = ce.detail?.code;
-      if (typeof c !== "string" || !c.trim()) return;
-      try {
-        sessionStorage.removeItem(GUAPO_PENDING_BARCODE_KEY);
-      } catch {
-        /* ignore */
-      }
-      void cargarEscaneoRef.current?.(c.trim());
-    };
-    window.addEventListener(GUAPO_BARCODE_SCAN_EVENT, onScan);
-    return () => window.removeEventListener(GUAPO_BARCODE_SCAN_EVENT, onScan);
-  }, []);
 
   // Nombre para el resumen: fuente única clienteOPreclienteSeleccionado o presupuesto en vista
   const resumenClienteNombre =
@@ -448,6 +416,22 @@ export default function PresupuestosPage() {
     }
   };
 
+  const appendItemPresupuesto = (producto: Producto, cantidad: number) => {
+    const q = cantidad > 0 ? cantidad : 1;
+    const precioUnitario = producto.precio_alquiler_efectivo;
+    const subtotal = precioUnitario * q;
+    const newItem: ItemPresupuesto = {
+      id: Date.now(),
+      productoId: producto.id,
+      productoNombre: producto.descripcion,
+      cantidad: q,
+      precioUnitario,
+      subtotal,
+    };
+    setItems((prev) => [...prev, newItem]);
+    setNuevoItem({ productoId: "", cantidad: 1, porcentaje: "" });
+  };
+
   const agregarItem = async () => {
     const producto = productos.find(
       (p) => p.id === Number(nuevoItem.productoId)
@@ -466,20 +450,7 @@ export default function PresupuestosPage() {
       return;
     }
 
-    const precioUnitario = producto.precio_alquiler_efectivo;
-    const subtotal = precioUnitario * nuevoItem.cantidad;
-
-    const newItem: ItemPresupuesto = {
-      id: Date.now(),
-      productoId: producto.id,
-      productoNombre: producto.descripcion,
-      cantidad: nuevoItem.cantidad,
-      precioUnitario,
-      subtotal,
-    };
-
-    setItems([...items, newItem]);
-    setNuevoItem({ productoId: "", cantidad: 1, porcentaje: "" });
+    appendItemPresupuesto(producto, nuevoItem.cantidad);
   };
 
   const eliminarItem = (id: number) => {
@@ -520,58 +491,62 @@ export default function PresupuestosPage() {
 
   nuevoPresupuestoRef.current = nuevoPresupuesto;
 
-  const mapApiToProducto = (p: Record<string, unknown>): Producto => ({
-    id: Number(p.id),
-    descripcion: String(p.descripcion ?? ""),
-    codigo_barra: String(p.codigo_barra ?? ""),
-    precio_alquiler_efectivo: Number(p.precio_alquiler_efectivo ?? 0),
-    inmovilizado: Boolean(p.inmovilizado),
-    estado: p.estado != null ? String(p.estado) : undefined,
-  });
-
-  const cargarPresupuestoDesdeEscaneo = async (rawCode: string) => {
-    const code = rawCode.trim();
-    if (!code || barcodeProcessLockRef.current) return;
-    barcodeProcessLockRef.current = true;
+  useEffect(() => {
+    let raw: string | null = null;
     try {
-      nuevoPresupuestoRef.current();
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${API_BASE}/productos/get/${encodeURIComponent(code)}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!res.ok) {
-        toast.error("Código no encontrado.");
-        return;
-      }
-      const p = (await res.json()) as Record<string, unknown>;
-      const producto = mapApiToProducto(p);
-      setProductos((prev) =>
-        prev.some((x) => x.id === producto.id) ? prev : [...prev, producto]
-      );
-      setProductoFiltro(producto.codigo_barra || producto.descripcion);
-      setNuevoItem((prev) => ({
-        ...prev,
-        productoId: String(producto.id),
-        cantidad: prev.cantidad > 0 ? prev.cantidad : 1,
-      }));
-      toast.success(
-        "Producto cargado; completá cliente y fechas para agregarlo a la lista."
-      );
-    } catch (e) {
-      console.error(e);
-      toast.error("No se pudo cargar el producto escaneado.");
-    } finally {
-      barcodeProcessLockRef.current = false;
+      raw = sessionStorage.getItem(GUAPO_PRESUPUESTO_IMPORT_PAYLOAD);
+    } catch {
+      /* ignore */
     }
-  };
+    if (!raw?.trim()) return;
+    try {
+      sessionStorage.removeItem(GUAPO_PRESUPUESTO_IMPORT_PAYLOAD);
+    } catch {
+      /* ignore */
+    }
+    let parsed: { items?: ScanQueueRow[] };
+    try {
+      parsed = JSON.parse(raw) as { items?: ScanQueueRow[] };
+    } catch {
+      return;
+    }
+    const rows = parsed?.items;
+    if (!Array.isArray(rows) || rows.length === 0) return;
 
-  cargarEscaneoRef.current = cargarPresupuestoDesdeEscaneo;
+    importedFromQueueRef.current = true;
+    const mapped: ItemPresupuesto[] = rows.map((row, i) => ({
+      id: Date.now() + i,
+      productoId: row.productoId,
+      productoNombre: row.descripcion,
+      cantidad: 1,
+      precioUnitario: row.precio_alquiler_efectivo,
+      subtotal: row.precio_alquiler_efectivo,
+    }));
+
+    flushSync(() => {
+      nuevoPresupuestoRef.current();
+    });
+    flushSync(() => {
+      setItems(mapped);
+      setProductos((prev) => {
+        const next = [...prev];
+        for (const row of rows) {
+          if (!next.some((p) => p.id === row.productoId)) {
+            next.push({
+              id: row.productoId,
+              descripcion: row.descripcion,
+              codigo_barra: row.codigoBarra,
+              precio_alquiler_efectivo: row.precio_alquiler_efectivo,
+              inmovilizado: false,
+            });
+          }
+        }
+        return next;
+      });
+    });
+    toast.success("Ítems cargados desde la cola del Dashboard.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- import one-shot al montar; ref apunta a nuevoPresupuesto actualizado
+  }, []);
 
   const guardarPresupuesto = async () => {
     const sel = clienteOPreclienteSeleccionado;
@@ -670,6 +645,10 @@ export default function PresupuestosPage() {
           // Respuesta OK pero no es JSON
         }
         toast.success("Presupuesto generado correctamente", { id: "guardar-presupuesto" });
+        if (importedFromQueueRef.current) {
+          clearScanQueue();
+          importedFromQueueRef.current = false;
+        }
         preclienteIdRef.current = null;
         setClienteOPreclienteSeleccionado(null);
         setShowModal(false);
