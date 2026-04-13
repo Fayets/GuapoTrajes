@@ -17,7 +17,7 @@ import { getApiBaseUrl } from "@/lib/api-config";
 import { useAuth } from "@/context/auth-context";
 import { format, startOfWeek, addDays } from "date-fns";
 import { es } from "date-fns/locale";
-import * as XLSX from "xlsx";
+import { downloadExcelFromAoA } from "@/lib/export-excel";
 
 interface AlquilerPorPrenda {
   producto_id: number;
@@ -282,7 +282,7 @@ export default function ReportesPage() {
   };
 
   // Función helper para exportar a Excel
-  const exportarAExcel = (
+  const exportarAExcel = async (
     datos: any[],
     headers: string[],
     nombreArchivo: string
@@ -414,21 +414,16 @@ export default function ReportesPage() {
         });
       });
 
-      // Crear workbook y worksheet
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...datosFormateados]);
-
-      // Ajustar ancho de columnas
-      const colWidths = headers.map((header) => ({
-        wch: Math.max(header.length, 15),
-      }));
-      ws["!cols"] = colWidths;
-
-      // Agregar worksheet al workbook
-      XLSX.utils.book_append_sheet(wb, ws, "Datos");
-
-      // Generar archivo Excel
-      XLSX.writeFile(wb, `${nombreArchivo}.xlsx`);
+      const colW = Math.max(
+        ...headers.map((h) => Math.max(String(h).length, 15)),
+        15
+      );
+      await downloadExcelFromAoA(
+        nombreArchivo,
+        "Datos",
+        [headers, ...datosFormateados],
+        colW
+      );
 
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -596,7 +591,7 @@ export default function ReportesPage() {
     }
   };
 
-  const exportarCSV = () => {
+  const exportarCSV = async () => {
     if (alquileres.length === 0) {
       toast.error("No hay datos para exportar");
       return;
@@ -627,13 +622,11 @@ export default function ReportesPage() {
     ]);
 
     try {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 20 }));
-      XLSX.utils.book_append_sheet(wb, ws, "Alquileres");
-      XLSX.writeFile(
-        wb,
-        `alquileres_por_prenda_${fechaDesde}_${fechaHasta}.xlsx`
+      await downloadExcelFromAoA(
+        `alquileres_por_prenda_${fechaDesde}_${fechaHasta}`,
+        "Alquileres",
+        [headers, ...rows],
+        20
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -699,7 +692,7 @@ export default function ReportesPage() {
     }
   };
 
-  const exportarRankingCSV = () => {
+  const exportarRankingCSV = async () => {
     if (ranking.length === 0) {
       toast.error("No hay datos para exportar");
       return;
@@ -732,13 +725,11 @@ export default function ReportesPage() {
     ]);
 
     try {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 20 }));
-      XLSX.utils.book_append_sheet(wb, ws, "Ranking");
-      XLSX.writeFile(
-        wb,
-        `ranking_alquileres_${fechaDesdeRanking}_${fechaHastaRanking}.xlsx`
+      await downloadExcelFromAoA(
+        `ranking_alquileres_${fechaDesdeRanking}_${fechaHastaRanking}`,
+        "Ranking",
+        [headers, ...rows],
+        20
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -1192,7 +1183,7 @@ export default function ReportesPage() {
     }
   };
 
-  const exportarRecibosCSV = () => {
+  const exportarRecibosCSV = async () => {
     if (recibos.length === 0) {
       toast.error("No hay datos para exportar");
       return;
@@ -1227,13 +1218,11 @@ export default function ReportesPage() {
     ]);
 
     try {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 20 }));
-      XLSX.utils.book_append_sheet(wb, ws, "Recibos");
-      XLSX.writeFile(
-        wb,
-        `recibos_por_fecha_${fechaDesdeRecibos}_${fechaHastaRecibos}.xlsx`
+      await downloadExcelFromAoA(
+        `recibos_por_fecha_${fechaDesdeRecibos}_${fechaHastaRecibos}`,
+        "Recibos",
+        [headers, ...rows],
+        20
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -1302,7 +1291,7 @@ export default function ReportesPage() {
     }
   };
 
-  const exportarIngresosCSV = () => {
+  const exportarIngresosCSV = async () => {
     if (
       !ingresosPorTipo ||
       !ingresosPorTipo.ingresos_por_tipo ||
@@ -1336,13 +1325,11 @@ export default function ReportesPage() {
     ]);
 
     try {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 20 }));
-      XLSX.utils.book_append_sheet(wb, ws, "Ingresos");
-      XLSX.writeFile(
-        wb,
-        `ingresos_por_tipo_${fechaDesdeIngresos}_${fechaHastaIngresos}.xlsx`
+      await downloadExcelFromAoA(
+        `ingresos_por_tipo_${fechaDesdeIngresos}_${fechaHastaIngresos}`,
+        "Ingresos",
+        [headers, ...rows],
+        20
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -1422,7 +1409,7 @@ export default function ReportesPage() {
     }
   };
 
-  const exportarStockCSV = () => {
+  const exportarStockCSV = async () => {
     if (
       !stockPorEstado ||
       !stockPorEstado.stock_por_estado ||
@@ -1473,13 +1460,11 @@ export default function ReportesPage() {
     });
 
     try {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 20 }));
-      XLSX.utils.book_append_sheet(wb, ws, "Stock por Estado");
-      XLSX.writeFile(
-        wb,
-        `stock_por_estado_${new Date().toISOString().split("T")[0]}.xlsx`
+      await downloadExcelFromAoA(
+        `stock_por_estado_${new Date().toISOString().split("T")[0]}`,
+        "Stock por Estado",
+        [headers, ...rows],
+        20
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -1518,7 +1503,7 @@ export default function ReportesPage() {
     }
   };
 
-  const exportarStockLineaCSV = () => {
+  const exportarStockLineaCSV = async () => {
     if (
       !stockPorLinea ||
       !stockPorLinea.stock_por_linea ||
@@ -1551,13 +1536,11 @@ export default function ReportesPage() {
     ]);
 
     try {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 20 }));
-      XLSX.utils.book_append_sheet(wb, ws, "Stock por Línea");
-      XLSX.writeFile(
-        wb,
-        `stock_por_linea_${new Date().toISOString().split("T")[0]}.xlsx`
+      await downloadExcelFromAoA(
+        `stock_por_linea_${new Date().toISOString().split("T")[0]}`,
+        "Stock por Linea",
+        [headers, ...rows],
+        20
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -1618,7 +1601,7 @@ export default function ReportesPage() {
     }
   };
 
-  const exportarSaldosCSV = () => {
+  const exportarSaldosCSV = async () => {
     if (saldosACobrar.length === 0) {
       toast.error("No hay datos para exportar");
       return;
@@ -1664,13 +1647,11 @@ export default function ReportesPage() {
     ]);
 
     try {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 20 }));
-      XLSX.utils.book_append_sheet(wb, ws, "Saldos a Cobrar");
-      XLSX.writeFile(
-        wb,
-        `saldos_a_cobrar_${fechaDesdeSaldos}_${fechaHastaSaldos}.xlsx`
+      await downloadExcelFromAoA(
+        `saldos_a_cobrar_${fechaDesdeSaldos}_${fechaHastaSaldos}`,
+        "Saldos a Cobrar",
+        [headers, ...rows],
+        20
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -1763,7 +1744,7 @@ export default function ReportesPage() {
     );
   };
 
-  const exportarPrendasPDF = () => {
+  const exportarPrendasPDF = async () => {
     if (prendasAArmar.length === 0) {
       toast.error("No hay datos para exportar");
       return;
@@ -1853,13 +1834,11 @@ export default function ReportesPage() {
         }
       });
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 18 }));
-      XLSX.utils.book_append_sheet(wb, ws, "Prendas a Armar");
-      XLSX.writeFile(
-        wb,
-        `prendas_a_armar_${fechaDesdePrendas}_${fechaHastaPrendas}.xlsx`
+      await downloadExcelFromAoA(
+        `prendas_a_armar_${fechaDesdePrendas}_${fechaHastaPrendas}`,
+        "Prendas a Armar",
+        [headers, ...rows],
+        18
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -1926,7 +1905,7 @@ export default function ReportesPage() {
     });
   }, [noDevolvieron, filtroNoDevolvieron]);
 
-  const exportarNoDevolvieronPDF = () => {
+  const exportarNoDevolvieronPDF = async () => {
     if (noDevolvieron.length === 0) {
       toast.error("No hay datos para exportar");
       return;
@@ -2021,13 +2000,11 @@ export default function ReportesPage() {
         }
       });
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 18 }));
-      XLSX.utils.book_append_sheet(wb, ws, "No Devolvieron");
-      XLSX.writeFile(
-        wb,
-        `no_devolvieron_${format(new Date(), "yyyy-MM-dd")}.xlsx`
+      await downloadExcelFromAoA(
+        `no_devolvieron_${format(new Date(), "yyyy-MM-dd")}`,
+        "No Devolvieron",
+        [headers, ...rows],
+        18
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {
@@ -2080,7 +2057,7 @@ export default function ReportesPage() {
     }
   };
 
-  const exportarProductosCriticosArmadoPDF = () => {
+  const exportarProductosCriticosArmadoPDF = async () => {
     if (productosCriticosArmado.length === 0) {
       toast.error("No hay datos para exportar");
       return;
@@ -2115,13 +2092,11 @@ export default function ReportesPage() {
         format(new Date(producto.fecha_evento), "dd/MM/yyyy", { locale: es }),
       ]);
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map(() => ({ wch: 20 }));
-      XLSX.utils.book_append_sheet(wb, ws, "Productos Críticos");
-      XLSX.writeFile(
-        wb,
-        `productos_criticos_armado_${fechaDesdeCriticosArmado}_${fechaHastaCriticosArmado}.xlsx`
+      await downloadExcelFromAoA(
+        `productos_criticos_armado_${fechaDesdeCriticosArmado}_${fechaHastaCriticosArmado}`,
+        "Productos Criticos",
+        [headers, ...rows],
+        20
       );
       toast.success("Excel exportado correctamente");
     } catch (error: any) {

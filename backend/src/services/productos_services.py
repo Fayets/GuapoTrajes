@@ -3,8 +3,12 @@ from fastapi import HTTPException
 from pony.orm.core import TransactionIntegrityError, ConstraintError
 from src import models, schemas
 from src.models import Producto, EstadoProducto, Sucursal, Roles
+from src.services.disponibilidad_services import (
+    verificar_disponibilidad,
+    producto_ids_en_ventana_reserva_el_dia,
+)
 from src.db import db
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, Tuple, List, Dict
 import traceback
 
@@ -38,6 +42,8 @@ def _producto_to_response_dict(p: "models.Producto") -> dict:
         "tela_nombre": p.tela.nombre if p.tela else None,
         "color_id": p.color.id if p.color else None,
         "color_nombre": p.color.nombre if p.color else None,
+        "disponible_en_fechas": None,
+        "en_ventana_reserva_hoy": None,
     }
     return d
 
@@ -80,6 +86,8 @@ def _row_to_producto_dict(row) -> dict:
         "destino_notas": None,
         "destino_cliente_nombre": None,
         "destino_cliente_celular": None,
+        "disponible_en_fechas": None,
+        "en_ventana_reserva_hoy": None,
     }
 
 
@@ -268,7 +276,12 @@ class ProductoServices:
         color_id: Optional[int] = None,
         page: int = 1,
         size: int = 20,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        fecha_retiro: Optional[date] = None,
+        fecha_devolucion: Optional[date] = None,
+        presupuesto_excluir_id: Optional[int] = None,
+        incluir_ventana_reserva: bool = False,
+        ventana_reserva_filtro: Optional[str] = None,
     ) -> Tuple[List[Dict], int]:
         with db_session:
             try:
@@ -286,6 +299,13 @@ class ProductoServices:
                     except ValueError:
                         raise HTTPException(status_code=400, detail="Estado inválido.")
 
+                reserved_ids: set[int] = set()
+                if incluir_ventana_reserva or (
+                    ventana_reserva_filtro
+                    and ventana_reserva_filtro.lower() in ("si", "no")
+                ):
+                    reserved_ids = producto_ids_en_ventana_reserva_el_dia()
+
                 # Construir WHERE con valores controlados (seguro frente a inyección)
                 conditions = []
                 if not is_admin and user.sucursal:
@@ -300,6 +320,19 @@ class ProductoServices:
                     conditions.append(f'p.tela_id = {int(tela_id)}')
                 if color_id is not None:
                     conditions.append(f'p.color_id = {int(color_id)}')
+
+                vf = (ventana_reserva_filtro or "").strip().lower()
+                if vf == "si":
+                    if not reserved_ids:
+                        conditions.append("1=0")
+                    else:
+                        ids_sql = ",".join(str(int(i)) for i in sorted(reserved_ids))
+                        conditions.append(f"p.id IN ({ids_sql})")
+                elif vf == "no":
+                    if reserved_ids:
+                        ids_sql = ",".join(str(int(i)) for i in sorted(reserved_ids))
+                        conditions.append(f"p.id NOT IN ({ids_sql})")
+
                 where_sql = ' AND '.join(conditions) if conditions else '1=1'
                 page = max(1, int(page))
                 size = max(1, min(int(size), 500))
@@ -361,6 +394,25 @@ class ProductoServices:
                                 r["destino_notas"] = getattr(pm, "notas", None)
                                 r["destino_cliente_nombre"] = getattr(pm, "cliente_nombre", None)
                                 r["destino_cliente_celular"] = getattr(pm, "cliente_celular", None)
+                if fecha_retiro is not None and fecha_devolucion is not None:
+                    for r in result:
+                        r["disponible_en_fechas"] = verificar_disponibilidad(
+                            r["id"],
+                            fecha_retiro,
+                            fecha_devolucion,
+                            presupuesto_excluir_id,
+                        )
+                else:
+                    for r in result:
+                        r["disponible_en_fechas"] = None
+
+                if incluir_ventana_reserva or vf in ("si", "no"):
+                    for r in result:
+                        r["en_ventana_reserva_hoy"] = r["id"] in reserved_ids
+                else:
+                    for r in result:
+                        r["en_ventana_reserva_hoy"] = None
+
                 return result, total
 
             except HTTPException:

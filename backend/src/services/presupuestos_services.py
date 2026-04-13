@@ -1,8 +1,11 @@
-from pony.orm import db_session, select, flush, commit, Database, desc
-from datetime import datetime, date
+from pony.orm import db_session, flush, commit, desc
+from datetime import datetime, date, timedelta
+from typing import List, Optional
+from decouple import config
 from fastapi import HTTPException
+from src.fechas_ar import fecha_presupuesto_api_ymd, instante_a_fecha_ar
 from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, db
-from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse
+from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse, ConjuntoMismaFechaCategoriaOut
 from src.services.disponibilidad_services import verificar_disponibilidad
 
 def _presupuesto_cliente_info(p):
@@ -208,9 +211,9 @@ class PresupuestosServices:
                         id=p.id,
                         numero=p.numero,
                         **_presupuesto_cliente_info(p),
-                        fecha_evento=str(p.fecha_evento),
-                        fecha_retiro=str(p.fecha_retiro) if p.fecha_retiro else None,
-                        fecha_devolucion=str(p.fecha_devolucion) if p.fecha_devolucion else None,
+                        fecha_evento=fecha_presupuesto_api_ymd(p.fecha_evento) or "",
+                        fecha_retiro=fecha_presupuesto_api_ymd(p.fecha_retiro),
+                        fecha_devolucion=fecha_presupuesto_api_ymd(p.fecha_devolucion),
                         categoria_evento=p.categoria_evento,
                         nombre_agasajado=p.nombre_agasajado,
                         lugar_evento=p.lugar_evento,
@@ -246,6 +249,95 @@ class PresupuestosServices:
                 import traceback
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al listar presupuestos: {str(e)}")
+
+    @staticmethod
+    def _norm_categoria_evento(val: Optional[str]) -> str:
+        return (val or "").strip().casefold()
+
+    @staticmethod
+    def _fecha_evento_dia_presupuesto(p) -> date:
+        """Día civil del evento (AR si el ORM devolviera datetime con zona)."""
+        v = p.fecha_evento
+        if isinstance(v, datetime):
+            return instante_a_fecha_ar(v)
+        return v
+
+    def listar_conjuntos_misma_fecha_categoria(
+        self,
+        fecha_evento: date,
+        categoria_evento: str,
+        excluir_presupuesto_id: Optional[int] = None,
+    ) -> List[ConjuntoMismaFechaCategoriaOut]:
+        """Presupuestos con la misma fecha de evento y categoría (normalizada), excl. cancelados."""
+        cat_buscada = self._norm_categoria_evento(categoria_evento)
+        if not cat_buscada:
+            return []
+        with db_session:
+            try:
+                # Rango ±1 día: SQL crudo (Pony 0.7 + Python 3.13 rompe el decompilador con >= / and en lambdas).
+                fecha_lo = fecha_evento - timedelta(days=1)
+                fecha_hi = fecha_evento + timedelta(days=1)
+                sqlite = (config("DB_PROVIDER", default="postgres") or "postgres").lower() == "sqlite"
+                conn = db.get_connection()
+                cur = conn.cursor()
+                try:
+                    if sqlite:
+                        cur.execute(
+                            'SELECT id FROM "Presupuesto" WHERE "fecha_evento" >= ? AND "fecha_evento" <= ?',
+                            (fecha_lo, fecha_hi),
+                        )
+                    else:
+                        cur.execute(
+                            'SELECT id FROM "Presupuesto" WHERE "fecha_evento" >= %s AND "fecha_evento" <= %s',
+                            (fecha_lo, fecha_hi),
+                        )
+                    ids = [row[0] for row in cur.fetchall()]
+                finally:
+                    cur.close()
+
+                candidatos = []
+                for pid in ids:
+                    p = Presupuesto.get(id=pid)
+                    if p is None:
+                        continue
+                    if self._fecha_evento_dia_presupuesto(p) != fecha_evento:
+                        continue
+                    candidatos.append(p)
+                out: List[ConjuntoMismaFechaCategoriaOut] = []
+                for p in candidatos:
+                    if excluir_presupuesto_id is not None and p.id == excluir_presupuesto_id:
+                        continue
+                    est = (p.estado or "").strip().lower()
+                    if est == "cancelada":
+                        continue
+                    if self._norm_categoria_evento(p.categoria_evento) != cat_buscada:
+                        continue
+                    lineas: List[str] = []
+                    for item in p.items:
+                        desc = (item.producto.descripcion or "").strip()
+                        if not desc:
+                            desc = f"Producto #{item.producto.id}"
+                        if item.cantidad and item.cantidad > 1:
+                            desc = f"{desc} x{item.cantidad}"
+                        lineas.append(desc)
+                    agasajado = (p.nombre_agasajado or "").strip() or "(sin nombre)"
+                    lugar = (p.lugar_evento or "").strip() or None
+                    out.append(
+                        ConjuntoMismaFechaCategoriaOut(
+                            presupuesto_id=p.id,
+                            numero=p.numero,
+                            nombre_agasajado=agasajado,
+                            lugar_evento=lugar,
+                            productos=lineas,
+                        )
+                    )
+                out.sort(key=lambda x: (x.nombre_agasajado.lower(), x.numero))
+                return out
+            except Exception as e:
+                print(f"❌ Error en listar_conjuntos_misma_fecha_categoria: {e}")
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"Error al consultar conjuntos: {str(e)}")
 
     def editar_presupuesto(self, presupuesto_id: int, data: PresupuestoCreate, current_user=None) -> dict:
         with db_session:
@@ -422,9 +514,9 @@ class PresupuestosServices:
                     id=presupuesto.id,
                     numero=presupuesto.numero,
                     **_presupuesto_cliente_info(presupuesto),
-                    fecha_evento=str(presupuesto.fecha_evento),
-                    fecha_retiro=str(presupuesto.fecha_retiro) if presupuesto.fecha_retiro else None,
-                    fecha_devolucion=str(presupuesto.fecha_devolucion) if presupuesto.fecha_devolucion else None,
+                    fecha_evento=fecha_presupuesto_api_ymd(presupuesto.fecha_evento) or "",
+                    fecha_retiro=fecha_presupuesto_api_ymd(presupuesto.fecha_retiro),
+                    fecha_devolucion=fecha_presupuesto_api_ymd(presupuesto.fecha_devolucion),
                     categoria_evento=presupuesto.categoria_evento,
                     nombre_agasajado=presupuesto.nombre_agasajado,
                     lugar_evento=presupuesto.lugar_evento,

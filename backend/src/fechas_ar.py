@@ -1,0 +1,78 @@
+"""
+Fechas de negocio en Argentina (Buenos Aires).
+Toda fecha con hora/zona se interpreta o se expone según America/Argentina/Buenos_Aires.
+Las cadenas solo "YYYY-MM-DD" son día civil sin conversión.
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import date, datetime
+from typing import Optional, Union
+
+from zoneinfo import ZoneInfo
+
+ZONA_ARGENTINA = ZoneInfo("America/Argentina/Buenos_Aires")
+
+
+def instante_a_fecha_ar(val: Union[date, datetime]) -> date:
+    """Convierte date o datetime al día civil en Argentina."""
+    if isinstance(val, date) and not isinstance(val, datetime):
+        return val
+    if isinstance(val, datetime):
+        if val.tzinfo is None:
+            return val.replace(tzinfo=ZONA_ARGENTINA).date()
+        return val.astimezone(ZONA_ARGENTINA).date()
+    raise TypeError(f"Tipo no soportado: {type(val)}")
+
+
+def parse_fecha_presupuesto_entrada(val) -> date:
+    """Entrada API / JSON → date (día civil AR si hay componente horario)."""
+    if isinstance(val, date) and not isinstance(val, datetime):
+        return val
+    if isinstance(val, datetime):
+        return instante_a_fecha_ar(val)
+    if isinstance(val, str):
+        s = val.strip()
+        if not s:
+            raise ValueError("fecha vacía")
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+            return date.fromisoformat(s)
+        normalized = s.replace("Z", "+00:00").replace("z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=ZONA_ARGENTINA)
+        return dt.astimezone(ZONA_ARGENTINA).date()
+    raise ValueError("formato de fecha no válido")
+
+
+def parse_fecha_query_presupuesto(s: str) -> date:
+    """
+    Query param (ej. conjuntos): YYYY-MM-DD o ISO completo → date en AR si aplica.
+    """
+    raw = (s or "").strip()
+    if not raw:
+        raise ValueError("fecha vacía")
+    if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+        try:
+            return date.fromisoformat(raw)
+        except ValueError:
+            pass
+    return parse_fecha_presupuesto_entrada(raw)
+
+
+def fecha_presupuesto_api_ymd(val) -> Optional[str]:
+    """Serializa fecha de presupuesto a 'YYYY-MM-DD' (día civil Argentina si era datetime)."""
+    if val is None:
+        return None
+    if isinstance(val, date) and not isinstance(val, datetime):
+        return val.isoformat()
+    if isinstance(val, datetime):
+        return instante_a_fecha_ar(val).isoformat()
+    text = str(val).strip()
+    if len(text) >= 10 and "T" not in text[:11]:
+        return text[:10]
+    try:
+        return parse_fecha_presupuesto_entrada(text).isoformat()
+    except ValueError:
+        return text[:10] if len(text) >= 10 else text

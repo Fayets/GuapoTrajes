@@ -119,3 +119,58 @@ def test_metricas_resumen_bloqueo_mundo(mundo_reserva):
         f"({pct:.1f}%)\n"
     )
     assert ok == total
+
+
+@pytest.fixture(scope="module")
+def mundo_solo_presupuesto_sin_sena():
+    """Presupuesto pendiente sin orden: no debe bloquear (la seña compromete la prenda)."""
+    w = seed_base_world()
+    pres = PresupuestosServices()
+    cu = fake_current_user(w.usuario.id)
+    payload = PresupuestoCreate(
+        cliente_id=w.cliente.id,
+        fecha_evento=R + timedelta(days=10),
+        fecha_retiro=R,
+        fecha_devolucion=R + timedelta(days=20),
+        categoria_evento="Casamiento",
+        nombre_agasajado="X",
+        lugar_evento="Salón",
+        observaciones="",
+        items=[
+            ItemPresupuestoIn(
+                producto_id=w.producto_a.id,
+                cantidad=1,
+                precio_unitario=100.0,
+                subtotal=100.0,
+            ),
+            ItemPresupuestoIn(
+                producto_id=w.producto_b.id,
+                cantidad=1,
+                precio_unitario=100.0,
+                subtotal=100.0,
+            ),
+        ],
+    )
+    pres.crear_presupuesto(payload, cu)
+    return w
+
+
+@pytest.mark.parametrize("prod_attr", ["producto_a", "producto_b"])
+@pytest.mark.parametrize("off_ret,off_dev,_esp,desc", CASOS_BLOQUEO)
+def test_presupuesto_sin_sena_no_bloquea_fechas(
+    mundo_solo_presupuesto_sin_sena,
+    prod_attr,
+    off_ret,
+    off_dev,
+    _esp,
+    desc,
+):
+    """Sin ProductoReservado (sin seña), cualquier ventana solicitada sigue disponible."""
+    w = mundo_solo_presupuesto_sin_sena
+    pid = getattr(w, prod_attr).id
+    fr = _d(off_ret)
+    fd = _d(off_dev)
+    assert fr <= fd
+    assert verificar_disponibilidad(pid, fr, fd) is True, (
+        f"{prod_attr} {desc}: sin seña no debe bloquear retiro={fr} dev={fd}"
+    )

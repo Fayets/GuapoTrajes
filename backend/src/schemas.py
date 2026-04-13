@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict, ValidationInfo
 from typing import List, Optional, Dict, Literal
 from datetime import date, datetime
+
+from src.fechas_ar import parse_fecha_presupuesto_entrada
 from src.models import Roles, Sucursal, MetodoPago
 
 Role = Literal["SUPER_ADMIN", "ADMIN", "EMPLEADO"]
@@ -256,6 +258,10 @@ class ProductResponse(ProductBase):
     destino_notas: Optional[str] = None
     destino_cliente_nombre: Optional[str] = None
     destino_cliente_celular: Optional[str] = None
+    # Si el cliente envía fecha_retiro + fecha_devolucion en GET /productos/all
+    disponible_en_fechas: Optional[bool] = None
+    # Si incluir_ventana_reserva=1: hoy está en [R-5,R] (presupuesto u orden)
+    en_ventana_reserva_hoy: Optional[bool] = None
 
 class ProductUpdateResponse(BaseModel):
     message: str
@@ -387,6 +393,18 @@ class PresupuestoCreate(BaseModel):
     extra_discount_amount: Optional[float] = None
     extra_discount_reason: Optional[str] = None
 
+    @field_validator("fecha_evento", "fecha_retiro", "fecha_devolucion", mode="before")
+    @classmethod
+    def fechas_calendario_negocio(cls, v, info: ValidationInfo):
+        field = info.field_name
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            if field == "fecha_evento":
+                raise ValueError("fecha_evento no puede estar vacía")
+            return None
+        return parse_fecha_presupuesto_entrada(v)
+
     @model_validator(mode="after")
     def cliente_o_precliente(self):
         if self.cliente_id is None and self.precliente_id is None:
@@ -442,6 +460,17 @@ class PresupuestoResponse(BaseModel):
     extra_discount_applied_by_id: Optional[int] = None
     extra_discount_applied_by_nombre: Optional[str] = None
     extra_discount_created_at: Optional[str] = None
+
+
+class ConjuntoMismaFechaCategoriaOut(BaseModel):
+    """Resumen de un presupuesto existente para avisar conjuntos ya armados (misma fecha y categoría)."""
+
+    presupuesto_id: int
+    numero: str
+    nombre_agasajado: str
+    lugar_evento: Optional[str] = None
+    productos: List[str]
+
 
 # --- ORDEN DE TRABAJO ---
 class ProductoReservadoSchema(BaseModel):

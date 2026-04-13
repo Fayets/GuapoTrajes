@@ -49,6 +49,8 @@ interface Producto {
   destino_notas?: string | null;
   destino_cliente_nombre?: string | null;
   destino_cliente_celular?: string | null;
+  /** true = en ventana de reserva (orden con seña, regla R−5…R según hoy) */
+  en_ventana_reserva_hoy?: boolean | null;
 }
 
 type EstadoKey = "SALON" | "CLIENTE" | "LAVANDERIA" | "MODISTA" | "VENDIDO";
@@ -92,6 +94,8 @@ export default function ProductosPage() {
   const [filtroTalleId, setFiltroTalleId] = useState<number | "">("");
   const [filtroTelaId, setFiltroTelaId] = useState<number | "">("");
   const [filtroColorId, setFiltroColorId] = useState<number | "">("");
+  /** Listar solo productos en ventana de reserva (misma regla que columna RESERVADO) */
+  const [filtroSoloReservados, setFiltroSoloReservados] = useState(false);
   const [productoExpandidoId, setProductoExpandidoId] = useState<number | null>(null);
 
   const API_BASE = getApiBaseUrl();
@@ -139,6 +143,10 @@ export default function ProductosPage() {
     if (filtroTalleId) params.set("talle_id", String(filtroTalleId));
     if (filtroTelaId) params.set("tela_id", String(filtroTelaId));
     if (filtroColorId) params.set("color_id", String(filtroColorId));
+    params.set("incluir_ventana_reserva", "true");
+    if (filtroSoloReservados) {
+      params.set("ventana_reserva", "si");
+    }
 
     console.log(`📦 Cargando productos: página ${page}`);
 
@@ -191,7 +199,15 @@ export default function ProductosPage() {
     if (!token) return;
     loadProductos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, page, filtroLineaId, filtroTalleId, filtroTelaId, filtroColorId]);
+  }, [
+    token,
+    page,
+    filtroLineaId,
+    filtroTalleId,
+    filtroTelaId,
+    filtroColorId,
+    filtroSoloReservados,
+  ]);
 
   const guardarProducto = async () => {
     if (!productoActual || !token) {
@@ -426,10 +442,33 @@ export default function ProductosPage() {
             onChange={(e) => setBusqueda(e.target.value)}
           />
         </div>
-        <div className="col-auto">
+        <div className="col-auto d-flex align-items-center gap-3 flex-wrap">
+          <div className="form-check mb-0 user-select-none">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="filtro-solo-reservados"
+              checked={filtroSoloReservados}
+              onChange={(e) => {
+                setFiltroSoloReservados(e.target.checked);
+                setPage(1);
+              }}
+            />
+            <label className="form-check-label small fw-semibold" htmlFor="filtro-solo-reservados">
+              Solo reservados
+            </label>
+          </div>
           <Button
             type="button"
-            variant={filtroOpen || filtroLineaId || filtroTalleId || filtroTelaId || filtroColorId ? "primary" : "outline"}
+            variant={
+              filtroOpen ||
+              filtroLineaId ||
+              filtroTalleId ||
+              filtroTelaId ||
+              filtroColorId
+                ? "primary"
+                : "outline"
+            }
             onClick={() => setFiltroOpen(!filtroOpen)}
           >
             <i className="bi bi-funnel me-1"></i>
@@ -515,6 +554,7 @@ export default function ProductosPage() {
                 setFiltroTalleId("");
                 setFiltroTelaId("");
                 setFiltroColorId("");
+                setFiltroSoloReservados(false);
                 setPage(1);
               }}
             >
@@ -536,6 +576,7 @@ export default function ProductosPage() {
                 <th>Talle</th>
                 <th>Color</th>
                 <th>Precio Alq. Lista</th>
+                <th>RESERVADO</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
@@ -543,7 +584,7 @@ export default function ProductosPage() {
             <tbody>
               {!token ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-4">
+                  <td colSpan={9} className="text-center py-4">
                     <div className="text-muted">
                       <i className="bi bi-lock me-2"></i>
                       Por favor, inicia sesión para ver los productos
@@ -552,7 +593,7 @@ export default function ProductosPage() {
                 </tr>
               ) : loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-4">
+                  <td colSpan={9} className="text-center py-4">
                     <div className="text-muted">
                       <i className="bi bi-arrow-repeat me-2"></i>
                       Cargando productos...
@@ -561,7 +602,7 @@ export default function ProductosPage() {
                 </tr>
               ) : productos.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-4">
+                  <td colSpan={9} className="text-center py-4">
                     <div className="text-muted">
                       <i className="bi bi-inbox me-2"></i>
                       No hay productos disponibles en tu sucursal
@@ -582,6 +623,16 @@ export default function ProductosPage() {
                     <td>{producto.talle_nombre ?? "-"}</td>
                     <td>{producto.color_nombre ?? "-"}</td>
                     <td>{producto.precio_alquiler_lista}</td>
+                    <td className="text-center">
+                      {producto.en_ventana_reserva_hoy === true ? (
+                        <span className="text-success" title="Reservado">
+                          <i className="bi bi-check-lg fs-5" aria-hidden />
+                          <span className="visually-hidden">Reservado</span>
+                        </span>
+                      ) : (
+                        <span className="text-muted small">—</span>
+                      )}
+                    </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <select
                         value={producto.estado}
@@ -677,7 +728,7 @@ export default function ProductosPage() {
                   </tr>
                   {productoExpandidoId === producto.id && (
                     <tr key={`${producto.id}-destino`}>
-                      <td colSpan={8} className="bg-light py-2 px-3 small">
+                      <td colSpan={9} className="bg-light py-2 px-3 small">
                         <div className="d-flex flex-column gap-1">
                           <div className="d-flex align-items-center gap-2 flex-wrap">
                             <span className="text-muted">Información de devolución:</span>
@@ -723,7 +774,7 @@ export default function ProductosPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="text-center py-4">
+                  <td colSpan={9} className="text-center py-4">
                     <div className="text-muted">
                       <i className="bi bi-search me-2"></i>
                       No se encontraron productos que coincidan con la búsqueda

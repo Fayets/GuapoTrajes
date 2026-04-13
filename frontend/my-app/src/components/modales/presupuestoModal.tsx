@@ -1,5 +1,4 @@
 import React from "react";
-import { useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -11,13 +10,19 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { getApiBaseUrl } from "@/lib/api-config";
+import {
+  addDaysYmd,
+  compareYmd,
+  fechaNegocioYmd,
+  ymdWeekdayUtc,
+} from "@/lib/fecha-calendario";
 
-/** Parsea "YYYY-MM-DD" en hora local para evitar que medianoche UTC se interprete como día anterior (ej. lunes → domingo en Argentina). */
-function parseDateLocal(s: string): Date {
-  const parts = s.split("-").map(Number);
-  if (parts.length !== 3 || parts.some(isNaN)) return new Date(s);
-  const [y, m, d] = parts;
-  return new Date(y, m - 1, d);
+/** ISO / YYYY-MM-DD → DD/MM/AAAA (día ya normalizado a negocio AR). */
+function formatFechaArgentina(iso: string): string {
+  const t = fechaNegocioYmd(iso);
+  if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(t)) return (iso || "").trim() || "";
+  const [y, m, d] = t.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 type Cliente = { id: number; nombre: string; apellido: string };
@@ -27,6 +32,9 @@ type Producto = {
   descripcion: string;
   codigo_barra: string;
   precio_alquiler_efectivo: number;
+  disponible_en_fechas?: boolean | null;
+  inmovilizado?: boolean;
+  estado?: string;
 };
 type Item = {
   id?: number;
@@ -158,18 +166,108 @@ export default function PresupuestoModal({
     fetchEventos();
   }, []);
 
-  // Agrega arriba del return, dentro del componente (parse local para evitar UTC → día anterior)
-  const fechaEvento = formData.fechaEvento
-    ? parseDateLocal(formData.fechaEvento)
-    : null;
-  const fechaRetiro = formData.fechaRetiro
-    ? parseDateLocal(formData.fechaRetiro)
-    : null;
-  const fechaDevolucion = formData.fechaDevolucion
-    ? parseDateLocal(formData.fechaDevolucion)
-    : null;
+  const [textoAvisoConjuntos, setTextoAvisoConjuntos] = React.useState("");
+  /** Clave de la última petición válida; el cleanup la vacía para descartar respuestas obsoletas. */
+  const conjuntosClaveRef = React.useRef("");
 
-  const formatDate = (date: Date) => date.toISOString().split("T")[0];
+  React.useEffect(() => {
+    if (!show) {
+      conjuntosClaveRef.current = "";
+      setTextoAvisoConjuntos("");
+      return;
+    }
+    const fecha = fechaNegocioYmd(formData.fechaEvento);
+    const cat = (formData.categoria || "").trim();
+    if (!fecha || !cat || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      conjuntosClaveRef.current = "";
+      setTextoAvisoConjuntos("");
+      return;
+    }
+
+    const excl = presupuestoSeleccionado?.id;
+    const clave = `${fecha}|${cat}|${excl ?? ""}`;
+    conjuntosClaveRef.current = clave;
+
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(async () => {
+      if (conjuntosClaveRef.current !== clave) return;
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          setTextoAvisoConjuntos("");
+          return;
+        }
+        const API_BASE = getApiBaseUrl();
+        const params = new URLSearchParams({
+          fecha_evento: fecha,
+          categoria_evento: cat,
+        });
+        if (excl != null) {
+          params.set("excluir_id", String(excl));
+        }
+        const res = await fetch(
+          `${API_BASE}/presupuestos/conjuntos-misma-fecha-categoria?${params.toString()}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: ctrl.signal,
+          }
+        );
+        if (conjuntosClaveRef.current !== clave) return;
+        if (!res.ok) {
+          setTextoAvisoConjuntos("");
+          return;
+        }
+        const data = (await res.json()) as {
+          nombre_agasajado: string;
+          lugar_evento?: string | null;
+          productos: string[];
+        }[];
+        if (conjuntosClaveRef.current !== clave) return;
+        if (!Array.isArray(data) || data.length === 0) {
+          setTextoAvisoConjuntos("");
+          return;
+        }
+        const lines = [
+          "Conjuntos ya armados para esta fecha:",
+          "",
+          ...data.map((row) => {
+            const prod =
+              row.productos?.length > 0
+                ? row.productos.join(", ")
+                : "(sin ítems)";
+            const lugar = (row.lugar_evento ?? "").trim();
+            const lugarTxt = lugar ? ` | Lugar: ${lugar}` : "";
+            return `- ${row.nombre_agasajado}: ${prod}${lugarTxt}`;
+          }),
+        ];
+        setTextoAvisoConjuntos(lines.join("\n"));
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === "AbortError") return;
+        if (conjuntosClaveRef.current === clave) setTextoAvisoConjuntos("");
+      }
+    }, 120);
+    return () => {
+      ctrl.abort();
+      window.clearTimeout(timer);
+    };
+  }, [show, formData.fechaEvento, formData.categoria, presupuestoSeleccionado?.id]);
+
+  React.useEffect(() => {
+    if (!show) return;
+    setFormData((prev: any) => {
+      if (prev.observaciones === textoAvisoConjuntos) return prev;
+      return { ...prev, observaciones: textoAvisoConjuntos };
+    });
+  }, [show, textoAvisoConjuntos, setFormData]);
+
+  const minIsoDevolucion = React.useMemo(() => {
+    if (!formData.fechaEvento || !formData.fechaRetiro) return undefined;
+    const fe = fechaNegocioYmd(formData.fechaEvento);
+    const fr = fechaNegocioYmd(formData.fechaRetiro);
+    if (!fe || !fr) return undefined;
+    const later = compareYmd(fe, fr) >= 0 ? fe : fr;
+    return addDaysYmd(later, 1);
+  }, [formData.fechaEvento, formData.fechaRetiro]);
 
   const clienteSeleccionado = React.useMemo(() => {
     return clientes.find((c) => String(c.id) === String(formData.clienteId));
@@ -189,67 +287,53 @@ export default function PresupuestoModal({
   }, [presupuestoSeleccionado, clienteSeleccionado, formData.preclienteId, preclienteNombreSeleccionado]);
 
   const handleFechaChange = (key: string, value: string) => {
-    const nuevaFecha = parseDateLocal(value);
     setFormData((prev: any) => {
       const nuevaData = { ...prev, [key]: value };
 
-    if (key === "fechaEvento") {
-      if (prev.fechaRetiro && parseDateLocal(prev.fechaRetiro) > nuevaFecha) {
-        nuevaData.fechaRetiro = value;
-      }
-      if (
-        prev.fechaDevolucion &&
-        parseDateLocal(prev.fechaDevolucion) <= nuevaFecha
-      ) {
-        const siguiente = new Date(nuevaFecha);
-        siguiente.setDate(siguiente.getDate() + 1);
-        nuevaData.fechaDevolucion = formatDate(siguiente);
-      }
-    }
-
-    if (key === "fechaRetiro") {
-      if (prev.fechaEvento && nuevaFecha > parseDateLocal(prev.fechaEvento)) {
-        nuevaData.fechaEvento = value;
-      }
-      if (
-        prev.fechaDevolucion &&
-        nuevaFecha >= parseDateLocal(prev.fechaDevolucion)
-      ) {
-        const siguiente = new Date(nuevaFecha);
-        siguiente.setDate(siguiente.getDate() + 1);
-        nuevaData.fechaDevolucion = formatDate(siguiente);
-      }
-    }
-
-    if (key === "fechaDevolucion") {
-      const eventoOK =
-        prev.fechaEvento && nuevaFecha > parseDateLocal(prev.fechaEvento);
-      const retiroOK =
-        prev.fechaRetiro && nuevaFecha > parseDateLocal(prev.fechaRetiro);
-      if (!eventoOK || !retiroOK) {
-        const fev = prev.fechaEvento ? parseDateLocal(prev.fechaEvento) : null;
-        const fret = prev.fechaRetiro ? parseDateLocal(prev.fechaRetiro) : null;
-        const base = fev && fret ? new Date(Math.max(+fev, +fret)) : fev || fret;
-        if (base) {
-          base.setDate(base.getDate() + 1);
-          nuevaData.fechaDevolucion = formatDate(base);
+      if (key === "fechaEvento") {
+        if (prev.fechaRetiro && compareYmd(prev.fechaRetiro, value) > 0) {
+          nuevaData.fechaRetiro = value;
         }
-      } else {
-        // Validar que no sea domingo (0 = domingo en getDay()) — usando hora local
-        const diaSemana = nuevaFecha.getDay();
-        if (diaSemana === 0) {
-          // Si es domingo, ajustar al lunes siguiente
-          nuevaFecha.setDate(nuevaFecha.getDate() + 1);
-          nuevaData.fechaDevolucion = formatDate(nuevaFecha);
-          // Mostrar mensaje informativo
+        if (prev.fechaDevolucion && compareYmd(prev.fechaDevolucion, value) <= 0) {
+          nuevaData.fechaDevolucion = addDaysYmd(value, 1);
+        }
+      }
+
+      if (key === "fechaRetiro") {
+        if (prev.fechaEvento && compareYmd(value, prev.fechaEvento) > 0) {
+          nuevaData.fechaEvento = value;
+        }
+        if (prev.fechaDevolucion && compareYmd(value, prev.fechaDevolucion) >= 0) {
+          nuevaData.fechaDevolucion = addDaysYmd(value, 1);
+        }
+      }
+
+      if (key === "fechaDevolucion") {
+        const eventoOK =
+          prev.fechaEvento && compareYmd(value, prev.fechaEvento) > 0;
+        const retiroOK =
+          prev.fechaRetiro && compareYmd(value, prev.fechaRetiro) > 0;
+        if (!eventoOK || !retiroOK) {
+          const fev = prev.fechaEvento || null;
+          const fret = prev.fechaRetiro || null;
+          let base: string | null = null;
+          if (fev && fret) {
+            base = compareYmd(fev, fret) >= 0 ? fev : fret;
+          } else {
+            base = fev || fret;
+          }
+          if (base) {
+            nuevaData.fechaDevolucion = addDaysYmd(base, 1);
+          }
+        } else if (ymdWeekdayUtc(value) === 0) {
+          nuevaData.fechaDevolucion = addDaysYmd(value, 1);
           alert(
             "La fecha de devolución no puede ser domingo. Se ajustó automáticamente al lunes siguiente."
           );
         }
       }
-    }
 
-    return nuevaData;
+      return nuevaData;
     });
   };
 
@@ -267,7 +351,7 @@ export default function PresupuestoModal({
       <DialogContent
         className="w-full border-0"
         dialogClassName="modal-xl"
-        dialogStyle={{ maxWidth: "900px", width: "95%" }}
+        dialogStyle={{ maxWidth: "min(1320px, 99vw)", width: "99%" }}
       >
         <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
           <DialogTitle>
@@ -281,7 +365,9 @@ export default function PresupuestoModal({
         </DialogHeader>
 
         <div className="modal-body px-3 px-md-4">
-          <div className="card mb-4 shadow-sm">
+          <div className="row g-4 align-items-lg-start">
+            <div className="col-12 col-lg-5 col-xl-5 d-flex flex-column gap-3 gap-lg-4">
+          <div className="card shadow-sm mb-0">
             <div className="card-header bg-light">
               <h6 className="mb-0">
                 <i className="bi bi-person-circle me-2"></i>
@@ -443,7 +529,7 @@ export default function PresupuestoModal({
             </div>
           </div>
 
-          <div className="card mb-4 shadow-sm">
+          <div className="card shadow-sm mb-0">
             <div className="card-header bg-light">
               <h6 className="mb-0">
                 <i className="bi bi-calendar-event me-2"></i>
@@ -457,7 +543,7 @@ export default function PresupuestoModal({
                   <label className="form-label fw-bold" htmlFor="presupuesto-fecha-evento">Fecha del evento</label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext border rounded p-2 bg-light">
-                      {formData.fechaEvento}
+                      {formatFechaArgentina(formData.fechaEvento) || "-"}
                     </div>
                   ) : (
                     <input
@@ -484,7 +570,7 @@ export default function PresupuestoModal({
                   <label className="form-label fw-bold" htmlFor="presupuesto-fecha-retiro">Fecha de retiro</label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext border rounded p-2 bg-light">
-                      {formData.fechaRetiro}
+                      {formatFechaArgentina(formData.fechaRetiro) || "-"}
                     </div>
                   ) : (
                     <input
@@ -508,7 +594,7 @@ export default function PresupuestoModal({
                   </label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext border rounded p-2 bg-light">
-                      {formData.fechaDevolucion}
+                      {formatFechaArgentina(formData.fechaDevolucion) || "-"}
                     </div>
                   ) : (
                     <input
@@ -517,18 +603,7 @@ export default function PresupuestoModal({
                       type="date"
                       className="form-control"
                       value={formData.fechaDevolucion}
-                      min={
-                        formData.fechaEvento &&
-                        formData.fechaRetiro &&
-                        formatDate(
-                          new Date(
-                            Math.max(
-                              parseDateLocal(formData.fechaEvento).getTime(),
-                              parseDateLocal(formData.fechaRetiro).getTime()
-                            ) + 86400000
-                          )
-                        )
-                      }
+                      min={minIsoDevolucion}
                       onChange={(e) =>
                         handleFechaChange("fechaDevolucion", e.target.value)
                       }
@@ -539,7 +614,7 @@ export default function PresupuestoModal({
             </div>
           </div>
 
-          <div className="card mb-4 shadow-sm">
+          <div className="card shadow-sm mb-0">
             <div className="card-header bg-light">
               <h6 className="mb-0">
                 <i className="bi bi-info-circle me-2"></i>
@@ -624,81 +699,33 @@ export default function PresupuestoModal({
                 </div>
                 <div className="col-12">
                   <label className="form-label fw-bold" htmlFor="presupuesto-observaciones">Observaciones</label>
-                  {verModoLectura ? (
-                    <div className="form-control-plaintext border rounded p-2 bg-light">
-                      {formData.observaciones}
-                    </div>
-                  ) : (
-                    <textarea
-                      id="presupuesto-observaciones"
-                      name="observaciones"
-                      className="form-control"
-                      rows={3}
-                      value={formData.observaciones}
-                      onChange={(e) =>
-                        setFormData((prev: any) => ({
-                          ...prev,
-                          observaciones: e.target.value,
-                        }))
-                      }
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card mb-4 shadow-sm">
-            <div className="card-header bg-light">
-              <h6 className="mb-0">
-                <i className="bi bi-list-check me-2"></i>
-                Resumen del Presupuesto
-              </h6>
-            </div>
-            <div className="card-body p-4">
-              <div className="d-flex flex-column gap-2">
-                <div className="d-flex justify-content-between">
-                  <span className="text-muted">Cliente:</span>
-                  <strong>{resumenClienteNombre ?? nombreClienteResumen}</strong>
-                </div>
-                <div className="d-flex justify-content-between">
-                  <span className="text-muted">Fecha evento:</span>
-                  <strong>{formData.fechaEvento || "-"}</strong>
-                </div>
-                <div className="d-flex justify-content-between">
-                  <span className="text-muted">Categoría:</span>
-                  <strong>{formData.categoria || "-"}</strong>
-                </div>
-                <div className="d-flex justify-content-between align-items-center">
-                  <span className="text-muted">Total estimado:</span>
-                  <div className="text-end">
-                    {hayDescuento && (
-                      <div
-                        className="text-muted"
-                        style={{
-                          textDecoration: "line-through",
-                          fontSize: "0.9rem",
-                        }}
-                      >
-                        ${totalOriginal.toLocaleString()}
-                      </div>
-                    )}
-                    <div className="fw-bold">
-                      ${totalMostrar.toLocaleString()}
-                      {hayDescuento && porcentajeDescuento && (
-                        <span className="text-success ms-1">
-                          (-{porcentajeDescuento}%)
-                        </span>
-                      )}
-                    </div>
+                  <div
+                    id="presupuesto-observaciones"
+                    className={`form-control-plaintext border rounded p-2 bg-light${textoAvisoConjuntos ? "" : " text-muted"}`}
+                    style={{ whiteSpace: "pre-wrap", minHeight: "4.5rem", userSelect: "none" }}
+                    aria-live="polite"
+                    aria-readonly="true"
+                  >
+                    {textoAvisoConjuntos || ""}
                   </div>
+                  {!verModoLectura &&
+                  formData.categoria?.trim() &&
+                  (!formData.fechaEvento?.trim() ||
+                    !/^\d{4}-\d{2}-\d{2}$/.test(fechaNegocioYmd(formData.fechaEvento))) ? (
+                    <p className="small text-muted mt-2 mb-0">
+                      Elegí también la <strong>fecha del evento</strong> para ver acá los conjuntos ya armados en esa fecha y categoría.
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
           </div>
 
+            </div>
+
+            <div className="col-12 col-lg-7 col-xl-7 d-flex flex-column gap-3 gap-lg-4">
           {/* Sección: Productos */}
-          <div className="card shadow-sm">
+          <div className="card shadow-sm mb-0">
             <div className="card-header bg-light">
               <h6 className="mb-0">
                 <i className="bi bi-box-seam me-2"></i>
@@ -741,8 +768,8 @@ export default function PresupuestoModal({
                 <>
                   <div className="border rounded p-3 mb-3 bg-light">
                     <h6 className="mb-3">Agregar Producto</h6>
-                    <div className="row align-items-end g-3">
-                      <div className="col-md-4">
+                    <div className="row g-3">
+                      <div className="col-12">
                         <label className="form-label fw-bold">
                           Buscar producto
                         </label>
@@ -754,7 +781,7 @@ export default function PresupuestoModal({
                           placeholder="Buscar por código o descripción"
                         />
                       </div>
-                      <div className="col-md-4">
+                      <div className="col-12">
                         <label className="form-label fw-bold">Producto</label>
                         <select
                           className="form-select"
@@ -770,15 +797,29 @@ export default function PresupuestoModal({
                                 .toLowerCase()
                                 .includes(productoFiltro.toLowerCase())
                             )
-                            .map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.descripcion} ({p.codigo_barra}) - $
-                                {p.precio_alquiler_efectivo.toLocaleString()}
-                              </option>
-                            ))}
+                            .map((p) => {
+                              const reservado =
+                                p.disponible_en_fechas === false;
+                              const base = `${p.descripcion} (${p.codigo_barra}) - $${p.precio_alquiler_efectivo.toLocaleString()}`;
+                              const label = reservado ? `${base} — RESERVADO` : base;
+                              return (
+                                <option
+                                  key={p.id}
+                                  value={p.id}
+                                  disabled={reservado}
+                                  style={
+                                    reservado
+                                      ? { color: "#c1121f", fontWeight: 600 }
+                                      : undefined
+                                  }
+                                >
+                                  {label}
+                                </option>
+                              );
+                            })}
                         </select>
                       </div>
-                      <div className="col-md-2">
+                      <div className="col-12 col-sm-5 col-md-4">
                         <label className="form-label fw-bold">Cantidad</label>
                         <input
                           type="number"
@@ -793,19 +834,20 @@ export default function PresupuestoModal({
                           }
                         />
                       </div>
-                      <div className="col-md-2">
+                      <div className="col-12 col-sm-7 col-md-8 d-flex align-items-end">
                         <button
+                          type="button"
                           onClick={async () => {
                             const disponible = await verificarDisponibilidad();
                             if (!disponible) {
                               alert(
-                                "El producto no está disponible en las fechas seleccionadas."
+                                "El producto está RESERVADO en las fechas seleccionadas."
                               );
                               return;
                             }
                             agregarItem();
                           }}
-                          className="btn btn-success w-100"
+                          className="btn btn-success text-nowrap"
                         >
                           <i className="bi bi-plus-circle me-1"></i>
                           Agregar
@@ -817,8 +859,8 @@ export default function PresupuestoModal({
                   {/* Sección: Descuento */}
                   <div className="border rounded p-3 mb-3 bg-light">
                     <h6 className="mb-3">Agregar Descuento</h6>
-                    <div className="row align-items-end g-3">
-                      <div className="col-md-4">
+                    <div className="row g-3 align-items-end">
+                      <div className="col-12 col-md-8">
                         <label className="form-label fw-bold">
                           Porcentaje de descuento
                         </label>
@@ -859,12 +901,13 @@ export default function PresupuestoModal({
                         )}
                       </div>
 
-                      <div className="col-md-2">
+                      <div className="col-12 col-md-4 d-flex align-items-end">
                         <button
+                          type="button"
                           onClick={async () => {
                             aplicarDescuento();
                           }}
-                          className="btn btn-success w-100"
+                          className="btn btn-success text-nowrap"
                           id="aplicarDescuento"
                         >
                           <i className="bi bi-plus-circle me-1"></i>
@@ -872,7 +915,7 @@ export default function PresupuestoModal({
                         </button>
                       </div>
                       {!esAdmin && (
-                        <div className="col-md-6">
+                        <div className="col-12">
                           <small className="text-muted">
                             <i className="bi bi-info-circle me-1"></i>
                             Descuentos mayores a 15% requieren motivo
@@ -1052,6 +1095,58 @@ export default function PresupuestoModal({
                   )}
                 </>
               )}
+            </div>
+          </div>
+
+          <div className="card shadow-sm mb-0">
+            <div className="card-header bg-light">
+              <h6 className="mb-0">
+                <i className="bi bi-list-check me-2"></i>
+                Resumen del Presupuesto
+              </h6>
+            </div>
+            <div className="card-body p-4">
+              <div className="d-flex flex-column gap-2">
+                <div className="d-flex justify-content-between">
+                  <span className="text-muted">Cliente:</span>
+                  <strong>{resumenClienteNombre ?? nombreClienteResumen}</strong>
+                </div>
+                <div className="d-flex justify-content-between">
+                  <span className="text-muted">Fecha evento:</span>
+                  <strong>{formatFechaArgentina(formData.fechaEvento) || "-"}</strong>
+                </div>
+                <div className="d-flex justify-content-between">
+                  <span className="text-muted">Categoría:</span>
+                  <strong>{formData.categoria || "-"}</strong>
+                </div>
+                <div className="d-flex justify-content-between align-items-center">
+                  <span className="text-muted">Total estimado:</span>
+                  <div className="text-end">
+                    {hayDescuento && (
+                      <div
+                        className="text-muted"
+                        style={{
+                          textDecoration: "line-through",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        ${totalOriginal.toLocaleString()}
+                      </div>
+                    )}
+                    <div className="fw-bold">
+                      ${totalMostrar.toLocaleString()}
+                      {hayDescuento && porcentajeDescuento && (
+                        <span className="text-success ms-1">
+                          (-{porcentajeDescuento}%)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
             </div>
           </div>
         </div>

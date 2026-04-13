@@ -1,11 +1,11 @@
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import List, Optional
+
+from src.fechas_ar import parse_fecha_query_presupuesto
 from src.services.presupuestos_services import PresupuestosServices
-from src.schemas import PresupuestoCreate
-from pony.orm import db_session
-from src.models import Presupuesto
+from src.schemas import PresupuestoCreate, ConjuntoMismaFechaCategoriaOut
 from src.controllers.auth_controller import get_current_user
-from typing import List
 
 router = APIRouter(prefix="/presupuestos")
 servicio = PresupuestosServices()
@@ -28,6 +28,37 @@ def obtener_todos(current_user=Depends(get_current_user)):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado al obtener presupuestos: {str(e)}")
+
+
+@router.get(
+    "/conjuntos-misma-fecha-categoria",
+    response_model=List[ConjuntoMismaFechaCategoriaOut],
+)
+def conjuntos_misma_fecha_categoria(
+    fecha_evento: str = Query(..., min_length=10, description="YYYY-MM-DD (solo día calendario)"),
+    categoria_evento: str = Query(..., min_length=1, description="Categoría del evento"),
+    excluir_id: Optional[int] = None,
+    current_user=Depends(get_current_user),
+):
+    """Lista presupuestos existentes con misma fecha de evento y categoría (para aviso en alta)."""
+    try:
+        fev = parse_fecha_query_presupuesto(fecha_evento)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail="fecha_evento inválida; usar YYYY-MM-DD o ISO con zona",
+        )
+    try:
+        return servicio.listar_conjuntos_misma_fecha_categoria(
+            fecha_evento=fev,
+            categoria_evento=categoria_evento,
+            excluir_presupuesto_id=excluir_id,
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error inesperado: {str(e)}")
+
 
 @router.get("/{presupuesto_id}")
 def obtener_por_id(presupuesto_id: int, current_user=Depends(get_current_user)):

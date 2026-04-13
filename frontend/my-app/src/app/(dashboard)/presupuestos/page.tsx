@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import PresupuestoModal from "@/components/modales/presupuestoModal";
 import { getApiBaseUrl } from "@/lib/api-config";
+import { fechaNegocioYmd, formatDdMmYyyyDesdeIso } from "@/lib/fecha-calendario";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +46,8 @@ type Producto = {
   precio_alquiler_efectivo: number;
   inmovilizado: boolean;
   estado?: string;
+  /** false = no disponible por ventana de reserva (backend); null/undefined = sin evaluar fechas */
+  disponible_en_fechas?: boolean | null;
 };
 
 type ItemPresupuesto = {
@@ -247,25 +248,49 @@ export default function PresupuestosPage() {
     }
   };
 
-  const fetchProductos = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/productos/all?page=1&size=200`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  const fetchProductos = useCallback(
+    async (opts?: { fechaRetiro?: string; fechaDevolucion?: string }) => {
+      try {
+        const token = localStorage.getItem("token");
+        let url = `${API_BASE}/productos/all?page=1&size=200`;
+        if (opts?.fechaRetiro && opts?.fechaDevolucion) {
+          url += `&fecha_retiro=${encodeURIComponent(opts.fechaRetiro)}&fecha_devolucion=${encodeURIComponent(opts.fechaDevolucion)}`;
+        }
+        const res = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      if (!res.ok) throw new Error("Error al obtener productos");
+        if (!res.ok) throw new Error("Error al obtener productos");
 
-      const data = await res.json();
-      setProductos(data);
-    } catch (error) {
-      console.error("Error fetching productos:", error);
+        const data = await res.json();
+        setProductos(data);
+      } catch (error) {
+        console.error("Error fetching productos:", error);
+      }
+    },
+    [API_BASE]
+  );
+
+  useEffect(() => {
+    if (!showModal || verModoLectura) return;
+    const fr = formData.fechaRetiro?.trim();
+    const fd = formData.fechaDevolucion?.trim();
+    if (fr && fd) {
+      void fetchProductos({ fechaRetiro: fr, fechaDevolucion: fd });
+    } else {
+      void fetchProductos();
     }
-  };
+  }, [
+    showModal,
+    verModoLectura,
+    formData.fechaRetiro,
+    formData.fechaDevolucion,
+    fetchProductos,
+  ]);
 
   const fetchPreclientes = async () => {
     try {
@@ -403,8 +428,12 @@ export default function PresupuestosPage() {
     }
 
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch(
-        `${API_BASE}/productos/${productoId}/disponibilidad?fecha_retiro=${fechaRetiro}&fecha_devolucion=${fechaDevolucion}`
+        `${API_BASE}/productos/${productoId}/disponibilidad?fecha_retiro=${encodeURIComponent(fechaRetiro)}&fecha_devolucion=${encodeURIComponent(fechaDevolucion)}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
       );
 
       const data = await res.json();
@@ -437,9 +466,19 @@ export default function PresupuestosPage() {
       (p) => p.id === Number(nuevoItem.productoId)
     );
     if (!producto) return;
+    if (producto.disponible_en_fechas === false) {
+      alert(
+        `El producto ${producto.descripcion} está RESERVADO en las fechas elegidas.`
+      );
+      return;
+    }
 
+    const token = localStorage.getItem("token");
     const res = await fetch(
-      `${API_BASE}/productos/${producto.id}/disponibilidad?fecha_retiro=${formData.fechaRetiro}&fecha_devolucion=${formData.fechaDevolucion}`
+      `${API_BASE}/productos/${producto.id}/disponibilidad?fecha_retiro=${encodeURIComponent(formData.fechaRetiro)}&fecha_devolucion=${encodeURIComponent(formData.fechaDevolucion)}`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
     );
     const data = await res.json();
 
@@ -600,9 +639,13 @@ export default function PresupuestosPage() {
     const tieneDescuentoExtra = porcentajeDescuento !== null && porcentajeDescuento > descuentoMaximoEstandar;
 
     const payload: Record<string, unknown> = {
-      fecha_evento: formData.fechaEvento,
-      fecha_retiro: formData.fechaRetiro || null,
-      fecha_devolucion: formData.fechaDevolucion || null,
+      fecha_evento: fechaNegocioYmd(formData.fechaEvento) || formData.fechaEvento,
+      fecha_retiro: formData.fechaRetiro
+        ? fechaNegocioYmd(formData.fechaRetiro) || formData.fechaRetiro
+        : null,
+      fecha_devolucion: formData.fechaDevolucion
+        ? fechaNegocioYmd(formData.fechaDevolucion) || formData.fechaDevolucion
+        : null,
       categoria_evento: formData.categoria,
       nombre_agasajado: formData.agasajado,
       lugar_evento: formData.lugar,
@@ -843,9 +886,10 @@ export default function PresupuestosPage() {
     setFormData({
       clienteId: presupuesto.cliente_id != null ? String(presupuesto.cliente_id) : "",
       preclienteId: presupuesto.precliente_id ?? null,
-      fechaEvento: presupuesto.fecha_evento,
-      fechaRetiro: presupuesto.fecha_retiro || "",
-      fechaDevolucion: presupuesto.fecha_devolucion || "",
+      fechaEvento: fechaNegocioYmd(presupuesto.fecha_evento) || presupuesto.fecha_evento || "",
+      fechaRetiro: fechaNegocioYmd(presupuesto.fecha_retiro || "") || presupuesto.fecha_retiro || "",
+      fechaDevolucion:
+        fechaNegocioYmd(presupuesto.fecha_devolucion || "") || presupuesto.fecha_devolucion || "",
       categoria: presupuesto.categoria_evento || "",
       agasajado: presupuesto.nombre_agasajado || "",
       lugar: presupuesto.lugar_evento || "",
@@ -1012,13 +1056,8 @@ export default function PresupuestosPage() {
 
     const formatearFecha = (fecha?: string) => {
       if (!fecha) return null;
-      try {
-        // Agregar T00:00:00 para evitar problemas de zona horaria
-        const fechaConHora = fecha.includes("T") ? fecha : fecha + "T00:00:00";
-        return format(new Date(fechaConHora), "dd/MM/yyyy", { locale: es });
-      } catch {
-        return fecha;
-      }
+      const s = formatDdMmYyyyDesdeIso(fecha);
+      return s || fecha;
     };
 
     const detalles: string[] = [];
@@ -1194,11 +1233,7 @@ export default function PresupuestosPage() {
                       <td>{p.numero}</td>
                       <td>{p.cliente_nombre}</td>
                       <td>
-                        {p.fecha_evento
-                          ? format(new Date(p.fecha_evento + "T00:00:00"), "dd/MM/yyyy", {
-                              locale: es,
-                            })
-                          : "Sin fecha"}
+                        {p.fecha_evento ? formatDdMmYyyyDesdeIso(p.fecha_evento) : "Sin fecha"}
                       </td>
 
                       <td>${p.total.toLocaleString()}</td>

@@ -102,8 +102,36 @@ def get_all_products(
     color_id: Optional[int] = Query(None, description="Filtrar por color"),
     page: int = Query(1, ge=1, description="Número de página (1-based)"),
     size: int = Query(20, ge=1, le=200, description="Tamaño de página"),
+    fecha_retiro: Optional[date] = Query(
+        None, description="Con fecha_devolucion: marca disponible_en_fechas por reservas"
+    ),
+    fecha_devolucion: Optional[date] = Query(
+        None, description="Con fecha_retiro: marca disponible_en_fechas por reservas"
+    ),
+    presupuesto_excluir_id: Optional[int] = Query(
+        None, description="Excluir este presupuesto al calcular disponible_en_fechas (edición)"
+    ),
+    incluir_ventana_reserva: bool = Query(
+        False,
+        description="Si true, agrega en_ventana_reserva_hoy (regla [R-5,R] y órden con reserva)",
+    ),
+    ventana_reserva: Optional[str] = Query(
+        None,
+        description='Filtrar por ventana de reserva hoy: "si" = solo reservados, "no" = excluir reservados',
+    ),
 ):
     try:
+        if (fecha_retiro is None) ^ (fecha_devolucion is None):
+            raise HTTPException(
+                status_code=400,
+                detail="Enviá ambas query params fecha_retiro y fecha_devolucion, o ninguna.",
+            )
+        vf = (ventana_reserva or "").strip().lower()
+        if vf and vf not in ("si", "no"):
+            raise HTTPException(
+                status_code=400,
+                detail='ventana_reserva debe ser "si", "no" o omitirse.',
+            )
         items, total = service.get_all_products(
             estado=estado,
             linea_id=linea_id,
@@ -113,6 +141,11 @@ def get_all_products(
             page=page,
             size=size,
             user_id=current_user.id,
+            fecha_retiro=fecha_retiro,
+            fecha_devolucion=fecha_devolucion,
+            presupuesto_excluir_id=presupuesto_excluir_id,
+            incluir_ventana_reserva=incluir_ventana_reserva,
+            ventana_reserva_filtro=vf or None,
         )
         # Headers de paginación
         response.headers["X-Total-Count"] = str(total)
@@ -209,10 +242,18 @@ def stats_por_estado(current_user=Depends(get_current_user)):
 def disponibilidad(
     producto_id: int,
     fecha_retiro: date = Query(..., description="Fecha de retiro"),
-    fecha_devolucion: date = Query(..., description="Fecha de devolución")
+    fecha_devolucion: date = Query(..., description="Fecha de devolución"),
+    presupuesto_excluir_id: Optional[int] = Query(
+        None, description="Excluir este presupuesto al verificar (edición)"
+    ),
 ):
     try:
-        disponible = verificar_disponibilidad(producto_id, fecha_retiro, fecha_devolucion)
+        disponible = verificar_disponibilidad(
+            producto_id,
+            fecha_retiro,
+            fecha_devolucion,
+            presupuesto_excluir_id,
+        )
         return {
             "producto_id": producto_id,
             "fecha_retiro": fecha_retiro,
