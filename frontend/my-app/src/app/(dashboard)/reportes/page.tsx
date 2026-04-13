@@ -178,6 +178,7 @@ export default function ReportesPage() {
   const [fechaHastaHistorico, setFechaHastaHistorico] = useState("");
   const [historicoProducto, setHistoricoProducto] = useState<any>(null);
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
+  const [historicoPagina, setHistoricoPagina] = useState(1);
 
   const reportTiles = useMemo(() => {
     const todosLosReportes = [
@@ -2106,17 +2107,21 @@ export default function ReportesPage() {
   };
 
   // Funciones para histórico de producto
-  const obtenerHistoricoProducto = async () => {
+  const obtenerHistoricoProducto = async (page: number = 1) => {
     if (!codigoBarraHistorico) {
       toast.error("Por favor, ingresa el código de barras del producto");
       return;
     }
 
+    const pageSafe = Math.max(1, Math.floor(page));
+    setHistoricoPagina(pageSafe);
     setIsLoadingHistorico(true);
     try {
-      let url = `${API_BASE}/reportes/historico-producto?codigo_barra=${codigoBarraHistorico}`;
+      let url = `${API_BASE}/reportes/historico-producto?codigo_barra=${encodeURIComponent(
+        codigoBarraHistorico.trim()
+      )}&page=${pageSafe}&page_size=10`;
       if (fechaHastaHistorico) {
-        url += `&fecha_hasta=${fechaHastaHistorico}`;
+        url += `&fecha_hasta=${encodeURIComponent(fechaHastaHistorico)}`;
       }
 
       const response = await fetch(url, {
@@ -2134,7 +2139,13 @@ export default function ReportesPage() {
       console.log("📊 Respuesta de histórico de producto:", data);
       if (data.success && data.data) {
         setHistoricoProducto(data.data);
-        toast.success("Histórico de producto obtenido exitosamente");
+        const p = data.data.paginacion?.page;
+        if (typeof p === "number" && p >= 1) {
+          setHistoricoPagina(p);
+        }
+        if (pageSafe === 1) {
+          toast.success("Histórico de producto obtenido exitosamente");
+        }
       } else {
         throw new Error("Formato de respuesta inválido");
       }
@@ -5394,9 +5405,9 @@ export default function ReportesPage() {
               Histórico de Producto
             </h5>
             <p className="text-muted small mb-0">
-              Trazabilidad completa del producto desde su ingreso al stock hasta
-              una fecha determinada. Incluye: ingreso, alquileres, lavandería,
-              modista, ventas.
+              Trazabilidad del producto hasta la fecha indicada (ingreso,
+              alquileres, lavandería, modista, ventas). La línea de tiempo va del
+              evento más reciente hacia atrás, hasta 10 eventos por página.
             </p>
           </div>
           <div className="card-body">
@@ -5412,7 +5423,7 @@ export default function ReportesPage() {
                   onChange={(e) => setCodigoBarraHistorico(e.target.value)}
                   onKeyPress={(e) => {
                     if (e.key === "Enter") {
-                      obtenerHistoricoProducto();
+                      void obtenerHistoricoProducto(1);
                     }
                   }}
                 />
@@ -5435,7 +5446,8 @@ export default function ReportesPage() {
             <div className="row mb-4">
               <div className="col-md-12 d-flex gap-2">
                 <button
-                  onClick={obtenerHistoricoProducto}
+                  type="button"
+                  onClick={() => void obtenerHistoricoProducto(1)}
                   disabled={isLoadingHistorico}
                   className="btn btn-primary"
                 >
@@ -5568,6 +5580,59 @@ export default function ReportesPage() {
                 {/* Timeline de Eventos */}
                 <div className="timeline-container">
                   <h5 className="mb-3">Línea de Tiempo</h5>
+                  {historicoProducto.paginacion && (
+                    <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                      <p className="text-muted small mb-0">
+                        Mostrando{" "}
+                        {historicoProducto.eventos.length === 0
+                          ? 0
+                          : (historicoProducto.paginacion.page - 1) *
+                              historicoProducto.paginacion.page_size +
+                            1}
+                        –
+                        {(historicoProducto.paginacion.page - 1) *
+                          historicoProducto.paginacion.page_size +
+                          historicoProducto.eventos.length}{" "}
+                        de {historicoProducto.paginacion.total} eventos · Página{" "}
+                        {historicoProducto.paginacion.page} de{" "}
+                        {historicoProducto.paginacion.total_pages}
+                      </p>
+                      <div className="btn-group" role="group" aria-label="Paginación histórico">
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm"
+                          disabled={
+                            isLoadingHistorico ||
+                            !historicoProducto.paginacion.has_prev
+                          }
+                          onClick={() =>
+                            void obtenerHistoricoProducto(
+                              historicoProducto.paginacion.page - 1
+                            )
+                          }
+                        >
+                          <i className="bi bi-chevron-left me-1"></i>
+                          Anterior
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm"
+                          disabled={
+                            isLoadingHistorico ||
+                            !historicoProducto.paginacion.has_next
+                          }
+                          onClick={() =>
+                            void obtenerHistoricoProducto(
+                              historicoProducto.paginacion.page + 1
+                            )
+                          }
+                        >
+                          Siguiente
+                          <i className="bi bi-chevron-right ms-1"></i>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="timeline">
                     {historicoProducto.eventos.map(
                       (evento: any, index: number) => {
@@ -5615,7 +5680,10 @@ export default function ReportesPage() {
                         const icon = getIcon();
 
                         return (
-                          <div key={index} className="timeline-item">
+                          <div
+                            key={`${historicoProducto.paginacion?.page ?? historicoPagina}-${evento.tipo}-${evento.fecha}-${index}`}
+                            className="timeline-item"
+                          >
                             <div className={`timeline-marker bg-${color}`}>
                               <i className={`bi ${icon}`}></i>
                             </div>

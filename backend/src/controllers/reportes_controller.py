@@ -466,12 +466,20 @@ def obtener_productos_criticos_armado(
 def obtener_historico_producto(
     codigo_barra: str = Query(..., description="Código de barras del producto"),
     fecha_hasta: Optional[date] = Query(None, description="Fecha hasta la cual se busca el histórico (default: fecha actual)"),
+    page: int = Query(1, ge=1, description="Número de página (1-based)"),
+    page_size: int = Query(
+        10,
+        ge=1,
+        le=10,
+        description="Eventos por página (máximo 10)",
+    ),
     current_user=Depends(get_current_user)
 ):
     """
     Obtener histórico completo (trazabilidad) de un producto desde su ingreso al stock hasta una fecha determinada.
     Incluye: ingreso, alquileres, lavandería, modista, ventas.
     Filtra automáticamente por la sucursal del usuario logueado.
+    Los eventos van del más reciente al más antiguo; la respuesta está paginada.
     """
     try:
         # Obtener la sucursal del usuario actual (es obligatoria según el modelo)
@@ -480,7 +488,9 @@ def obtener_historico_producto(
         resultado = servicio.obtener_historico_producto(
             codigo_barra=codigo_barra,
             fecha_hasta=fecha_hasta,
-            sucursal_id=sucursal_id
+            sucursal_id=sucursal_id,
+            page=page,
+            page_size=page_size,
         )
         
         return {

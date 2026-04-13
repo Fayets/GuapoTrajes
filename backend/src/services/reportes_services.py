@@ -1840,7 +1840,9 @@ class ReportesServices:
         self,
         codigo_barra: str,
         fecha_hasta: Optional[date] = None,
-        sucursal_id: Optional[int] = None
+        sucursal_id: Optional[int] = None,
+        page: int = 1,
+        page_size: int = 10,
     ) -> Dict:
         """
         Obtener histórico completo (trazabilidad) de un producto desde su ingreso al stock hasta una fecha determinada.
@@ -1850,9 +1852,11 @@ class ReportesServices:
             codigo_barra: Código de barras del producto
             fecha_hasta: Fecha hasta la cual se busca el histórico (default: fecha actual)
             sucursal_id: ID de la sucursal (opcional, si es None busca en todas)
+            page: Página 1-based
+            page_size: Tamaño de página (máx. 10); eventos más recientes primero
         
         Returns:
-            Diccionario con información del producto y lista cronológica de eventos
+            Diccionario con producto, eventos de la página, resumen global y paginación
         """
         try:
             from datetime import date as date_type
@@ -1876,14 +1880,15 @@ class ReportesServices:
             
             # 1. Evento de ingreso al stock
             if producto.fecha_alta and producto.fecha_alta <= fecha_hasta:
+                suc_nom = producto.sucursal.nombre if producto.sucursal else "N/A"
                 eventos.append({
                     "tipo": "ingreso",
                     "fecha": producto.fecha_alta.isoformat(),
                     "fecha_datetime": datetime.combine(producto.fecha_alta, datetime.min.time()),
                     "descripcion": "Ingreso al stock",
-                    "detalle": f"Producto ingresado al sistema en sucursal {producto.sucursal.nombre}",
+                    "detalle": f"Producto ingresado al sistema en sucursal {suc_nom}",
                     "estado": producto.estado.value if hasattr(producto.estado, 'value') else str(producto.estado),
-                    "sucursal": producto.sucursal.nombre
+                    "sucursal": suc_nom,
                 })
             
             # 2. Alquileres (órdenes de trabajo)
@@ -1900,15 +1905,28 @@ class ReportesServices:
                     continue
                 
                 presupuesto = orden.presupuesto
-                cliente = presupuesto.cliente if presupuesto else None
-                
+                pc = getattr(presupuesto, "precliente", None) if presupuesto else None
+                cli = getattr(presupuesto, "cliente", None) if presupuesto else None
+                if pc is not None:
+                    nombre_titular = (
+                        f"{getattr(pc, 'apellido', '') or ''} {getattr(pc, 'nombre', '') or ''}".strip()
+                        or "N/A"
+                    )
+                elif cli is not None:
+                    nombre_titular = (
+                        f"{getattr(cli, 'apellido', '') or ''} {getattr(cli, 'nombre', '') or ''}".strip()
+                        or "N/A"
+                    )
+                else:
+                    nombre_titular = "N/A"
+
                 eventos.append({
                     "tipo": "alquiler",
                     "fecha": orden.fecha_evento.isoformat(),
                     "fecha_datetime": datetime.combine(orden.fecha_evento, datetime.min.time()),
                     "descripcion": f"Alquilado - Orden #{orden.id}",
-                    "detalle": f"Cliente: {cliente.nombre} {cliente.apellido} - Evento: {presupuesto.categoria_evento or 'N/A'} - Estado orden: {orden.estado}",
-                    "cliente_nombre": f"{cliente.nombre} {cliente.apellido}" if cliente else "N/A",
+                    "detalle": f"Cliente: {nombre_titular} - Evento: {(presupuesto.categoria_evento if presupuesto else None) or 'N/A'} - Estado orden: {orden.estado}",
+                    "cliente_nombre": nombre_titular,
                     "orden_id": orden.id,
                     "presupuesto_numero": presupuesto.numero if presupuesto else "N/A",
                     "estado_reserva": pr.estado,
@@ -1921,14 +1939,15 @@ class ReportesServices:
             ))
             
             for pl in productos_lavanderia:
+                lav_nombre = pl.lavanderia.nombre if pl.lavanderia else "N/A"
                 if pl.fecha_ingreso and pl.fecha_ingreso <= fecha_hasta:
                     eventos.append({
                         "tipo": "lavanderia_ingreso",
                         "fecha": pl.fecha_ingreso.isoformat(),
                         "fecha_datetime": datetime.combine(pl.fecha_ingreso, datetime.min.time()),
-                        "descripcion": f"Ingreso a lavandería: {pl.lavanderia.nombre}",
+                        "descripcion": f"Ingreso a lavandería: {lav_nombre}",
                         "detalle": f"Producto enviado a lavandería - Notas: {pl.notas or 'Sin notas'}",
-                        "lavanderia_nombre": pl.lavanderia.nombre,
+                        "lavanderia_nombre": lav_nombre,
                         "notas": pl.notas or ""
                     })
                 
@@ -1937,9 +1956,9 @@ class ReportesServices:
                         "tipo": "lavanderia_salida",
                         "fecha": pl.fecha_salida.isoformat(),
                         "fecha_datetime": datetime.combine(pl.fecha_salida, datetime.min.time()),
-                        "descripcion": f"Salida de lavandería: {pl.lavanderia.nombre}",
+                        "descripcion": f"Salida de lavandería: {lav_nombre}",
                         "detalle": f"Producto regresado de lavandería",
-                        "lavanderia_nombre": pl.lavanderia.nombre
+                        "lavanderia_nombre": lav_nombre
                     })
             
             # 4. Modista
@@ -1948,14 +1967,15 @@ class ReportesServices:
             ))
             
             for pm in productos_modista:
+                mod_nombre = pm.modista.nombre if pm.modista else "N/A"
                 if pm.fecha_ingreso and pm.fecha_ingreso <= fecha_hasta:
                     eventos.append({
                         "tipo": "modista_ingreso",
                         "fecha": pm.fecha_ingreso.isoformat(),
                         "fecha_datetime": datetime.combine(pm.fecha_ingreso, datetime.min.time()),
-                        "descripcion": f"Ingreso a modista: {pm.modista.nombre}",
+                        "descripcion": f"Ingreso a modista: {mod_nombre}",
                         "detalle": f"Producto enviado a modista - Notas: {pm.notas or 'Sin notas'}",
-                        "modista_nombre": pm.modista.nombre,
+                        "modista_nombre": mod_nombre,
                         "notas": pm.notas or ""
                     })
                 
@@ -1964,9 +1984,9 @@ class ReportesServices:
                         "tipo": "modista_salida",
                         "fecha": pm.fecha_salida.isoformat(),
                         "fecha_datetime": datetime.combine(pm.fecha_salida, datetime.min.time()),
-                        "descripcion": f"Salida de modista: {pm.modista.nombre}",
+                        "descripcion": f"Salida de modista: {mod_nombre}",
                         "detalle": f"Producto regresado de modista",
-                        "modista_nombre": pm.modista.nombre
+                        "modista_nombre": mod_nombre
                     })
             
             # 5. Ventas
@@ -1982,14 +2002,18 @@ class ReportesServices:
                 if venta.fecha > fecha_hasta:
                     continue
                 
-                cliente = venta.cliente
+                cliente = getattr(venta, "cliente", None)
+                if cliente is not None:
+                    cli_txt = f"{getattr(cliente, 'nombre', '') or ''} {getattr(cliente, 'apellido', '') or ''}".strip() or "N/A"
+                else:
+                    cli_txt = "N/A"
                 eventos.append({
                     "tipo": "venta",
                     "fecha": venta.fecha.isoformat(),
                     "fecha_datetime": datetime.combine(venta.fecha, venta.fecha_hora.time() if hasattr(venta, 'fecha_hora') else datetime.min.time()),
                     "descripcion": f"Vendido - Venta #{venta.id}",
-                    "detalle": f"Cliente: {cliente.nombre} {cliente.apellido} - Cantidad: {dv.cantidad} - Precio unitario: ${dv.precio_unitario:,.2f} - Subtotal: ${dv.subtotal:,.2f}",
-                    "cliente_nombre": f"{cliente.nombre} {cliente.apellido}",
+                    "detalle": f"Cliente: {cli_txt} - Cantidad: {dv.cantidad} - Precio unitario: ${dv.precio_unitario:,.2f} - Subtotal: ${dv.subtotal:,.2f}",
+                    "cliente_nombre": cli_txt,
                     "venta_id": venta.id,
                     "cantidad": dv.cantidad,
                     "precio_unitario": float(dv.precio_unitario),
@@ -1997,8 +2021,17 @@ class ReportesServices:
                     "tipo_precio": venta.tipo_precio
                 })
             
-            # Ordenar eventos por fecha (más antiguos primero)
-            eventos.sort(key=lambda x: x["fecha_datetime"])
+            # Más reciente primero (línea de tiempo hacia atrás)
+            eventos.sort(key=lambda x: x["fecha_datetime"], reverse=True)
+
+            total_eventos = len(eventos)
+            ps = max(1, min(int(page_size or 10), 10))
+            total_pages = max(1, (total_eventos + ps - 1) // ps) if total_eventos else 1
+            pg = min(max(1, int(page or 1)), total_pages)
+            start = (pg - 1) * ps
+            eventos_pagina = eventos[start : start + ps]
+            for ev in eventos_pagina:
+                ev.pop("fecha_datetime", None)
             
             # Información del producto
             producto_info = {
@@ -2010,8 +2043,8 @@ class ReportesServices:
                 "color": (producto.color.nombre if producto.color else None),
                 "tela": (producto.tela.nombre if producto.tela else None),
                 "estado_actual": producto.estado.value if hasattr(producto.estado, 'value') else str(producto.estado),
-                "sucursal_id": producto.sucursal.id,
-                "sucursal_nombre": producto.sucursal.nombre,
+                "sucursal_id": producto.sucursal.id if producto.sucursal else None,
+                "sucursal_nombre": producto.sucursal.nombre if producto.sucursal else None,
                 "fecha_alta": producto.fecha_alta.isoformat() if producto.fecha_alta else None,
                 "veces_alquilado": producto.veces_alquilado,
                 "stock": producto.stock,
@@ -2027,12 +2060,20 @@ class ReportesServices:
                 "total_modista": len([e for e in eventos if "modista" in e["tipo"]])
             }
             
-            print(f"🔍 DEBUG: Histórico generado con {len(eventos)} eventos")
+            print(f"🔍 DEBUG: Histórico generado con {total_eventos} eventos (página {pg}/{total_pages})")
             
             return {
                 "producto": producto_info,
-                "eventos": eventos,
+                "eventos": eventos_pagina,
                 "resumen": resumen,
+                "paginacion": {
+                    "page": pg,
+                    "page_size": ps,
+                    "total": total_eventos,
+                    "total_pages": total_pages,
+                    "has_prev": pg > 1,
+                    "has_next": pg < total_pages,
+                },
                 "fecha_hasta": fecha_hasta.isoformat()
             }
             
