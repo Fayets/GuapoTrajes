@@ -111,6 +111,9 @@ def get_all_products(
     presupuesto_excluir_id: Optional[int] = Query(
         None, description="Excluir este presupuesto al calcular disponible_en_fechas (edición)"
     ),
+    orden_excluir_id: Optional[int] = Query(
+        None, description="Excluir reservas de esta orden al calcular disponible_en_fechas (edición)"
+    ),
     incluir_ventana_reserva: bool = Query(
         False,
         description="Si true, agrega en_ventana_reserva_hoy (regla [R-5,R] y órden con reserva)",
@@ -144,6 +147,7 @@ def get_all_products(
             fecha_retiro=fecha_retiro,
             fecha_devolucion=fecha_devolucion,
             presupuesto_excluir_id=presupuesto_excluir_id,
+            orden_excluir_id=orden_excluir_id,
             incluir_ventana_reserva=incluir_ventana_reserva,
             ventana_reserva_filtro=vf or None,
         )
@@ -246,6 +250,9 @@ def disponibilidad(
     presupuesto_excluir_id: Optional[int] = Query(
         None, description="Excluir este presupuesto al verificar (edición)"
     ),
+    orden_excluir_id: Optional[int] = Query(
+        None, description="Excluir reservas de esta orden al verificar (edición)"
+    ),
 ):
     try:
         disponible = verificar_disponibilidad(
@@ -253,6 +260,7 @@ def disponibilidad(
             fecha_retiro,
             fecha_devolucion,
             presupuesto_excluir_id,
+            orden_excluir_id,
         )
         return {
             "producto_id": producto_id,

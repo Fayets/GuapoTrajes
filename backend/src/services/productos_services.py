@@ -280,6 +280,7 @@ class ProductoServices:
         fecha_retiro: Optional[date] = None,
         fecha_devolucion: Optional[date] = None,
         presupuesto_excluir_id: Optional[int] = None,
+        orden_excluir_id: Optional[int] = None,
         incluir_ventana_reserva: bool = False,
         ventana_reserva_filtro: Optional[str] = None,
     ) -> Tuple[List[Dict], int]:
@@ -401,6 +402,7 @@ class ProductoServices:
                             fecha_retiro,
                             fecha_devolucion,
                             presupuesto_excluir_id,
+                            orden_excluir_id,
                         )
                 else:
                     for r in result:

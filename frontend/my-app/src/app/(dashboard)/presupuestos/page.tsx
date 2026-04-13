@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import PresupuestoModal from "@/components/modales/presupuestoModal";
@@ -86,6 +87,7 @@ type Presupuesto = {
   lugar_evento?: string;
   seña_pagada?: number;
   payment_method?: string; // Cambiado de metodo_pago
+  orden_id?: number | null;
 };
 
 type PresupuestoResponse = {
@@ -107,6 +109,7 @@ type PresupuestoResponse = {
   items: ItemPresupuesto[];
   seña_pagada?: number;
   payment_method?: string; // Cambiado de metodo_pago
+  orden_id?: number | null;
 };
 
 export default function PresupuestosPage() {
@@ -204,8 +207,45 @@ export default function PresupuestosPage() {
   /** True si el modal se abrió importando ítems desde la cola del dashboard; al guardar OK se vacía localStorage. */
   const importedFromQueueRef = useRef(false);
   const nuevoPresupuestoRef = useRef<() => void>(() => {});
+  const abrirPresupuestoEdicionRef = useRef<(p: Presupuesto) => void>(() => {});
 
   const API_BASE = getApiBaseUrl();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const adaptPresupuestoDesdeApi = useCallback((p: any): Presupuesto => {
+    const items = (p.items ?? []).map((item: any) => {
+      const productoId =
+        item.productoId ?? item.producto_id ?? item.producto?.id ?? 0;
+      const precioUnitario =
+        item.precioUnitario ??
+        item.precio_unitario ??
+        item.producto?.precio_alquiler_efectivo ??
+        0;
+      const cantidad = item.cantidad ?? 0;
+      const subtotal = item.subtotal ?? cantidad * precioUnitario;
+      return {
+        id: item.id ?? `${productoId}-${cantidad}`,
+        productoId,
+        productoNombre:
+          item.productoNombre ??
+          item.producto_nombre ??
+          item.producto_descripcion ??
+          item.descripcion ??
+          item.producto?.descripcion ??
+          "Producto",
+        cantidad,
+        precioUnitario,
+        subtotal,
+      };
+    });
+    return {
+      ...p,
+      orden_id: p.orden_id ?? null,
+      items,
+    };
+  }, []);
 
   useEffect(() => {
     fetchClientes();
@@ -249,12 +289,19 @@ export default function PresupuestosPage() {
   };
 
   const fetchProductos = useCallback(
-    async (opts?: { fechaRetiro?: string; fechaDevolucion?: string }) => {
+    async (opts?: {
+      fechaRetiro?: string;
+      fechaDevolucion?: string;
+      ordenExcluirId?: number;
+    }) => {
       try {
         const token = localStorage.getItem("token");
         let url = `${API_BASE}/productos/all?page=1&size=200`;
         if (opts?.fechaRetiro && opts?.fechaDevolucion) {
           url += `&fecha_retiro=${encodeURIComponent(opts.fechaRetiro)}&fecha_devolucion=${encodeURIComponent(opts.fechaDevolucion)}`;
+        }
+        if (opts?.ordenExcluirId != null) {
+          url += `&orden_excluir_id=${encodeURIComponent(String(opts.ordenExcluirId))}`;
         }
         const res = await fetch(url, {
           method: "GET",
@@ -279,16 +326,18 @@ export default function PresupuestosPage() {
     if (!showModal || verModoLectura) return;
     const fr = formData.fechaRetiro?.trim();
     const fd = formData.fechaDevolucion?.trim();
+    const ordenExcluirId = presupuestoSeleccionado?.orden_id ?? undefined;
     if (fr && fd) {
-      void fetchProductos({ fechaRetiro: fr, fechaDevolucion: fd });
+      void fetchProductos({ fechaRetiro: fr, fechaDevolucion: fd, ordenExcluirId });
     } else {
-      void fetchProductos();
+      void fetchProductos({ ordenExcluirId });
     }
   }, [
     showModal,
     verModoLectura,
     formData.fechaRetiro,
     formData.fechaDevolucion,
+    presupuestoSeleccionado?.orden_id,
     fetchProductos,
   ]);
 
@@ -418,6 +467,11 @@ export default function PresupuestosPage() {
     setNuevoItem((prev) => ({ ...prev, [name]: value }));
   };
 
+  const ordenExcluirDisponibilidadQuery = () => {
+    const oid = presupuestoSeleccionado?.orden_id;
+    return oid != null ? `&orden_excluir_id=${encodeURIComponent(String(oid))}` : "";
+  };
+
   const verificarDisponibilidad = async () => {
     const { fechaRetiro, fechaDevolucion } = formData;
     const productoId = nuevoItem.productoId;
@@ -430,7 +484,7 @@ export default function PresupuestosPage() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `${API_BASE}/productos/${productoId}/disponibilidad?fecha_retiro=${encodeURIComponent(fechaRetiro)}&fecha_devolucion=${encodeURIComponent(fechaDevolucion)}`,
+        `${API_BASE}/productos/${productoId}/disponibilidad?fecha_retiro=${encodeURIComponent(fechaRetiro)}&fecha_devolucion=${encodeURIComponent(fechaDevolucion)}${ordenExcluirDisponibilidadQuery()}`,
         {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }
@@ -475,7 +529,7 @@ export default function PresupuestosPage() {
 
     const token = localStorage.getItem("token");
     const res = await fetch(
-      `${API_BASE}/productos/${producto.id}/disponibilidad?fecha_retiro=${encodeURIComponent(formData.fechaRetiro)}&fecha_devolucion=${encodeURIComponent(formData.fechaDevolucion)}`,
+      `${API_BASE}/productos/${producto.id}/disponibilidad?fecha_retiro=${encodeURIComponent(formData.fechaRetiro)}&fecha_devolucion=${encodeURIComponent(formData.fechaDevolucion)}${ordenExcluirDisponibilidadQuery()}`,
       {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       }
@@ -484,7 +538,7 @@ export default function PresupuestosPage() {
 
     if (!data.disponible) {
       alert(
-        `El producto ${producto.descripcion} no está disponible en la fecha seleccionada.`
+        `El producto ${producto.descripcion} no está disponible para la nueva fecha (conflicto con otra reserva).`
       );
       return;
     }
@@ -502,6 +556,7 @@ export default function PresupuestosPage() {
 
   const nuevoPresupuesto = () => {
     setPresupuestoActual(null);
+    setPresupuestoSeleccionado(null);
     setVerModoLectura(false);
     preclienteIdRef.current = null;
     setClienteOPreclienteSeleccionado(null);
@@ -668,10 +723,17 @@ export default function PresupuestosPage() {
       (payload as any).cliente_id = parseInt(formData.clienteId, 10);
     }
 
+    const editando =
+      Boolean(presupuestoSeleccionado?.id) && !verModoLectura;
+    const url = editando
+      ? `${API_BASE}/presupuestos/${presupuestoSeleccionado!.id}`
+      : `${API_BASE}/presupuestos/`;
+    const method = editando ? "PUT" : "POST";
+
     try {
       toast.loading("Guardando presupuesto...", { id: "guardar-presupuesto" });
-      const res = await fetch(`${API_BASE}/presupuestos/`, {
-        method: "POST",
+      const res = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -687,13 +749,17 @@ export default function PresupuestosPage() {
         } catch {
           // Respuesta OK pero no es JSON
         }
-        toast.success("Presupuesto generado correctamente", { id: "guardar-presupuesto" });
+        toast.success(
+          editando ? "Presupuesto actualizado correctamente" : "Presupuesto generado correctamente",
+          { id: "guardar-presupuesto" }
+        );
         if (importedFromQueueRef.current) {
           clearScanQueue();
           importedFromQueueRef.current = false;
         }
         preclienteIdRef.current = null;
         setClienteOPreclienteSeleccionado(null);
+        setPresupuestoSeleccionado(null);
         setShowModal(false);
         setTotalConDescuento(null);
         setPorcentajeDescuento(null);
@@ -745,37 +811,7 @@ export default function PresupuestosPage() {
         console.warn("La respuesta de presupuestos no es un array:", data);
         setPresupuestos([]); // Prevención
       } else {
-        const presupuestosAdaptados = data.map((p: any) => ({
-          ...p,
-          items: (p.items ?? []).map((item: any) => {
-            const productoId =
-              item.productoId ?? item.producto_id ?? item.producto?.id ?? 0;
-
-            const precioUnitario =
-              item.precioUnitario ??
-              item.precio_unitario ??
-              item.producto?.precio_alquiler_efectivo ??
-              0;
-
-            const cantidad = item.cantidad ?? 0;
-            const subtotal = item.subtotal ?? cantidad * precioUnitario;
-
-            return {
-              id: item.id ?? `${productoId}-${cantidad}`,
-              productoId,
-              productoNombre:
-                item.productoNombre ??
-                item.producto_nombre ??
-                item.producto_descripcion ??
-                item.descripcion ??
-                item.producto?.descripcion ??
-                "Producto",
-              cantidad,
-              precioUnitario,
-              subtotal,
-            };
-          }),
-        }));
+        const presupuestosAdaptados = data.map(adaptPresupuestoDesdeApi);
 
         setPresupuestos(presupuestosAdaptados);
       }
@@ -873,43 +909,14 @@ export default function PresupuestosPage() {
     }
   };
 
-  const abrirPresupuestoVista = (presupuesto: PresupuestoResponse) => {
-    setPresupuestoSeleccionado(presupuesto);
-    const nombre = presupuesto.cliente_nombre?.trim();
-    if (presupuesto.es_precliente && presupuesto.precliente_id != null && nombre) {
-      setClienteOPreclienteSeleccionado({ tipo: "precliente", id: presupuesto.precliente_id, nombre });
-    } else if (presupuesto.cliente_id != null && nombre) {
-      setClienteOPreclienteSeleccionado({ tipo: "cliente", id: presupuesto.cliente_id, nombre });
-    } else {
-      setClienteOPreclienteSeleccionado(null);
-    }
-    setFormData({
-      clienteId: presupuesto.cliente_id != null ? String(presupuesto.cliente_id) : "",
-      preclienteId: presupuesto.precliente_id ?? null,
-      fechaEvento: fechaNegocioYmd(presupuesto.fecha_evento) || presupuesto.fecha_evento || "",
-      fechaRetiro: fechaNegocioYmd(presupuesto.fecha_retiro || "") || presupuesto.fecha_retiro || "",
-      fechaDevolucion:
-        fechaNegocioYmd(presupuesto.fecha_devolucion || "") || presupuesto.fecha_devolucion || "",
-      categoria: presupuesto.categoria_evento || "",
-      agasajado: presupuesto.nombre_agasajado || "",
-      lugar: presupuesto.lugar_evento || "",
-      observaciones: presupuesto.observaciones || "",
-    });
-
-    setItems(presupuesto.items);
-    setTotalConDescuento(null);
-    setPorcentajeDescuento(null);
-    setVerModoLectura(true);
-    setVerModoLectura(true);
-    setShowModal(true);
-  };
-
   function toPresupuestoResponse(p: Presupuesto): PresupuestoResponse {
     return {
       id: p.id,
       numero: p.numero,
       cliente_id: p.cliente_id,
+      precliente_id: p.precliente_id,
       cliente_nombre: p.cliente_nombre,
+      es_precliente: p.es_precliente ?? false,
       fecha_evento: p.fecha_evento,
       total: p.total,
       estado: p.estado,
@@ -920,8 +927,81 @@ export default function PresupuestosPage() {
       categoria_evento: p["categoria_evento"] || "",
       nombre_agasajado: p["nombre_agasajado"] || "",
       lugar_evento: p["lugar_evento"] || "",
+      orden_id: p.orden_id ?? null,
     };
   }
+
+  const abrirPresupuestoInterno = (presupuesto: Presupuesto, verLectura: boolean) => {
+    const pr = toPresupuestoResponse(presupuesto);
+    setPresupuestoSeleccionado(pr);
+    const nombre = pr.cliente_nombre?.trim();
+    if (pr.es_precliente && pr.precliente_id != null && nombre) {
+      setClienteOPreclienteSeleccionado({ tipo: "precliente", id: pr.precliente_id, nombre });
+    } else if (pr.cliente_id != null && nombre) {
+      setClienteOPreclienteSeleccionado({ tipo: "cliente", id: pr.cliente_id, nombre });
+    } else {
+      setClienteOPreclienteSeleccionado(null);
+    }
+    setFormData({
+      clienteId: pr.cliente_id != null ? String(pr.cliente_id) : "",
+      preclienteId: pr.precliente_id ?? null,
+      fechaEvento: fechaNegocioYmd(pr.fecha_evento) || pr.fecha_evento || "",
+      fechaRetiro: fechaNegocioYmd(pr.fecha_retiro || "") || pr.fecha_retiro || "",
+      fechaDevolucion:
+        fechaNegocioYmd(pr.fecha_devolucion || "") || pr.fecha_devolucion || "",
+      categoria: pr.categoria_evento || "",
+      agasajado: pr.nombre_agasajado || "",
+      lugar: pr.lugar_evento || "",
+      observaciones: pr.observaciones || "",
+    });
+
+    setItems(pr.items);
+    setTotalConDescuento(null);
+    setPorcentajeDescuento(null);
+    setVerModoLectura(verLectura);
+    setShowModal(true);
+  };
+
+  const abrirPresupuestoVista = (presupuesto: Presupuesto) => {
+    abrirPresupuestoInterno(presupuesto, true);
+  };
+
+  const abrirPresupuestoEdicion = (presupuesto: Presupuesto) => {
+    setPresupuestoActual(presupuesto);
+    abrirPresupuestoInterno(presupuesto, false);
+  };
+
+  abrirPresupuestoEdicionRef.current = abrirPresupuestoEdicion;
+
+  useEffect(() => {
+    const raw = searchParams.get("editar");
+    if (!raw?.trim()) return;
+    const pid = parseInt(raw, 10);
+    if (Number.isNaN(pid)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/presupuestos/${pid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          toast.error("No se pudo cargar el presupuesto para editar.");
+          return;
+        }
+        const data = await res.json();
+        if (cancelled) return;
+        const p = adaptPresupuestoDesdeApi(data);
+        abrirPresupuestoEdicionRef.current(p);
+        router.replace(pathname || "/presupuestos");
+      } catch {
+        toast.error("Error al abrir el presupuesto.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams.get("editar"), API_BASE, adaptPresupuestoDesdeApi, pathname, router]);
   const confirmarSenia = async () => {
     if (!presupuestoAConvertir) return;
 
@@ -1255,12 +1335,20 @@ export default function PresupuestosPage() {
                           <button
                             className="btn btn-sm btn-outline-secondary"
                             title="Ver presupuesto"
-                            onClick={() =>
-                              abrirPresupuestoVista(toPresupuestoResponse(p))
-                            }
+                            onClick={() => abrirPresupuestoVista(p)}
                           >
                             Ver
                           </button>
+                          {p.estado.toLowerCase() !== "cancelada" && (
+                            <button
+                              className="btn btn-sm btn-primary"
+                              type="button"
+                              title="Editar fechas e ítems"
+                              onClick={() => abrirPresupuestoEdicion(p)}
+                            >
+                              Editar
+                            </button>
+                          )}
                           {p.estado.toLowerCase() === "convertido_orden" ||
                           p.estado.toLowerCase() === "aprobado" ||
                           p.estado.toLowerCase() === "cancelada" ? (
@@ -1377,6 +1465,7 @@ export default function PresupuestosPage() {
         onClose={() => {
           setShowModal(false);
           setVerModoLectura(false);
+          setPresupuestoSeleccionado(null);
         }}
       />
 

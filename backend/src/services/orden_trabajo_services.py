@@ -19,6 +19,8 @@ from datetime import datetime, timedelta, date
 from typing import Optional
 import logging
 
+from src.services.disponibilidad_services import reconstruir_productos_reservados_para_orden
+
 logger = logging.getLogger(__name__)
 
 class OrdenTrabajoServices:
@@ -102,8 +104,6 @@ class OrdenTrabajoServices:
                 print(f"🔍 DEBUG - Presupuesto fecha_evento: {presupuesto.fecha_evento} (tipo: {type(presupuesto.fecha_evento)})")
                 print(f"🔍 DEBUG - Orden fecha_evento a guardar: {fecha_evento_orden} (tipo: {type(fecha_evento_orden)})")
 
-                fecha_retiro_reserva = presupuesto.fecha_retiro or presupuesto.fecha_evento
-
                 orden = OrdenTrabajo(
                     presupuesto=presupuesto,
                     fecha_evento=fecha_evento_orden,
@@ -151,22 +151,7 @@ class OrdenTrabajoServices:
                     )
                     flush()
 
-                # Reservar productos
-                for item in presupuesto.items:
-                    producto = item.producto
-                    fecha_bloqueo = fecha_retiro_reserva - timedelta(days=5)
-
-                    if producto.estado in ("lavanderia", "alquilado"):
-                        estado = "no disponible"
-                    else:
-                        estado = "reservado"
-
-                    ProductoReservado(
-                        orden_trabajo=orden,
-                        producto=producto,
-                        estado=estado,
-                        fecha_bloqueo=fecha_bloqueo,
-                    )
+                reconstruir_productos_reservados_para_orden(orden, presupuesto)
                 
                 presupuesto.estado = "Aprobado"
                 

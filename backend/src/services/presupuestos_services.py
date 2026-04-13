@@ -6,7 +6,10 @@ from fastapi import HTTPException
 from src.fechas_ar import fecha_presupuesto_api_ymd, instante_a_fecha_ar
 from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, db
 from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse, ConjuntoMismaFechaCategoriaOut
-from src.services.disponibilidad_services import verificar_disponibilidad
+from src.services.disponibilidad_services import (
+    validar_producto_para_item_presupuesto,
+    reconstruir_productos_reservados_para_orden,
+)
 
 def _presupuesto_cliente_info(p):
     """Devuelve cliente_id, precliente_id, cliente_nombre, es_precliente, cliente_dni, cliente_direccion, cliente_celular para un presupuesto."""
@@ -30,6 +33,16 @@ def _presupuesto_cliente_info(p):
         "cliente_direccion": c.direccion,
         "cliente_celular": c.celular,
     }
+
+
+def _extra_discount_reason_para_db(value: Optional[str]) -> str:
+    """
+    Motivo de descuento extra: en algunos despliegues Pony/BD no aceptan NULL en la columna.
+    Normalizar a cadena vacía en lugar de None al persistir.
+    """
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 class PresupuestosServices:
@@ -61,19 +74,14 @@ class PresupuestosServices:
                     producto = Producto.get(id=item.producto_id)
                     if not producto:
                         raise HTTPException(status_code=404, detail=f"Producto ID {item.producto_id} no encontrado")
-                    
-                    # Verificar disponibilidad del producto
-                    disponible = verificar_disponibilidad(
-                        producto_id=item.producto_id,
+
+                    validar_producto_para_item_presupuesto(
+                        producto,
                         fecha_retiro=fecha_retiro,
-                        fecha_devolucion=fecha_devolucion
+                        fecha_devolucion=fecha_devolucion,
+                        orden_excluir_id=None,
+                        es_reuso_del_mismo_presupuesto=False,
                     )
-                    
-                    if not disponible:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"El producto '{producto.descripcion}' no está disponible en las fechas seleccionadas (ya está reservado en otro presupuesto u orden de trabajo)"
-                        )
 
                 # Calcular total base sumando los subtotales de los items
                 # NOTA: El frontend ya aplicó el descuento redistribuyendo los precios de los items,
@@ -150,8 +158,9 @@ class PresupuestosServices:
                 if data.extra_discount_percentage is not None:
                     presupuesto_args["extra_discount_percentage"] = data.extra_discount_percentage
                     presupuesto_args["extra_discount_amount"] = data.extra_discount_amount
-                    if data.extra_discount_reason:
-                        presupuesto_args["extra_discount_reason"] = data.extra_discount_reason
+                    presupuesto_args["extra_discount_reason"] = _extra_discount_reason_para_db(
+                        data.extra_discount_reason
+                    )
                     if usuario_aplico_descuento:
                         presupuesto_args["extra_discount_applied_by"] = usuario_aplico_descuento
                     presupuesto_args["extra_discount_created_at"] = datetime.now()
@@ -241,6 +250,7 @@ class PresupuestosServices:
                         extra_discount_applied_by_id=p.extra_discount_applied_by.id if p.extra_discount_applied_by else None,
                         extra_discount_applied_by_nombre=f"{p.extra_discount_applied_by.nombre} {p.extra_discount_applied_by.apellido}" if p.extra_discount_applied_by else None,
                         extra_discount_created_at=str(p.extra_discount_created_at) if p.extra_discount_created_at else None,
+                        orden_id=p.orden_trabajo.id if p.orden_trabajo else None,
                     )
                     for p in presupuestos
                 ]
@@ -346,8 +356,19 @@ class PresupuestosServices:
                 if not presupuesto:
                     raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
 
-                if presupuesto.orden_trabajo:
-                    raise HTTPException(status_code=400, detail="No se puede editar: ya tiene orden de trabajo generada")
+                orden = presupuesto.orden_trabajo
+                if orden:
+                    oest = (orden.estado or "").strip().lower()
+                    if oest in ("completada", "cancelada", "cancelado"):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="No se puede editar: la orden está completada o cancelada.",
+                        )
+                    if getattr(orden, "contrato_generado_at", None):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="No se puede editar: el contrato ya fue generado.",
+                        )
 
                 # Cliente o precliente
                 cliente = None
@@ -364,25 +385,22 @@ class PresupuestosServices:
                 # Verificar productos y disponibilidad
                 fecha_retiro = data.fecha_retiro or data.fecha_evento
                 fecha_devolucion = data.fecha_devolucion or data.fecha_evento
-                
+
+                old_product_ids = {item.producto.id for item in presupuesto.items}
+                orden_excluir_id = orden.id if orden else None
+
                 for item in data.items:
                     producto = Producto.get(id=item.producto_id)
                     if not producto:
                         raise HTTPException(status_code=404, detail=f"Producto ID {item.producto_id} no encontrado")
-                    
-                    # Verificar disponibilidad del producto (excluyendo este presupuesto)
-                    disponible = verificar_disponibilidad(
-                        producto_id=item.producto_id,
+
+                    validar_producto_para_item_presupuesto(
+                        producto,
                         fecha_retiro=fecha_retiro,
                         fecha_devolucion=fecha_devolucion,
-                        presupuesto_excluir_id=presupuesto_id
+                        orden_excluir_id=orden_excluir_id,
+                        es_reuso_del_mismo_presupuesto=(producto.id in old_product_ids),
                     )
-                    
-                    if not disponible:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"El producto '{producto.descripcion}' no está disponible en las fechas seleccionadas (ya está reservado en otro presupuesto u orden de trabajo)"
-                        )
 
                 # Actualizar presupuesto
                 presupuesto.cliente = cliente
@@ -452,18 +470,36 @@ class PresupuestosServices:
                     
                     presupuesto.extra_discount_percentage = data.extra_discount_percentage
                     presupuesto.extra_discount_amount = data.extra_discount_amount
-                    presupuesto.extra_discount_reason = data.extra_discount_reason
+                    presupuesto.extra_discount_reason = _extra_discount_reason_para_db(
+                        data.extra_discount_reason
+                    )
                     presupuesto.extra_discount_applied_by = usuario_aplico_descuento
                     presupuesto.extra_discount_created_at = datetime.now()
                 else:
                     # Si no hay descuento extra, limpiar campos
                     presupuesto.extra_discount_percentage = None
                     presupuesto.extra_discount_amount = None
-                    presupuesto.extra_discount_reason = None
+                    presupuesto.extra_discount_reason = ""
                     presupuesto.extra_discount_applied_by = None
                     presupuesto.extra_discount_created_at = None
 
                 presupuesto.total = total
+
+                if orden:
+                    if orden.seña_pagada > total:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="El total del presupuesto no puede ser menor que la seña ya pagada.",
+                        )
+                    orden.saldo_pendiente = total - orden.seña_pagada
+                    orden.fecha_evento = data.fecha_evento
+                    orden.extra_discount_percentage = presupuesto.extra_discount_percentage
+                    orden.extra_discount_amount = presupuesto.extra_discount_amount
+                    orden.extra_discount_reason = presupuesto.extra_discount_reason
+                    orden.extra_discount_applied_by = presupuesto.extra_discount_applied_by
+                    orden.extra_discount_created_at = presupuesto.extra_discount_created_at
+                    reconstruir_productos_reservados_para_orden(orden, presupuesto)
+
                 flush()
                 commit()
 
@@ -544,6 +580,7 @@ class PresupuestosServices:
                     extra_discount_applied_by_id=presupuesto.extra_discount_applied_by.id if presupuesto.extra_discount_applied_by else None,
                     extra_discount_applied_by_nombre=f"{presupuesto.extra_discount_applied_by.nombre} {presupuesto.extra_discount_applied_by.apellido}" if presupuesto.extra_discount_applied_by else None,
                     extra_discount_created_at=str(presupuesto.extra_discount_created_at) if presupuesto.extra_discount_created_at else None,
+                    orden_id=presupuesto.orden_trabajo.id if presupuesto.orden_trabajo else None,
                 )
 
             except HTTPException:

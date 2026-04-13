@@ -460,6 +460,7 @@ class PresupuestoResponse(BaseModel):
     extra_discount_applied_by_id: Optional[int] = None
     extra_discount_applied_by_nombre: Optional[str] = None
     extra_discount_created_at: Optional[str] = None
+    orden_id: Optional[int] = None
 
 
 class ConjuntoMismaFechaCategoriaOut(BaseModel):

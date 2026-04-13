@@ -355,12 +355,18 @@ export default function PresupuestoModal({
       >
         <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
           <DialogTitle>
-            {verModoLectura ? "Ver Presupuesto" : "Nuevo Presupuesto"}
+            {verModoLectura
+              ? "Ver Presupuesto"
+              : presupuestoSeleccionado?.id
+                ? "Editar Presupuesto"
+                : "Nuevo Presupuesto"}
           </DialogTitle>
           <DialogDescription>
             {verModoLectura
               ? "Visualización de presupuesto existente"
-              : "Completá los datos del evento y seleccioná los productos"}
+              : presupuestoSeleccionado?.id
+                ? "Modificá fechas o ítems; se revalida disponibilidad y las reservas de la orden si aplica."
+                : "Completá los datos del evento y seleccioná los productos"}
           </DialogDescription>
         </DialogHeader>
 

@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/auth-context";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/RoleGate";
 import { MetodoPagoSelector } from "@/components/metodo-pago-selector";
@@ -2296,6 +2297,26 @@ function OrdenesTrabajoContent() {
             </div>
 
             <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
+              {(() => {
+                const e = (ordenSeleccionada.estado || "").toLowerCase();
+                const bloqueada =
+                  e === "completada" ||
+                  e === "cancelada" ||
+                  Boolean(ordenSeleccionada.contrato_generado_at);
+                if (bloqueada) return null;
+                return (
+                  <Link
+                    className="btn btn-primary"
+                    href={`/presupuestos?editar=${ordenSeleccionada.presupuesto_id}`}
+                    onClick={() => {
+                      setShowViewModal(false);
+                      setHistorialSeñas([]);
+                    }}
+                  >
+                    Editar presupuesto e ítems
+                  </Link>
+                );
+              })()}
               <button
                 className="btn btn-light border"
                 onClick={() => {
