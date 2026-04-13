@@ -16,7 +16,7 @@ from src.models import (
     Modista,
 )
 from datetime import datetime, timedelta, date
-from typing import Optional
+from typing import List, Optional, Any
 import logging
 
 from src.services.disponibilidad_services import reconstruir_productos_reservados_para_orden
@@ -94,8 +94,11 @@ class OrdenTrabajoServices:
                     )
 
                 total = presupuesto.total
-                saldo_pendiente = total - seña_pagada
-                
+                saldo_pendiente = max(0.0, float(total) - float(seña_pagada))
+                estado_inicial = (
+                    "Pagada" if saldo_pendiente <= 0 else "En proceso"
+                )
+
                 # Asegurar que la fecha_evento se copie exactamente sin conversiones
                 # La fecha_evento del presupuesto ya es un objeto date, copiarlo directamente
                 fecha_evento_orden = presupuesto.fecha_evento
@@ -112,7 +115,7 @@ class OrdenTrabajoServices:
                     metodo_pago=payment_method_str,  # Para compatibilidad
                     metodo_pago_configurable=metodo_pago_configurable,  # Nueva relación
                     submetodo_pago=submetodo_pago,  # Nueva relación
-                    estado="En proceso",
+                    estado=estado_inicial,
                     # Copiar campos de descuento extra del presupuesto
                     extra_discount_percentage=presupuesto.extra_discount_percentage,
                     extra_discount_amount=presupuesto.extra_discount_amount,
@@ -240,6 +243,7 @@ class OrdenTrabajoServices:
                             {
                                 "producto_id": pr.producto.id,
                                 "producto_descripcion": pr.producto.descripcion,
+                                "codigo_barra": pr.producto.codigo_barra or "",
                                 "estado": pr.estado,
                                 "fecha_bloqueo": pr.fecha_bloqueo.isoformat(),
                                 "observaciones": pr.observaciones,
@@ -320,6 +324,7 @@ class OrdenTrabajoServices:
                         {
                             "producto_id": pr.producto.id,
                             "producto_descripcion": pr.producto.descripcion,
+                            "codigo_barra": pr.producto.codigo_barra or "",
                             "estado": pr.estado,
                             "fecha_bloqueo": pr.fecha_bloqueo.isoformat(),
                             "observaciones": pr.observaciones,
@@ -1027,11 +1032,14 @@ class OrdenTrabajoServices:
         self,
         orden_id: int,
         usuario_id: int,
-        destino: str,
+        destino: Optional[str] = None,
         lavanderia_id: Optional[int] = None,
         modista_id: Optional[int] = None,
+        envios: Optional[List[Any]] = None,
     ) -> dict:
-        """Completar la devolución. Los productos pasan al estado indicado (SALON, LAVANDERIA o MODISTA) y se liberan de la orden."""
+        """Completar la devolución. Modo legacy: un destino para todos los productos.
+        Modo envíos: varios lotes (remitos) con destino/lavandería/modista por lote;
+        los productos no listados en ningún envío permanecen en la orden."""
         with db_session:
             try:
                 orden = OrdenTrabajo.get(id=orden_id)
@@ -1044,31 +1052,157 @@ class OrdenTrabajoServices:
                         detail=f"La orden ya está en estado '{orden.estado}' y no puede ser completada"
                     )
 
-                productos_reservados = list(orden.productos_reservados)
-                cliente_nombre, cliente_celular = self._obtener_cliente_orden(orden)
-                self._aplicar_destino_productos(
-                    productos_reservados,
-                    destino,
-                    lavanderia_id,
-                    modista_id,
-                    cliente_nombre=cliente_nombre,
-                    cliente_celular=cliente_celular,
-                )
-                for producto_reservado in productos_reservados:
-                    producto_reservado.delete()
+                productos_en_orden = {pr.producto.id: pr for pr in orden.productos_reservados}
+                if not productos_en_orden:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="La orden no tiene productos reservados para devolver",
+                    )
 
-                orden.estado = "Completada"
+                cliente_nombre, cliente_celular = self._obtener_cliente_orden(orden)
+                remitos_out: List[dict] = []
+                stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+
+                batches: List[tuple] = []
+                if envios:
+                    for e in envios:
+                        if hasattr(e, "model_dump"):
+                            raw = e.model_dump()
+                        elif isinstance(e, dict):
+                            raw = e
+                        else:
+                            raw = {
+                                "destino": getattr(e, "destino", None),
+                                "lavanderia_id": getattr(e, "lavanderia_id", None),
+                                "modista_id": getattr(e, "modista_id", None),
+                                "productos_ids": getattr(e, "productos_ids", None),
+                            }
+                        d = raw.get("destino")
+                        lav = raw.get("lavanderia_id")
+                        mod = raw.get("modista_id")
+                        pids = raw.get("productos_ids")
+                        if not pids:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Cada envío debe incluir productos_ids",
+                            )
+                        batches.append((list(pids), str(d), lav, mod))
+                else:
+                    if not destino:
+                        raise HTTPException(
+                            status_code=400, detail="Debe indicar destino o envíos"
+                        )
+                    batches.append(
+                        (
+                            list(productos_en_orden.keys()),
+                            destino,
+                            lavanderia_id,
+                            modista_id,
+                        )
+                    )
+
+                asignados: set = set()
+                for batch_idx, (pids, d_dest, d_lav, d_mod) in enumerate(batches):
+                    if len(pids) != len(set(pids)):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Hay productos duplicados dentro del mismo envío",
+                        )
+                    dup = asignados.intersection(pids)
+                    if dup:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Producto(s) repetidos en más de un envío: {sorted(dup)}",
+                        )
+                    invalid = [pid for pid in pids if pid not in productos_en_orden]
+                    if invalid:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Productos que no pertenecen a la orden: {invalid}",
+                        )
+                    asignados.update(pids)
+
+                    a_procesar = [productos_en_orden[pid] for pid in pids]
+                    num_remito = f"REM-{orden.id}-{stamp}-{batch_idx + 1}"
+                    desc = f"Devolución orden #{orden.id} — remito {num_remito}"
+                    self._aplicar_destino_productos(
+                        a_procesar,
+                        d_dest,
+                        d_lav,
+                        d_mod,
+                        descripcion=desc,
+                        cliente_nombre=cliente_nombre,
+                        cliente_celular=cliente_celular,
+                    )
+                    lav_nombre = None
+                    mod_nombre = None
+                    if d_dest == "LAVANDERIA" and d_lav:
+                        lav = Lavanderia.get(id=d_lav)
+                        lav_nombre = lav.nombre if lav else None
+                    if d_dest == "MODISTA" and d_mod:
+                        mod = Modista.get(id=d_mod)
+                        mod_nombre = mod.nombre if mod else None
+
+                    lineas_prod = []
+                    for pr in a_procesar:
+                        prod = pr.producto
+                        lineas_prod.append(
+                            {
+                                "producto_id": prod.id,
+                                "descripcion": prod.descripcion or "",
+                                "codigo_barra": prod.codigo_barra or "",
+                            }
+                        )
+
+                    remitos_out.append(
+                        {
+                            "numero": num_remito,
+                            "destino": d_dest,
+                            "lavanderia_id": d_lav,
+                            "lavanderia_nombre": lav_nombre,
+                            "modista_id": d_mod,
+                            "modista_nombre": mod_nombre,
+                            "productos": lineas_prod,
+                            "cantidad": len(lineas_prod),
+                        }
+                    )
+
+                    for pr in a_procesar:
+                        observaciones_previas = pr.observaciones or ""
+                        nueva_obs = f"[Devolución {num_remito} - {datetime.now().strftime('%d/%m/%Y %H:%M')}]"
+                        pr.observaciones = (
+                            f"{observaciones_previas}\n{nueva_obs}".strip()
+                            if observaciones_previas
+                            else nueva_obs
+                        )
+                        pid_del = pr.producto.id
+                        pr.delete()
+                        productos_en_orden.pop(pid_del, None)
+
+                restantes = len(productos_en_orden)
+                if restantes == 0:
+                    orden.estado = "Completada"
                 flush()
 
+                msg_base = (
+                    f"Devolución registrada: {len(remitos_out)} remito(s)."
+                    if remitos_out
+                    else "Devolución registrada."
+                )
+                if restantes > 0:
+                    msg_base += f" Quedan {restantes} prenda(s) en la orden (no incluidas en envíos)."
+
                 return {
-                    "message": f"Devolución completada. Productos enviados a {destino}.",
+                    "message": msg_base,
                     "success": True,
                     "data": {
                         "orden_id": orden.id,
                         "estado": orden.estado,
-                        "productos_liberados": len(productos_reservados),
-                        "destino": destino,
-                    }
+                        "productos_procesados": len(asignados),
+                        "productos_restantes_orden": restantes,
+                        "remitos": remitos_out,
+                        "orden_completada": restantes == 0,
+                    },
                 }
 
             except HTTPException:

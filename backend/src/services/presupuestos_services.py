@@ -491,7 +491,21 @@ class PresupuestosServices:
                             status_code=400,
                             detail="El total del presupuesto no puede ser menor que la seña ya pagada.",
                         )
-                    orden.saldo_pendiente = total - orden.seña_pagada
+                    orden.saldo_pendiente = max(
+                        0.0, float(total) - float(orden.seña_pagada)
+                    )
+                    # Misma regla que al pagar saldo desde la orden: si no queda saldo, marcar pagada.
+                    oest = (orden.estado or "").strip().lower()
+                    if orden.saldo_pendiente <= 0:
+                        if oest not in (
+                            "completada",
+                            "cancelada",
+                            "cancelado",
+                            "entregada",
+                        ):
+                            orden.estado = "Pagada"
+                    elif oest == "pagada":
+                        orden.estado = "En proceso"
                     orden.fecha_evento = data.fecha_evento
                     orden.extra_discount_percentage = presupuesto.extra_discount_percentage
                     orden.extra_discount_amount = presupuesto.extra_discount_amount

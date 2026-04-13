@@ -287,6 +287,7 @@ def completar_devolucion(orden_id: int, data: CompletarDevolucionSchema, current
             data.destino,
             data.lavanderia_id,
             data.modista_id,
+            data.envios,
         )
     except HTTPException as e:
         raise e

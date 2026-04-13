@@ -47,8 +47,13 @@ export function useScanQueueWithScanner(options: { listen: boolean }) {
         setItems(loadScanQueue());
       }
     };
+    const onLocalUpdate = () => setItems(loadScanQueue());
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener("guapo-scan-queue-updated", onLocalUpdate);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("guapo-scan-queue-updated", onLocalUpdate);
+    };
   }, []);
 
   useEffect(() => {

@@ -5519,19 +5519,7 @@ export default function ReportesPage() {
 
                 {/* Resumen */}
                 <div className="row mb-4">
-                  <div className="col-md-2">
-                    <div className="card border-info">
-                      <div className="card-body text-center">
-                        <div className="text-info small mb-1">
-                          Total Eventos
-                        </div>
-                        <div className="h4 text-info fw-bold">
-                          {historicoProducto.resumen.total_eventos}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-2">
+                  <div className="col-md-3">
                     <div className="card border-success">
                       <div className="card-body text-center">
                         <div className="text-success small mb-1">
@@ -5543,7 +5531,7 @@ export default function ReportesPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-2">
+                  <div className="col-md-3">
                     <div className="card border-warning">
                       <div className="card-body text-center">
                         <div className="text-warning small mb-1">Ventas</div>
@@ -5557,7 +5545,7 @@ export default function ReportesPage() {
                     <div className="card border-primary">
                       <div className="card-body text-center">
                         <div className="text-primary small mb-1">
-                          Lavandería
+                          Ingresos lavandería
                         </div>
                         <div className="h4 text-primary fw-bold">
                           {historicoProducto.resumen.total_lavanderia}
@@ -5568,7 +5556,9 @@ export default function ReportesPage() {
                   <div className="col-md-3">
                     <div className="card border-secondary">
                       <div className="card-body text-center">
-                        <div className="text-secondary small mb-1">Modista</div>
+                        <div className="text-secondary small mb-1">
+                          Ingresos modista
+                        </div>
                         <div className="h4 text-secondary fw-bold">
                           {historicoProducto.resumen.total_modista}
                         </div>

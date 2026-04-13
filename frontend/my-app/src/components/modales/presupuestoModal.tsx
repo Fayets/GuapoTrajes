@@ -27,6 +27,13 @@ function formatFechaArgentina(iso: string): string {
 
 type Cliente = { id: number; nombre: string; apellido: string };
 type Precliente = { id: number; nombre: string; apellido: string; celular: string };
+
+/** Respuesta de /presupuestos/conjuntos-misma-fecha-categoria (aviso en modal). */
+type ConjuntoMismaFechaFila = {
+  nombre_agasajado: string;
+  lugar_evento?: string | null;
+  productos: string[];
+};
 type Producto = {
   id: number;
   descripcion: string;
@@ -166,21 +173,41 @@ export default function PresupuestoModal({
     fetchEventos();
   }, []);
 
-  const [textoAvisoConjuntos, setTextoAvisoConjuntos] = React.useState("");
+  const [conjuntosMismaFechaRows, setConjuntosMismaFechaRows] = React.useState<
+    ConjuntoMismaFechaFila[]
+  >([]);
   /** Clave de la última petición válida; el cleanup la vacía para descartar respuestas obsoletas. */
   const conjuntosClaveRef = React.useRef("");
+
+  const textoAvisoConjuntos = React.useMemo(() => {
+    if (!conjuntosMismaFechaRows.length) return "";
+    const lines = [
+      "Conjuntos ya armados para esta fecha:",
+      "",
+      ...conjuntosMismaFechaRows.map((row) => {
+        const prod =
+          row.productos?.length > 0
+            ? row.productos.join(", ")
+            : "(sin ítems)";
+        const lugar = (row.lugar_evento ?? "").trim();
+        const lugarTxt = lugar ? ` | Lugar: ${lugar}` : "";
+        return `- ${row.nombre_agasajado}: ${prod}${lugarTxt}`;
+      }),
+    ];
+    return lines.join("\n");
+  }, [conjuntosMismaFechaRows]);
 
   React.useEffect(() => {
     if (!show) {
       conjuntosClaveRef.current = "";
-      setTextoAvisoConjuntos("");
+      setConjuntosMismaFechaRows([]);
       return;
     }
     const fecha = fechaNegocioYmd(formData.fechaEvento);
     const cat = (formData.categoria || "").trim();
     if (!fecha || !cat || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
       conjuntosClaveRef.current = "";
-      setTextoAvisoConjuntos("");
+      setConjuntosMismaFechaRows([]);
       return;
     }
 
@@ -194,7 +221,7 @@ export default function PresupuestoModal({
       try {
         const token = localStorage.getItem("token");
         if (!token) {
-          setTextoAvisoConjuntos("");
+          setConjuntosMismaFechaRows([]);
           return;
         }
         const API_BASE = getApiBaseUrl();
@@ -214,36 +241,19 @@ export default function PresupuestoModal({
         );
         if (conjuntosClaveRef.current !== clave) return;
         if (!res.ok) {
-          setTextoAvisoConjuntos("");
+          setConjuntosMismaFechaRows([]);
           return;
         }
-        const data = (await res.json()) as {
-          nombre_agasajado: string;
-          lugar_evento?: string | null;
-          productos: string[];
-        }[];
+        const data = (await res.json()) as ConjuntoMismaFechaFila[];
         if (conjuntosClaveRef.current !== clave) return;
         if (!Array.isArray(data) || data.length === 0) {
-          setTextoAvisoConjuntos("");
+          setConjuntosMismaFechaRows([]);
           return;
         }
-        const lines = [
-          "Conjuntos ya armados para esta fecha:",
-          "",
-          ...data.map((row) => {
-            const prod =
-              row.productos?.length > 0
-                ? row.productos.join(", ")
-                : "(sin ítems)";
-            const lugar = (row.lugar_evento ?? "").trim();
-            const lugarTxt = lugar ? ` | Lugar: ${lugar}` : "";
-            return `- ${row.nombre_agasajado}: ${prod}${lugarTxt}`;
-          }),
-        ];
-        setTextoAvisoConjuntos(lines.join("\n"));
+        setConjuntosMismaFechaRows(data);
       } catch (e: unknown) {
         if (e instanceof Error && e.name === "AbortError") return;
-        if (conjuntosClaveRef.current === clave) setTextoAvisoConjuntos("");
+        if (conjuntosClaveRef.current === clave) setConjuntosMismaFechaRows([]);
       }
     }, 120);
     return () => {
@@ -351,7 +361,7 @@ export default function PresupuestoModal({
       <DialogContent
         className="w-full border-0"
         dialogClassName="modal-xl"
-        dialogStyle={{ maxWidth: "min(1320px, 99vw)", width: "99%" }}
+        dialogStyle={{ maxWidth: "min(1480px, 99vw)", width: "99%" }}
       >
         <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
           <DialogTitle>
@@ -372,7 +382,7 @@ export default function PresupuestoModal({
 
         <div className="modal-body px-3 px-md-4">
           <div className="row g-4 align-items-lg-start">
-            <div className="col-12 col-lg-5 col-xl-5 d-flex flex-column gap-3 gap-lg-4">
+            <div className="col-12 col-lg-6 col-xl-6 d-flex flex-column gap-3 gap-lg-4">
           <div className="card shadow-sm mb-0">
             <div className="card-header bg-light">
               <h6 className="mb-0">
@@ -536,19 +546,25 @@ export default function PresupuestoModal({
           </div>
 
           <div className="card shadow-sm mb-0">
-            <div className="card-header bg-light">
-              <h6 className="mb-0">
+            <div className="card-header bg-light py-2">
+              <h6 className="mb-0 fs-6">
                 <i className="bi bi-calendar-event me-2"></i>
                 Fechas del Evento
               </h6>
             </div>
-            <div className="card-body p-4">
-              <div className="row g-3 g-md-4">
+            <div className="card-body p-3">
+              <div className="row g-2 g-lg-3">
                 {/* Fecha del evento */}
                 <div className="col-12 col-md-4">
-                  <label className="form-label fw-bold" htmlFor="presupuesto-fecha-evento">Fecha del evento</label>
+                  <label
+                    className="form-label small fw-bold mb-1 d-block"
+                    htmlFor="presupuesto-fecha-evento"
+                    title="Fecha del evento"
+                  >
+                    Fecha del evento
+                  </label>
                   {verModoLectura ? (
-                    <div className="form-control-plaintext border rounded p-2 bg-light">
+                    <div className="form-control-plaintext form-control-sm border rounded p-2 bg-light">
                       {formatFechaArgentina(formData.fechaEvento) || "-"}
                     </div>
                   ) : (
@@ -556,7 +572,7 @@ export default function PresupuestoModal({
                       id="presupuesto-fecha-evento"
                       name="fechaEvento"
                       type="date"
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={formData.fechaEvento}
                       min={formData.fechaRetiro || undefined}
                       max={
@@ -573,9 +589,15 @@ export default function PresupuestoModal({
 
                 {/* Fecha de retiro */}
                 <div className="col-12 col-md-4">
-                  <label className="form-label fw-bold" htmlFor="presupuesto-fecha-retiro">Fecha de retiro</label>
+                  <label
+                    className="form-label small fw-bold mb-1 d-block"
+                    htmlFor="presupuesto-fecha-retiro"
+                    title="Fecha de retiro"
+                  >
+                    Fecha de retiro
+                  </label>
                   {verModoLectura ? (
-                    <div className="form-control-plaintext border rounded p-2 bg-light">
+                    <div className="form-control-plaintext form-control-sm border rounded p-2 bg-light">
                       {formatFechaArgentina(formData.fechaRetiro) || "-"}
                     </div>
                   ) : (
@@ -583,7 +605,7 @@ export default function PresupuestoModal({
                       id="presupuesto-fecha-retiro"
                       name="fechaRetiro"
                       type="date"
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={formData.fechaRetiro}
                       max={formData.fechaEvento || undefined}
                       onChange={(e) =>
@@ -595,11 +617,15 @@ export default function PresupuestoModal({
 
                 {/* Fecha de devolución */}
                 <div className="col-12 col-md-4">
-                  <label className="form-label fw-bold" htmlFor="presupuesto-fecha-devolucion">
+                  <label
+                    className="form-label small fw-bold mb-1 d-block"
+                    htmlFor="presupuesto-fecha-devolucion"
+                    title="Fecha de devolución"
+                  >
                     Fecha de devolución
                   </label>
                   {verModoLectura ? (
-                    <div className="form-control-plaintext border rounded p-2 bg-light">
+                    <div className="form-control-plaintext form-control-sm border rounded p-2 bg-light">
                       {formatFechaArgentina(formData.fechaDevolucion) || "-"}
                     </div>
                   ) : (
@@ -607,7 +633,7 @@ export default function PresupuestoModal({
                       id="presupuesto-fecha-devolucion"
                       name="fechaDevolucion"
                       type="date"
-                      className="form-control"
+                      className="form-control form-control-sm"
                       value={formData.fechaDevolucion}
                       min={minIsoDevolucion}
                       onChange={(e) =>
@@ -705,15 +731,58 @@ export default function PresupuestoModal({
                 </div>
                 <div className="col-12">
                   <label className="form-label fw-bold" htmlFor="presupuesto-observaciones">Observaciones</label>
-                  <div
-                    id="presupuesto-observaciones"
-                    className={`form-control-plaintext border rounded p-2 bg-light${textoAvisoConjuntos ? "" : " text-muted"}`}
-                    style={{ whiteSpace: "pre-wrap", minHeight: "4.5rem", userSelect: "none" }}
-                    aria-live="polite"
-                    aria-readonly="true"
-                  >
-                    {textoAvisoConjuntos || ""}
-                  </div>
+                  {conjuntosMismaFechaRows.length > 0 ? (
+                    <div
+                      id="presupuesto-observaciones"
+                      className="border rounded bg-light overflow-auto"
+                      style={{
+                        maxHeight: "min(40vh, 15rem)",
+                        fontSize: "0.8125rem",
+                        userSelect: "none",
+                      }}
+                      aria-live="polite"
+                    >
+                      <div className="px-2 py-1 px-md-3 py-md-2 border-bottom border-secondary border-opacity-25 small text-muted fw-semibold">
+                        Conjuntos ya armados para esta fecha
+                      </div>
+                      {conjuntosMismaFechaRows.map((row, idx) => (
+                        <div
+                          key={`${row.nombre_agasajado}-${idx}`}
+                          className={
+                            idx < conjuntosMismaFechaRows.length - 1
+                              ? "px-2 py-2 px-md-3 border-bottom border-secondary border-opacity-25"
+                              : "px-2 py-2 px-md-3"
+                          }
+                        >
+                          <div className="fw-semibold text-body">{row.nombre_agasajado}</div>
+                          {(row.lugar_evento ?? "").trim() ? (
+                            <div className="text-muted mt-1" style={{ fontSize: "0.75rem" }}>
+                              <i className="bi bi-geo-alt me-1" aria-hidden />
+                              {(row.lugar_evento ?? "").trim()}
+                            </div>
+                          ) : null}
+                          <ul className="mb-0 mt-1 ps-3 text-body-secondary" style={{ fontSize: "0.75rem" }}>
+                            {(row.productos?.length ? row.productos : ["(sin ítems)"]).map((p, j) => (
+                              <li key={j}>{p}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div
+                      id="presupuesto-observaciones"
+                      className="form-control-plaintext border rounded p-2 bg-light text-muted small"
+                      style={{ minHeight: "2.75rem", userSelect: "none" }}
+                      aria-live="polite"
+                    >
+                      {formData.categoria?.trim() &&
+                      formData.fechaEvento?.trim() &&
+                      /^\d{4}-\d{2}-\d{2}$/.test(fechaNegocioYmd(formData.fechaEvento))
+                        ? "No hay otros conjuntos armados para esta fecha y categoría."
+                        : "—"}
+                    </div>
+                  )}
                   {!verModoLectura &&
                   formData.categoria?.trim() &&
                   (!formData.fechaEvento?.trim() ||
@@ -729,7 +798,7 @@ export default function PresupuestoModal({
 
             </div>
 
-            <div className="col-12 col-lg-7 col-xl-7 d-flex flex-column gap-3 gap-lg-4">
+            <div className="col-12 col-lg-6 col-xl-6 d-flex flex-column gap-3 gap-lg-4">
           {/* Sección: Productos */}
           <div className="card shadow-sm mb-0">
             <div className="card-header bg-light">

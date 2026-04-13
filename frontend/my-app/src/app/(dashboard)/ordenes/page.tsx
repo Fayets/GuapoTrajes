@@ -130,6 +130,7 @@ function OrdenesTrabajoContent() {
       case "entregada":
         return "bg-info";
       case "pagada":
+      case "pagado": // legado (algunos pagos viejos guardaban "Pagado")
         return "bg-warning";
       default:
         return "bg-secondary";
@@ -280,7 +281,13 @@ function OrdenesTrabajoContent() {
   };
 
   const registrarPago = async () => {
-    if (!ordenSeleccionada || !montoPago || !metodoPagoId || !cuentaDestinoId) {
+    if (!ordenSeleccionada) return;
+    if (ordenSeleccionada.saldo_pendiente <= 0) {
+      toast.error("No hay saldo pendiente; no se pueden registrar más pagos.");
+      setShowPagoModal(false);
+      return;
+    }
+    if (!montoPago || !metodoPagoId || !cuentaDestinoId) {
       if (!cuentaDestinoId) {
         toast.error("Debes seleccionar una cuenta destino");
       }
@@ -1459,8 +1466,16 @@ function OrdenesTrabajoContent() {
                             Ver
                           </button>
                           <button
+                            type="button"
                             className="btn btn-sm btn-outline-success"
+                            disabled={orden.saldo_pendiente <= 0}
+                            title={
+                              orden.saldo_pendiente <= 0
+                                ? "No hay saldo pendiente; no se pueden agregar más pagos."
+                                : "Registrar pago adicional"
+                            }
                             onClick={() => {
+                              if (orden.saldo_pendiente <= 0) return;
                               setOrdenSeleccionada(orden);
                               setShowPagoModal(true);
                             }}

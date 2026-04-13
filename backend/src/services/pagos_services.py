@@ -72,7 +72,7 @@ class PagosServices:
                 orden.seña_pagada += data.monto
                 orden.saldo_pendiente = max(presupuesto.total - orden.seña_pagada, 0)
                 if orden.saldo_pendiente == 0:
-                    orden.estado = "Pagado"
+                    orden.estado = "Pagada"
 
                 # Solo crear movimiento en cuenta corriente si el presupuesto tiene cliente (no precliente)
                 movimiento = None

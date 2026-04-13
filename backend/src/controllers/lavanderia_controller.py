@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pony.orm import db_session
 from src import schemas
 from src.services.lavanderia_services import LavanderiaServices
@@ -80,19 +80,43 @@ def regresar_producto_lavanderia(producto_id: int, current_user=Depends(get_curr
         return {"message": "Error al regresar el producto de lavandería", "success": False, "data": None}
 
 @router.get("/productos")
-def obtener_productos_lavanderia(current_user=Depends(get_current_user)):
+def obtener_productos_lavanderia(
+    lavanderia_id: Optional[int] = Query(
+        None, description="Filtrar prendas enviadas a esta lavandería (ingreso activo)"
+    ),
+    current_user=Depends(get_current_user),
+):
     try:
-        productos = servicio.get_productos_lavanderia()
-        if not productos:
-            return {"message": "No hay productos con estado LAVANDERIA", "success": False, "data": []}
-        return {"message": "Productos obtenidos correctamente", "success": True, "data": productos}
+        productos = servicio.get_productos_lavanderia(lavanderia_id=lavanderia_id)
+        return {
+            "message": "Productos obtenidos correctamente",
+            "success": True,
+            "data": productos,
+        }
     except HTTPException as e:
-        return {"message": e.detail, "success": False, "data": []}
+        raise e
     except Exception as e:
         import traceback
         print("❌ Error inesperado en obtener_productos_lavanderia:")
         print(traceback.format_exc())
-        return {"message": "Error inesperado al obtener productos en lavandería", "success": False, "data": []}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inesperado al obtener productos en lavandería: {str(e)}",
+        )
+
+
+@router.post("/regresar-varios")
+def regresar_varios_lavanderia(
+    body: schemas.RegresarVariosLavanderiaBody,
+    current_user=Depends(get_current_user),
+):
+    """Varios productos vuelven al salón (cierra ingreso en lavandería)."""
+    try:
+        return servicio.regresar_varios_de_lavanderia(body.productos_ids)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 

@@ -82,6 +82,9 @@ export function saveScanQueue(items: ScanQueueRow[]): void {
       SCAN_QUEUE_STORAGE_KEY,
       JSON.stringify({ v: 2, items } satisfies ScanQueueFileV2)
     );
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("guapo-scan-queue-updated"));
+    }
   } catch {
     /* ignore */
   }

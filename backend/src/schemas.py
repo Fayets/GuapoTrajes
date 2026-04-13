@@ -351,6 +351,15 @@ class RegresoProductoLavanderiaResponse(BaseModel):
     fecha_salida: Optional[date] = None
     estado: Optional[str] = None  
 
+
+class RegresarVariosLavanderiaBody(BaseModel):
+    """Dar de baja varios productos de lavandería en un solo paso (vuelven a salón)."""
+    productos_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        description="IDs de producto (Producto.id) actualmente en lavandería activa",
+    )
+
 # Modistas
 
 class ModistaCreate(BaseModel):
@@ -557,11 +566,58 @@ class PagoSaldoPendienteSchema(BaseModel):
         }
     )
 
+class DevolucionEnvioBatchSchema(BaseModel):
+    """Un envío/remito: conjunto de productos con el mismo destino (ej. una lavandería)."""
+    productos_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        description="IDs de producto (Producto.id) incluidos en este envío",
+    )
+    destino: Literal["SALON", "LAVANDERIA", "MODISTA"] = Field(
+        ..., description="Estado destino de este lote"
+    )
+    lavanderia_id: Optional[int] = Field(
+        None, description="ID de lavandería (obligatorio si destino=LAVANDERIA)"
+    )
+    modista_id: Optional[int] = Field(
+        None, description="ID de modista (obligatorio si destino=MODISTA)"
+    )
+
+
 class CompletarDevolucionSchema(BaseModel):
-    """Destino de los productos al completar la devolución."""
-    destino: Literal["SALON", "LAVANDERIA", "MODISTA"] = Field(..., description="Estado destino: SALON, LAVANDERIA o MODISTA")
-    lavanderia_id: Optional[int] = Field(None, description="ID de lavandería (obligatorio si destino=LAVANDERIA)")
-    modista_id: Optional[int] = Field(None, description="ID de modista (obligatorio si destino=MODISTA)")
+    """Completar devolución: modo legacy (un solo destino) o varios envíos/remitos."""
+    destino: Optional[Literal["SALON", "LAVANDERIA", "MODISTA"]] = Field(
+        None,
+        description="Destino único para todos los productos (si no se envía envios)",
+    )
+    lavanderia_id: Optional[int] = Field(
+        None, description="ID de lavandería (obligatorio si destino=LAVANDERIA, modo legacy)"
+    )
+    modista_id: Optional[int] = Field(
+        None, description="ID de modista (obligatorio si destino=MODISTA, modo legacy)"
+    )
+    envios: Optional[List[DevolucionEnvioBatchSchema]] = Field(
+        None,
+        description="Varios lotes (un remito por lote). Si viene con ítems, reemplaza destino/lavanderia/modista legacy.",
+    )
+
+    @model_validator(mode="after")
+    def validar_destino_o_envios(self) -> "CompletarDevolucionSchema":
+        env = self.envios if self.envios is not None else []
+        if len(env) == 0:
+            if not self.destino:
+                raise ValueError("Indique destino o la lista envios con al menos un lote")
+            if self.destino == "LAVANDERIA" and not self.lavanderia_id:
+                raise ValueError("lavanderia_id es obligatorio cuando destino es LAVANDERIA")
+            if self.destino == "MODISTA" and not self.modista_id:
+                raise ValueError("modista_id es obligatorio cuando destino es MODISTA")
+        else:
+            for i, e in enumerate(env):
+                if e.destino == "LAVANDERIA" and not e.lavanderia_id:
+                    raise ValueError(f"Envío {i + 1}: lavanderia_id obligatorio")
+                if e.destino == "MODISTA" and not e.modista_id:
+                    raise ValueError(f"Envío {i + 1}: modista_id obligatorio")
+        return self
 
 
 class DevolucionParcialSchema(BaseModel):

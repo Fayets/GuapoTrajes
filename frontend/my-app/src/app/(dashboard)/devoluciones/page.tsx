@@ -16,13 +16,144 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { toast } from "sonner";
 
+/** Respuesta `data.remitos` de completar-devolución (varios envíos). */
+type RemitoDevolucionApi = {
+  numero: string;
+  destino: string;
+  lavanderia_nombre?: string | null;
+  modista_nombre?: string | null;
+  cantidad?: number;
+  productos: Array<{
+    producto_id: number;
+    descripcion: string;
+    codigo_barra: string;
+  }>;
+};
+
+function escHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escJsStr(s: string): string {
+  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, " ");
+}
+
+/** Ventana con remitos (un bloque por envío) y etiquetas con código de barras. */
+function abrirVentanaRemitosYEtiquetas(
+  remitos: RemitoDevolucionApi[],
+  meta: { ordenId: number; presupuesto: string; cliente: string },
+  lanzarImpresion: boolean
+) {
+  const hoy = format(new Date(), "dd/MM/yyyy HH:mm", { locale: es });
+  const bloquesRemito = remitos
+    .map((r, idx) => {
+      const destinoTxt =
+        r.destino === "LAVANDERIA"
+          ? `Lavandería: ${escHtml(r.lavanderia_nombre || "—")}`
+          : r.destino === "MODISTA"
+            ? `Modista: ${escHtml(r.modista_nombre || "—")}`
+            : "Destino: Salón";
+      const filas = (r.productos || [])
+        .map(
+          (p) =>
+            `<tr><td>${escHtml(String(p.producto_id))}</td><td>${escHtml(p.codigo_barra || "—")}</td><td>${escHtml(p.descripcion || "")}</td></tr>`
+        )
+        .join("");
+      return `
+      <div class="remito-box">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <strong style="font-size:1.1rem">Remito ${escHtml(r.numero)}</strong>
+            <div class="text-muted small">${idx + 1} / ${remitos.length}</div>
+          </div>
+          <div class="text-end small">${escHtml(hoy)}</div>
+        </div>
+        <p class="mb-1"><strong>Orden</strong> #${meta.ordenId} · <strong>Presupuesto</strong> ${escHtml(meta.presupuesto)}</p>
+        <p class="mb-2"><strong>Cliente</strong> ${escHtml(meta.cliente)}</p>
+        <p class="mb-2"><strong>${destinoTxt}</strong></p>
+        <table class="table table-sm table-bordered mb-0">
+          <thead><tr><th>ID</th><th>Código</th><th>Descripción</th></tr></thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>`;
+    })
+    .join("");
+
+  const etiquetasHtml: string[] = [];
+  const barcodeScripts: string[] = [];
+  let k = 0;
+  for (const r of remitos) {
+    for (const p of r.productos || []) {
+      const id = `bc-${k++}`;
+      const code = (p.codigo_barra || "").trim() || "0";
+      etiquetasHtml.push(`
+        <div class="etiqueta">
+          <div class="small text-muted">${escHtml(r.numero)}</div>
+          <svg id="${id}" class="barcode-svg"></svg>
+          <div class="small fw-semibold mt-1">${escHtml(p.descripcion || "")}</div>
+        </div>`);
+      barcodeScripts.push(
+        `try{JsBarcode('#${id}','${escJsStr(code)}',{format:'CODE128',width:1.1,height:32,margin:2,displayValue:true,fontSize:9,textAlign:'center'});}catch(e){console.warn(e);}`
+      );
+    }
+  }
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><title>Remitos y etiquetas — Orden #${meta.ordenId}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+body{padding:16px;font-family:system-ui,sans-serif;}
+.remito-box{border:1px solid #333;border-radius:6px;padding:14px;margin-bottom:20px;page-break-after:always;}
+.etiqueta{display:inline-block;vertical-align:top;border:1px dashed #555;border-radius:6px;padding:10px;margin:8px;min-width:200px;page-break-inside:avoid;text-align:center;}
+.barcode-svg{display:block;max-width:100%;height:auto;margin:0 auto;}
+@media print{.no-print{display:none!important}.remito-box{page-break-after:always}}
+</style></head><body>
+<h2 class="mb-3">Devolución — remitos</h2>
+${bloquesRemito}
+<h3 class="mt-4 mb-2 no-print">Etiquetas (código de barras)</h3>
+<p class="small text-muted no-print">Revisá la hoja y usá &quot;Imprimir&quot; para remitos y etiquetas juntos, o solo una sección desde el navegador.</p>
+<div class="mb-3">${etiquetasHtml.join("")}</div>
+<div class="no-print d-flex gap-2">
+<button type="button" class="btn btn-primary" onclick="window.print()">Imprimir</button>
+<button type="button" class="btn btn-outline-secondary" onclick="window.close()">Cerrar</button>
+</div>
+<script>
+window.addEventListener('load',function(){
+${barcodeScripts.join("\n")}
+${lanzarImpresion ? "setTimeout(function(){window.print();},500);" : ""}
+});
+</script>
+</body></html>`;
+
+  const w = window.open("", "_blank", "width=900,height=1000");
+  if (!w) {
+    toast.error("Permití ventanas emergentes para ver remitos y etiquetas");
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
 // Tipos
 type ProductoReservado = {
   producto_id: number;
   producto_descripcion: string;
+  codigo_barra?: string;
   estado: string;
   fecha_bloqueo: string;
   observaciones?: string;
+};
+
+type AsignacionDevolucionCompleta = {
+  incluido: boolean;
+  destino: "SALON" | "LAVANDERIA" | "MODISTA";
+  lavanderiaId: number | null;
+  modistaId: number | null;
 };
 
 type OrdenTrabajo = {
@@ -68,6 +199,10 @@ export default function DevolucionesPage() {
   const [modistaId, setModistaId] = useState<number | null>(null);
   const [lavanderias, setLavanderias] = useState<Array<{ id: number; nombre: string }>>([]);
   const [modistas, setModistas] = useState<Array<{ id: number; nombre: string }>>([]);
+  const [asignacionesCompletada, setAsignacionesCompletada] = useState<
+    Record<number, AsignacionDevolucionCompleta>
+  >({});
+  const [imprimirPostDevolucion, setImprimirPostDevolucion] = useState(true);
 
   const { token } = useAuth();
 
@@ -612,14 +747,55 @@ export default function DevolucionesPage() {
 
   const handleCompletada = async () => {
     if (!ordenSeleccionada) return;
-    if (destinoEstado === "LAVANDERIA" && !lavanderiaId) {
-      toast.error("Seleccioná una lavandería");
+    const filas = ordenSeleccionada.productos_reservados || [];
+    const incluidos = filas.filter((p) => asignacionesCompletada[p.producto_id]?.incluido);
+    if (incluidos.length === 0) {
+      toast.error("Marcá al menos un producto (casillero a la izquierda), o cancelá.");
       return;
     }
-    if (destinoEstado === "MODISTA" && !modistaId) {
-      toast.error("Seleccioná una modista");
-      return;
+    for (const pr of incluidos) {
+      const a = asignacionesCompletada[pr.producto_id];
+      if (!a) continue;
+      if (a.destino === "LAVANDERIA" && !a.lavanderiaId) {
+        toast.error(`Seleccioná lavandería para: ${pr.producto_descripcion}`);
+        return;
+      }
+      if (a.destino === "MODISTA" && !a.modistaId) {
+        toast.error(`Seleccioná modista para: ${pr.producto_descripcion}`);
+        return;
+      }
     }
+
+    type EnvioPayload = {
+      productos_ids: number[];
+      destino: "SALON" | "LAVANDERIA" | "MODISTA";
+      lavanderia_id: number | null;
+      modista_id: number | null;
+    };
+    const envios: EnvioPayload[] = [];
+    const seen = new Map<string, EnvioPayload>();
+    for (const pr of incluidos) {
+      const a = asignacionesCompletada[pr.producto_id]!;
+      const key = `${a.destino}|${a.lavanderiaId ?? ""}|${a.modistaId ?? ""}`;
+      let row = seen.get(key);
+      if (!row) {
+        row = {
+          productos_ids: [],
+          destino: a.destino,
+          lavanderia_id: a.lavanderiaId,
+          modista_id: a.modistaId,
+        };
+        seen.set(key, row);
+        envios.push(row);
+      }
+      row.productos_ids.push(pr.producto_id);
+    }
+
+    const ordenMeta = {
+      ordenId: ordenSeleccionada.id,
+      presupuesto: ordenSeleccionada.presupuesto_numero,
+      cliente: ordenSeleccionada.cliente_nombre,
+    };
 
     setProcesando(true);
     try {
@@ -631,26 +807,31 @@ export default function DevolucionesPage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            destino: destinoEstado,
-            lavanderia_id: destinoEstado === "LAVANDERIA" ? lavanderiaId : null,
-            modista_id: destinoEstado === "MODISTA" ? modistaId : null,
-          }),
+          body: JSON.stringify({ envios }),
         }
       );
 
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
         throw new Error(
-          error.detail || error.message || "Error al completar devolución"
+          typeof error.detail === "string"
+            ? error.detail
+            : Array.isArray(error.detail)
+              ? error.detail.map((x: any) => x.msg || x).join(", ")
+              : error.message || "Error al completar devolución"
         );
       }
 
       const result = await res.json();
       if (result.success) {
-        toast.success("Devolución completada correctamente");
+        toast.success(result.message || "Devolución registrada");
+        const remitos = result.data?.remitos as RemitoDevolucionApi[] | undefined;
+        if (remitos?.length && imprimirPostDevolucion) {
+          abrirVentanaRemitosYEtiquetas(remitos, ordenMeta, true);
+        }
         setShowCompletadaModal(false);
         setOrdenSeleccionada(null);
+        setAsignacionesCompletada({});
         setDestinoEstado("SALON");
         setLavanderiaId(null);
         setModistaId(null);
@@ -743,6 +924,17 @@ export default function DevolucionesPage() {
   };
 
   const abrirModalCompletada = (orden: OrdenTrabajo) => {
+    const init: Record<number, AsignacionDevolucionCompleta> = {};
+    (orden.productos_reservados || []).forEach((p) => {
+      init[p.producto_id] = {
+        incluido: true,
+        destino: "LAVANDERIA",
+        lavanderiaId: null,
+        modistaId: null,
+      };
+    });
+    setAsignacionesCompletada(init);
+    setImprimirPostDevolucion(true);
     setOrdenSeleccionada(orden);
     setShowCompletadaModal(true);
   };
@@ -894,89 +1086,197 @@ export default function DevolucionesPage() {
         </div>
       )}
 
-      {/* Modal Confirmar Completada */}
-      <Dialog open={showCompletadaModal} onOpenChange={setShowCompletadaModal}>
+      {/* Modal Confirmar Completada (varios envíos / remitos por lavandería u otro destino) */}
+      <Dialog
+        open={showCompletadaModal}
+        onOpenChange={(open) => {
+          setShowCompletadaModal(open);
+          if (!open) {
+            setOrdenSeleccionada(null);
+            setAsignacionesCompletada({});
+            setDestinoEstado("SALON");
+            setLavanderiaId(null);
+            setModistaId(null);
+          }
+        }}
+      >
         <DialogContent
           className="w-full border-0"
           dialogClassName="modal-dialog-centered modal-lg"
-          dialogStyle={{ maxWidth: "520px", width: "95%" }}
+          dialogStyle={{ maxWidth: "880px", width: "98%" }}
         >
           <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
-            <DialogTitle className="fw-semibold">Confirmar Devolución Completa</DialogTitle>
-            <DialogDescription className="mb-0">
-              ¿Estás seguro de que deseas marcar esta orden como devolución
-              completada?
-            </DialogDescription>
+            <DialogTitle className="fw-semibold mb-0">Devolución</DialogTitle>
           </DialogHeader>
-          <div className="modal-body px-3 px-md-4">
+          <div className="modal-body px-3 px-md-4" style={{ maxHeight: "70vh", overflowY: "auto" }}>
             {ordenSeleccionada && (
               <>
-                <div className="mb-3">
-                  <p>
-                    <strong>Orden:</strong> #{ordenSeleccionada.id}
-                  </p>
-                  <p>
+                <div className="mb-3 small">
+                  <p className="mb-1">
+                    <strong>Orden:</strong> #{ordenSeleccionada.id} ·{" "}
                     <strong>Presupuesto:</strong> {ordenSeleccionada.presupuesto_numero}
                   </p>
-                  <p>
+                  <p className="mb-0">
                     <strong>Cliente:</strong> {ordenSeleccionada.cliente_nombre}
                   </p>
                 </div>
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">Destino de las prendas</label>
-                  <select
-                    className="form-select"
-                    value={destinoEstado}
-                    onChange={(e) => {
-                      setDestinoEstado(e.target.value as "SALON" | "LAVANDERIA" | "MODISTA");
-                      setLavanderiaId(null);
-                      setModistaId(null);
-                    }}
-                  >
-                    <option value="SALON">Salón</option>
-                    <option value="LAVANDERIA">Lavandería</option>
-                    <option value="MODISTA">Modista</option>
-                  </select>
+                <div className="table-responsive border rounded">
+                  <table className="table table-sm align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th
+                          className="text-center p-1"
+                          style={{ width: "44px" }}
+                          title="Desmarcá si no va en esta tanda (queda en la orden)"
+                          aria-label="Incluir en esta tanda"
+                        />
+                        <th>Producto</th>
+                        <th style={{ minWidth: "110px" }}>Destino</th>
+                        <th style={{ minWidth: "130px" }}>Lavandería</th>
+                        <th style={{ minWidth: "130px" }}>Modista</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(ordenSeleccionada.productos_reservados || []).map((pr) => {
+                        const a =
+                          asignacionesCompletada[pr.producto_id] ?? {
+                            incluido: true,
+                            destino: "LAVANDERIA" as const,
+                            lavanderiaId: null,
+                            modistaId: null,
+                          };
+                        return (
+                          <tr key={pr.producto_id}>
+                            <td className="text-center">
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                checked={a.incluido}
+                                onChange={(e) =>
+                                  setAsignacionesCompletada((prev) => ({
+                                    ...prev,
+                                    [pr.producto_id]: {
+                                      ...a,
+                                      incluido: e.target.checked,
+                                    },
+                                  }))
+                                }
+                                aria-label={`A enviar en esta operación: ${pr.producto_descripcion}`}
+                              />
+                            </td>
+                            <td>
+                              <div className="small fw-semibold">{pr.producto_descripcion}</div>
+                              {pr.codigo_barra ? (
+                                <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                  {pr.codigo_barra}
+                                </div>
+                              ) : null}
+                            </td>
+                            <td>
+                              <select
+                                className="form-select form-select-sm"
+                                disabled={!a.incluido}
+                                value={a.destino}
+                                onChange={(e) => {
+                                  const destino = e.target.value as
+                                    | "SALON"
+                                    | "LAVANDERIA"
+                                    | "MODISTA";
+                                  setAsignacionesCompletada((prev) => ({
+                                    ...prev,
+                                    [pr.producto_id]: {
+                                      ...a,
+                                      destino,
+                                      lavanderiaId: null,
+                                      modistaId: null,
+                                    },
+                                  }));
+                                }}
+                              >
+                                <option value="SALON">Salón</option>
+                                <option value="LAVANDERIA">Lavandería</option>
+                                <option value="MODISTA">Modista</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select
+                                className="form-select form-select-sm"
+                                disabled={!a.incluido || a.destino !== "LAVANDERIA"}
+                                value={a.lavanderiaId ?? ""}
+                                onChange={(e) =>
+                                  setAsignacionesCompletada((prev) => ({
+                                    ...prev,
+                                    [pr.producto_id]: {
+                                      ...a,
+                                      lavanderiaId: e.target.value
+                                        ? Number(e.target.value)
+                                        : null,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="">—</option>
+                                {lavanderias.map((l) => (
+                                  <option key={l.id} value={l.id}>
+                                    {l.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <select
+                                className="form-select form-select-sm"
+                                disabled={!a.incluido || a.destino !== "MODISTA"}
+                                value={a.modistaId ?? ""}
+                                onChange={(e) =>
+                                  setAsignacionesCompletada((prev) => ({
+                                    ...prev,
+                                    [pr.producto_id]: {
+                                      ...a,
+                                      modistaId: e.target.value
+                                        ? Number(e.target.value)
+                                        : null,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="">—</option>
+                                {modistas.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-                {destinoEstado === "LAVANDERIA" && (
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Lavandería</label>
-                    <select
-                      className="form-select"
-                      value={lavanderiaId ?? ""}
-                      onChange={(e) => setLavanderiaId(e.target.value ? Number(e.target.value) : null)}
-                    >
-                      <option value="">Seleccionar lavandería...</option>
-                      {lavanderias.map((l) => (
-                        <option key={l.id} value={l.id}>{l.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {destinoEstado === "MODISTA" && (
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Modista</label>
-                    <select
-                      className="form-select"
-                      value={modistaId ?? ""}
-                      onChange={(e) => setModistaId(e.target.value ? Number(e.target.value) : null)}
-                    >
-                      <option value="">Seleccionar modista...</option>
-                      {modistas.map((m) => (
-                        <option key={m.id} value={m.id}>{m.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div className="form-check mt-3">
+                  <input
+                    id="chk-imprimir-devolucion"
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={imprimirPostDevolucion}
+                    onChange={(e) => setImprimirPostDevolucion(e.target.checked)}
+                  />
+                  <label className="form-check-label small" htmlFor="chk-imprimir-devolucion">
+                    Abrir remitos y etiquetas al guardar (impresión automática si el navegador lo permite)
+                  </label>
+                </div>
               </>
             )}
           </div>
-          <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
+          <DialogFooter className="border-top pt-3 d-flex flex-wrap justify-content-end gap-2 px-3 px-md-4 pb-2">
             <button
+              type="button"
               className="btn btn-secondary"
               onClick={() => {
                 setShowCompletadaModal(false);
                 setOrdenSeleccionada(null);
+                setAsignacionesCompletada({});
                 setDestinoEstado("SALON");
                 setLavanderiaId(null);
                 setModistaId(null);
@@ -986,6 +1286,7 @@ export default function DevolucionesPage() {
               Cancelar
             </button>
             <button
+              type="button"
               className="btn btn-success"
               onClick={handleCompletada}
               disabled={procesando}
@@ -998,7 +1299,7 @@ export default function DevolucionesPage() {
               ) : (
                 <>
                   <i className="bi bi-check-circle me-2"></i>
-                  Confirmar
+                  Confirmar y generar remitos
                 </>
               )}
             </button>

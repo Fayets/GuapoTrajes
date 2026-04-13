@@ -4,10 +4,18 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
-from pony.orm import db_session
+from pony.orm import db_session, flush
 
-from src.models import EstadoProducto, Presupuesto, Producto, ProductoReservado
-from src.schemas import ItemPresupuestoIn, PresupuestoCreate
+from src.models import (
+    EstadoProducto,
+    Lavanderia,
+    OrdenTrabajo,
+    Presupuesto,
+    Producto,
+    ProductoLavanderia,
+    ProductoReservado,
+)
+from src.schemas import DevolucionEnvioBatchSchema, ItemPresupuestoIn, PresupuestoCreate
 from src.services.orden_trabajo_services import OrdenTrabajoServices
 from src.services.presupuestos_services import PresupuestosServices
 
@@ -78,7 +86,11 @@ def test_completar_devolucion_salon_libera_reserva(orden_pagada_total):
     with db_session:
         p = Producto.get(id=x.producto_id)
         assert p.estado == EstadoProducto.SALON
-        n = sum(1 for pr in ProductoReservado.select() if pr.producto.id == x.producto_id)
+        n = sum(
+            1
+            for pr in list(ProductoReservado.select())
+            if pr.producto.id == x.producto_id
+        )
         assert n == 0
 
 
@@ -153,5 +165,64 @@ def test_devolucion_parcial_solo_un_producto(orden_dos_productos):
         pb = Producto.get(id=x.id_b)
         assert pa.estado == EstadoProducto.SALON
         assert pb.estado == EstadoProducto.CLIENTE
-        assert sum(1 for pr in ProductoReservado.select() if pr.producto.id == x.id_a) == 0
-        assert sum(1 for pr in ProductoReservado.select() if pr.producto.id == x.id_b) == 1
+        assert (
+            sum(1 for pr in list(ProductoReservado.select()) if pr.producto.id == x.id_a)
+            == 0
+        )
+        assert (
+            sum(1 for pr in list(ProductoReservado.select()) if pr.producto.id == x.id_b)
+            == 1
+        )
+
+
+def test_completar_devolucion_dos_envios_dos_lavanderias(orden_dos_productos):
+    """Varios remitos en un mismo POST: cada producto a una lavandería distinta."""
+    x = orden_dos_productos
+    with db_session:
+        l1 = Lavanderia(nombre="Lav pytest A")
+        l2 = Lavanderia(nombre="Lav pytest B")
+        flush()
+        id_l1, id_l2 = l1.id, l2.id
+
+    svc = OrdenTrabajoServices()
+    svc.registrar_contrato_generado(x.orden_id)
+    envios = [
+        DevolucionEnvioBatchSchema(
+            productos_ids=[x.id_a],
+            destino="LAVANDERIA",
+            lavanderia_id=id_l1,
+        ),
+        DevolucionEnvioBatchSchema(
+            productos_ids=[x.id_b],
+            destino="LAVANDERIA",
+            lavanderia_id=id_l2,
+        ),
+    ]
+    out = svc.completar_devolucion(
+        x.orden_id,
+        usuario_id=x.world.usuario.id,
+        destino=None,
+        lavanderia_id=None,
+        modista_id=None,
+        envios=envios,
+    )
+    assert out["success"] is True
+    assert len(out["data"]["remitos"]) == 2
+    assert out["data"]["orden_completada"] is True
+
+    with db_session:
+        pa = Producto.get(id=x.id_a)
+        pb = Producto.get(id=x.id_b)
+        assert pa.estado == EstadoProducto.LAVANDERIA
+        assert pb.estado == EstadoProducto.LAVANDERIA
+        pl_rows = [
+            pl
+            for pl in list(ProductoLavanderia.select())
+            if pl.producto.id in (x.id_a, x.id_b)
+        ]
+        assert len(pl_rows) == 2
+        by_pid = {pl.producto.id: pl.lavanderia.id for pl in pl_rows}
+        assert by_pid[x.id_a] == id_l1
+        assert by_pid[x.id_b] == id_l2
+        o = OrdenTrabajo.get(id=x.orden_id)
+        assert o.estado == "Completada"

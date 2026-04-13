@@ -1891,22 +1891,27 @@ class ReportesServices:
                     "sucursal": suc_nom,
                 })
             
-            # 2. Alquileres (órdenes de trabajo)
-            productos_reservados = list(ProductoReservado.select(
-                lambda pr: pr.producto.id == producto.id
+            # 2. Alquileres (órdenes de trabajo): por ítems de presupuesto asociados al producto.
+            # Tras devolución completada suele borrarse ProductoReservado; el presupuesto/orden queda.
+            items_presupuesto = list(ItemPresupuesto.select(
+                lambda ip: ip.producto.id == producto.id
             ))
-            
-            for pr in productos_reservados:
-                orden = pr.orden_trabajo
+            ordenes_alquiler_vistas = set()
+            for ip in items_presupuesto:
+                presupuesto = ip.presupuesto
+                if not presupuesto:
+                    continue
+                orden = presupuesto.orden_trabajo
                 if not orden or not orden.fecha_evento:
                     continue
-                
+                if orden.id in ordenes_alquiler_vistas:
+                    continue
                 if orden.fecha_evento > fecha_hasta:
                     continue
-                
-                presupuesto = orden.presupuesto
-                pc = getattr(presupuesto, "precliente", None) if presupuesto else None
-                cli = getattr(presupuesto, "cliente", None) if presupuesto else None
+                ordenes_alquiler_vistas.add(orden.id)
+
+                pc = getattr(presupuesto, "precliente", None)
+                cli = getattr(presupuesto, "cliente", None)
                 if pc is not None:
                     nombre_titular = (
                         f"{getattr(pc, 'apellido', '') or ''} {getattr(pc, 'nombre', '') or ''}".strip()
@@ -1920,6 +1925,9 @@ class ReportesServices:
                 else:
                     nombre_titular = "N/A"
 
+                pr_actual = ProductoReservado.get(
+                    producto=producto, orden_trabajo=orden
+                )
                 eventos.append({
                     "tipo": "alquiler",
                     "fecha": orden.fecha_evento.isoformat(),
@@ -1929,7 +1937,7 @@ class ReportesServices:
                     "cliente_nombre": nombre_titular,
                     "orden_id": orden.id,
                     "presupuesto_numero": presupuesto.numero if presupuesto else "N/A",
-                    "estado_reserva": pr.estado,
+                    "estado_reserva": pr_actual.estado if pr_actual else None,
                     "fecha_evento": orden.fecha_evento.isoformat()
                 })
             
@@ -2046,18 +2054,17 @@ class ReportesServices:
                 "sucursal_id": producto.sucursal.id if producto.sucursal else None,
                 "sucursal_nombre": producto.sucursal.nombre if producto.sucursal else None,
                 "fecha_alta": producto.fecha_alta.isoformat() if producto.fecha_alta else None,
-                "veces_alquilado": producto.veces_alquilado,
+                "veces_alquilado": len(ordenes_alquiler_vistas),
                 "stock": producto.stock,
                 "inmovilizado": producto.inmovilizado
             }
             
-            # Resumen estadístico
+            # Resumen: lavandería y modista = solo ingresos (no salidas).
             resumen = {
-                "total_eventos": len(eventos),
                 "total_alquileres": len([e for e in eventos if e["tipo"] == "alquiler"]),
                 "total_ventas": len([e for e in eventos if e["tipo"] == "venta"]),
-                "total_lavanderia": len([e for e in eventos if "lavanderia" in e["tipo"]]),
-                "total_modista": len([e for e in eventos if "modista" in e["tipo"]])
+                "total_lavanderia": len([e for e in eventos if e["tipo"] == "lavanderia_ingreso"]),
+                "total_modista": len([e for e in eventos if e["tipo"] == "modista_ingreso"]),
             }
             
             print(f"🔍 DEBUG: Histórico generado con {total_eventos} eventos (página {pg}/{total_pages})")
