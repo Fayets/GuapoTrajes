@@ -53,6 +53,7 @@ export default function PreclientesPage() {
     dni: "",
     direccion: "",
     notas: "",
+    fecha_nacimiento: "",
   });
 
   const handlePageChange = (selectedItem: { selected: number }) => {
@@ -172,6 +173,7 @@ export default function PreclientesPage() {
       dni: "",
       direccion: "",
       notas: "",
+      fecha_nacimiento: "",
     });
     setPreclienteIdConvertir(precliente.id || null);
     setShowClienteModal(true);
@@ -272,6 +274,9 @@ export default function PreclientesPage() {
           body: JSON.stringify({
             dni: formDataCliente.dni.trim(),
             direccion: formDataCliente.direccion.trim(),
+            fecha_nacimiento: formDataCliente.fecha_nacimiento?.trim()
+              ? formDataCliente.fecha_nacimiento.trim()
+              : null,
           }),
         }
       );
@@ -428,6 +433,7 @@ export default function PreclientesPage() {
         onClose={() => setShowClienteModal(false)}
         onSave={guardarClienteDesdePrecliente}
         modoEdicion={false}
+        esConversionPrecliente
       />
 
       <Dialog open={showModal} onOpenChange={(open) => !open && setShowModal(false)}>

@@ -13,6 +13,8 @@ import JsBarcode from "jsbarcode";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/RoleGate";
 import { getApiBaseUrl } from "@/lib/api-config";
+import { imprimirEtiqueta50x25 } from "@/lib/imprimir-etiqueta-modista";
+import { imprimirRemitoEnvioLote } from "@/lib/imprimir-remito-envio";
 
 type ItemConfig = { id: number; nombre: string; codigo: string };
 
@@ -20,6 +22,7 @@ interface Producto {
   id: number;
   codigo_barra: string;
   descripcion: string;
+  descripcion_libre?: string | null;
   linea_id?: number | null;
   tela_id?: number | null;
   talle_id?: number | null;
@@ -93,6 +96,20 @@ export default function ProductosPage() {
   const [filtroTelaId, setFiltroTelaId] = useState<number | "">("");
   const [filtroColorId, setFiltroColorId] = useState<number | "">("");
   const [productoExpandidoId, setProductoExpandidoId] = useState<number | null>(null);
+  const [modistas, setModistas] = useState<{ id: string; nombre: string }[]>([]);
+  /** Envío a taller: elegir modista en modal (no usar prompt). */
+  const [modistaModalProducto, setModistaModalProducto] = useState<Producto | null>(
+    null
+  );
+  const [modistaModalId, setModistaModalId] = useState<string>("");
+  const [modistaModalBusy, setModistaModalBusy] = useState(false);
+  const [lavanderias, setLavanderias] = useState<{ id: string; nombre: string }[]>(
+    []
+  );
+  const [lavanderiaModalProducto, setLavanderiaModalProducto] =
+    useState<Producto | null>(null);
+  const [lavanderiaModalId, setLavanderiaModalId] = useState<string>("");
+  const [lavanderiaModalBusy, setLavanderiaModalBusy] = useState(false);
 
   const API_BASE = getApiBaseUrl();
   const API_URL = `${API_BASE}/productos`;
@@ -124,6 +141,46 @@ export default function ProductosPage() {
       })
       .catch(() => {});
   }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_BASE}/modistas/all`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { id?: string | number; nombre?: string }[]) => {
+        if (!Array.isArray(data)) return;
+        setModistas(
+          data
+            .map((m) => ({
+              id: String(m.id ?? ""),
+              nombre: m.nombre ?? `Modista ${m.id}`,
+            }))
+            .filter((m) => m.id)
+        );
+      })
+      .catch(() => setModistas([]));
+  }, [token, API_BASE]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_BASE}/lavanderia/all`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { id?: string | number; nombre?: string }[]) => {
+        if (!Array.isArray(data)) return;
+        setLavanderias(
+          data
+            .map((l) => ({
+              id: String(l.id ?? ""),
+              nombre: l.nombre ?? `Lavandería ${l.id}`,
+            }))
+            .filter((l) => l.id)
+        );
+      })
+      .catch(() => setLavanderias([]));
+  }, [token, API_BASE]);
 
   // Carga de productos con paginación y filtro remoto
   const loadProductos = () => {
@@ -187,6 +244,64 @@ export default function ProductosPage() {
       });
   };
 
+  async function aplicarCambioEstadoProducto(
+    producto: Producto,
+    nuevoEstado: EstadoKey,
+    opts?: { modistaId?: number; lavanderiaId?: number }
+  ): Promise<boolean> {
+    if (!token) {
+      toast.error("Sesión no disponible.");
+      return false;
+    }
+    const payload: Record<string, unknown> = { estado: nuevoEstado };
+    if (nuevoEstado === "MODISTA") {
+      payload.modista_id = opts?.modistaId ?? null;
+    } else if (nuevoEstado === "LAVANDERIA") {
+      payload.lavanderia_id = opts?.lavanderiaId ?? null;
+    }
+    try {
+      const response = await fetch(`${API_URL}/estado/${producto.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result?.success === false) {
+        const message =
+          result?.message ||
+          result?.detail ||
+          "Error al actualizar el estado.";
+        toast.error(message);
+        return false;
+      }
+      toast.success(result?.message || "Estado actualizado correctamente");
+      if (result?.remito_impresion) {
+        imprimirRemitoEnvioLote([result.remito_impresion]);
+      }
+      if (
+        nuevoEstado === "MODISTA" &&
+        result?.etiqueta_modista &&
+        producto.codigo_barra
+      ) {
+        imprimirEtiqueta50x25(
+          producto.codigo_barra,
+          result.etiqueta_modista
+        );
+      }
+      loadProductos();
+      return true;
+    } catch (error: unknown) {
+      console.error(error);
+      const msg =
+        error instanceof Error ? error.message : "Error al actualizar el estado.";
+      toast.error(msg);
+      return false;
+    }
+  }
+
   useEffect(() => {
     if (!token) return;
     loadProductos();
@@ -212,6 +327,7 @@ export default function ProductosPage() {
       tela_id: productoSinId.tela_id ?? null,
       talle_id: productoSinId.talle_id ?? null,
       color_id: productoSinId.color_id ?? null,
+      descripcion_libre: (productoSinId.descripcion_libre || "").trim() || null,
       costo: productoSinId.costo ?? 0,
       precio_alquiler_lista: productoSinId.precio_alquiler_lista ?? 0,
       precio_alquiler_efectivo: productoSinId.precio_alquiler_efectivo ?? 0,
@@ -327,7 +443,7 @@ export default function ProductosPage() {
   }, [isModalEtiquetaOpen, productoEtiqueta]);
 
   const productosFiltrados = productos.filter((producto) =>
-    `${producto.linea_nombre ?? ""} ${producto.codigo_barra} ${producto.descripcion}`
+    `${producto.linea_nombre ?? ""} ${producto.codigo_barra} ${producto.descripcion} ${producto.descripcion_libre ?? ""}`
       .toLowerCase()
       .includes(busqueda.toLowerCase())
   );
@@ -373,6 +489,7 @@ export default function ProductosPage() {
   const productoBase = () => ({
     codigo_barra: "",
     descripcion: "",
+    descripcion_libre: "",
     linea_id: null as number | null,
     tela_id: null as number | null,
     talle_id: null as number | null,
@@ -531,7 +648,7 @@ export default function ProductosPage() {
             <thead className="table-light">
               <tr>
                 <th>Código de Barra</th>
-                <th>Descripción</th>
+                <th>Título (auto)</th>
                 <th>Línea</th>
                 <th>Talle</th>
                 <th>Color</th>
@@ -577,7 +694,14 @@ export default function ProductosPage() {
                       style={{ cursor: "pointer" }}
                     >
                     <td className="fw-medium">{producto.codigo_barra}</td>
-                    <td>{producto.descripcion}</td>
+                    <td>
+                      <div className="fw-medium">{producto.descripcion}</div>
+                      {producto.descripcion_libre ? (
+                        <div className="small text-muted text-truncate" title={producto.descripcion_libre}>
+                          {producto.descripcion_libre}
+                        </div>
+                      ) : null}
+                    </td>
                     <td>{producto.linea_nombre ?? "-"}</td>
                     <td>{producto.talle_nombre ?? "-"}</td>
                     <td>{producto.color_nombre ?? "-"}</td>
@@ -587,38 +711,36 @@ export default function ProductosPage() {
                         value={producto.estado}
                         onChange={async (e) => {
                           if (!token) return;
-                          const nuevoEstado = e.target.value;
+                          const nuevoEstado = e.target.value as EstadoKey;
                           const estadoAnterior = producto.estado;
-                          const payload = { estado: nuevoEstado };
-                          try {
-                            const response = await fetch(
-                              `${API_URL}/estado/${producto.id}`,
-                              {
-                                method: "PATCH",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                  Authorization: `Bearer ${token}`,
-                                },
-                                body: JSON.stringify(payload),
-                              }
-                            );
-                            const result = await response.json().catch(() => ({}));
-                            if (!response.ok || result?.success === false) {
-                              const message =
-                                result?.message ||
-                                result?.detail ||
-                                "Error al actualizar el estado.";
-                              toast.error(message);
-                              e.target.value = estadoAnterior;
+                          if (nuevoEstado === "MODISTA") {
+                            e.target.value = estadoAnterior;
+                            if (!modistas.length) {
+                              toast.error(
+                                "No hay modistas disponibles. Cargá la sección Modistas."
+                              );
                               return;
                             }
-                            toast.success(result?.message || "Estado actualizado correctamente");
-                            loadProductos();
-                          } catch (error: any) {
-                            console.error(error);
-                            toast.error(error?.message || "Error al actualizar el estado.");
-                            e.target.value = estadoAnterior;
+                            setModistaModalProducto(producto);
+                            setModistaModalId(modistas[0]?.id ?? "");
+                            return;
                           }
+                          if (nuevoEstado === "LAVANDERIA") {
+                            e.target.value = estadoAnterior;
+                            if (!lavanderias.length) {
+                              toast.error(
+                                "No hay lavanderías disponibles. Cargá la sección Lavandería."
+                              );
+                              return;
+                            }
+                            setLavanderiaModalProducto(producto);
+                            setLavanderiaModalId(lavanderias[0]?.id ?? "");
+                            return;
+                          }
+                          await aplicarCambioEstadoProducto(
+                            producto,
+                            nuevoEstado
+                          );
                         }}
                         className="form-select form-select-sm"
                         style={{ minWidth: "140px" }}
@@ -767,6 +889,200 @@ export default function ProductosPage() {
         </div>
       </div>
 
+      {/* Modal: elegir modista al pasar a taller */}
+      <Dialog
+        open={!!modistaModalProducto}
+        onOpenChange={(open) => {
+          if (!open && !modistaModalBusy) {
+            setModistaModalProducto(null);
+            setModistaModalId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-3 px-3">
+            <DialogTitle>Enviar a modista</DialogTitle>
+          </DialogHeader>
+          {modistaModalProducto && (
+            <div className="modal-body px-3 pb-2">
+              <p className="small text-muted mb-3">
+                Elegí la modista para{" "}
+                <span className="fw-semibold">{modistaModalProducto.codigo_barra}</span>
+                {modistaModalProducto.descripcion ? (
+                  <>
+                    {" "}
+                    — {modistaModalProducto.descripcion}
+                  </>
+                ) : null}
+                .
+              </p>
+              <div className="mb-0">
+                <label htmlFor="modista-modal-select" className="form-label fw-bold">
+                  Modista
+                </label>
+                <select
+                  id="modista-modal-select"
+                  className="form-select"
+                  value={modistaModalId}
+                  onChange={(ev) => setModistaModalId(ev.target.value)}
+                  disabled={modistaModalBusy || !modistas.length}
+                >
+                  {modistas.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="mt-2 pt-3 border-top d-flex justify-content-end gap-3 px-3 pb-3 flex-wrap">
+            <Button
+              variant="secondary"
+              disabled={modistaModalBusy}
+              onClick={() => {
+                setModistaModalProducto(null);
+                setModistaModalId("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="btn-primary"
+              disabled={
+                modistaModalBusy ||
+                !modistaModalProducto ||
+                !modistaModalId ||
+                !Number.isFinite(Number(modistaModalId)) ||
+                Number(modistaModalId) <= 0
+              }
+              onClick={async () => {
+                if (!modistaModalProducto || !modistaModalId) return;
+                const modistaId = Number(modistaModalId);
+                if (!Number.isFinite(modistaId) || modistaId <= 0) {
+                  toast.error("Elegí una modista válida.");
+                  return;
+                }
+                setModistaModalBusy(true);
+                try {
+                  const ok = await aplicarCambioEstadoProducto(
+                    modistaModalProducto,
+                    "MODISTA",
+                    { modistaId }
+                  );
+                  if (ok) {
+                    setModistaModalProducto(null);
+                    setModistaModalId("");
+                  }
+                } finally {
+                  setModistaModalBusy(false);
+                }
+              }}
+            >
+              {modistaModalBusy ? "Enviando…" : "Confirmar envío"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: elegir lavandería */}
+      <Dialog
+        open={!!lavanderiaModalProducto}
+        onOpenChange={(open) => {
+          if (!open && !lavanderiaModalBusy) {
+            setLavanderiaModalProducto(null);
+            setLavanderiaModalId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-3 px-3">
+            <DialogTitle>Enviar a lavandería</DialogTitle>
+          </DialogHeader>
+          {lavanderiaModalProducto && (
+            <div className="modal-body px-3 pb-2">
+              <p className="small text-muted mb-3">
+                Elegí la lavandería para{" "}
+                <span className="fw-semibold">
+                  {lavanderiaModalProducto.codigo_barra}
+                </span>
+                {lavanderiaModalProducto.descripcion ? (
+                  <> — {lavanderiaModalProducto.descripcion}</>
+                ) : null}
+                .
+              </p>
+              <div className="mb-0">
+                <label
+                  htmlFor="lavanderia-modal-select"
+                  className="form-label fw-bold"
+                >
+                  Lavandería
+                </label>
+                <select
+                  id="lavanderia-modal-select"
+                  className="form-select"
+                  value={lavanderiaModalId}
+                  onChange={(ev) => setLavanderiaModalId(ev.target.value)}
+                  disabled={lavanderiaModalBusy || !lavanderias.length}
+                >
+                  {lavanderias.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="mt-2 pt-3 border-top d-flex justify-content-end gap-3 px-3 pb-3 flex-wrap">
+            <Button
+              variant="secondary"
+              disabled={lavanderiaModalBusy}
+              onClick={() => {
+                setLavanderiaModalProducto(null);
+                setLavanderiaModalId("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="btn-primary"
+              disabled={
+                lavanderiaModalBusy ||
+                !lavanderiaModalProducto ||
+                !lavanderiaModalId ||
+                !Number.isFinite(Number(lavanderiaModalId)) ||
+                Number(lavanderiaModalId) <= 0
+              }
+              onClick={async () => {
+                if (!lavanderiaModalProducto || !lavanderiaModalId) return;
+                const lavanderiaId = Number(lavanderiaModalId);
+                if (!Number.isFinite(lavanderiaId) || lavanderiaId <= 0) {
+                  toast.error("Elegí una lavandería válida.");
+                  return;
+                }
+                setLavanderiaModalBusy(true);
+                try {
+                  const ok = await aplicarCambioEstadoProducto(
+                    lavanderiaModalProducto,
+                    "LAVANDERIA",
+                    { lavanderiaId }
+                  );
+                  if (ok) {
+                    setLavanderiaModalProducto(null);
+                    setLavanderiaModalId("");
+                  }
+                } finally {
+                  setLavanderiaModalBusy(false);
+                }
+              }}
+            >
+              {lavanderiaModalBusy ? "Enviando…" : "Confirmar envío"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal etiqueta */}
       <Dialog open={isModalEtiquetaOpen} onOpenChange={setIsModalEtiquetaOpen}>
         <DialogContent className="sm:max-w-md text-center">
@@ -842,11 +1158,26 @@ export default function ProductosPage() {
                         />
                       </div>
                       <div className="col-12">
-                        <label className="form-label fw-bold">Descripción (auto)</label>
+                        <label className="form-label fw-bold">Título (auto)</label>
                         <Input
                           className="form-control w-100"
                           value={productoActual?.descripcion || ""}
                           readOnly
+                        />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label fw-bold">Descripción</label>
+                        <textarea
+                          className="form-control w-100"
+                          rows={3}
+                          placeholder="Distintivo o notas de esta prenda (opcional)"
+                          value={productoActual?.descripcion_libre ?? ""}
+                          onChange={(e) =>
+                            setProductoActual({
+                              ...productoActual!,
+                              descripcion_libre: e.target.value,
+                            })
+                          }
                         />
                       </div>
                       <div className="col-12 col-sm-6">
@@ -1259,9 +1590,15 @@ export default function ProductosPage() {
                           </div>
                         </div>
                         <div className="col-12">
-                          <label className="form-label fw-bold">Descripción</label>
+                          <label className="form-label fw-bold">Título (auto)</label>
                           <div className="form-control bg-light border-0">
                             {productoActual.descripcion || "N/A"}
+                          </div>
+                        </div>
+                        <div className="col-12">
+                          <label className="form-label fw-bold">Descripción</label>
+                          <div className="form-control bg-light border-0">
+                            {productoActual.descripcion_libre?.trim() || "—"}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">

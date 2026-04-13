@@ -145,6 +145,12 @@ export function Sidebar({ collapsed, toggleSidebar, mobileOpen = false, onMobile
           allow: ["ADMIN", "SUPER_ADMIN"],
         },
         {
+          title: "Ajuste de precios",
+          icon: "bi-percent",
+          href: "/configuraciones/ajuste-precios",
+          allow: ["ADMIN", "SUPER_ADMIN"],
+        },
+        {
           title: "Usuarios",
           icon: "bi-people-fill",
           href: "/usuarios",

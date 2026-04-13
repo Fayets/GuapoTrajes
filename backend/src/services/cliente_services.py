@@ -36,6 +36,7 @@ class ClientServices:
                     dni=cliente.dni.strip(),
                     direccion=cliente.direccion.strip(),
                     celular=cliente.celular.strip(),
+                    fecha_nacimiento=cliente.fecha_nacimiento,
                     notas=cliente.notas.strip() if cliente.notas else ""
                 )
                 return {
@@ -48,7 +49,8 @@ class ClientServices:
                         "dni": nuevo_cliente.dni,
                         "direccion": nuevo_cliente.direccion,
                         "celular": nuevo_cliente.celular,
-                        "notas": nuevo_cliente.notas
+                        "notas": nuevo_cliente.notas,
+                        "fecha_nacimiento": nuevo_cliente.fecha_nacimiento,
                     }
                 }
             except HTTPException:
@@ -96,7 +98,8 @@ class ClientServices:
                         "dni":cliente.dni,
                         "direccion": cliente.direccion,
                         "celular": cliente.celular,
-                        "notas":cliente.notas
+                        "notas":cliente.notas,
+                        "fecha_nacimiento": cliente.fecha_nacimiento,
                     }
                     clientes_list.append(clientes_dict)
                 
@@ -118,7 +121,8 @@ class ClientServices:
                 "dni":cliente.dni,
                 "direccion": cliente.direccion,
                 "celular": cliente.celular,
-                "notas":cliente.notas
+                "notas":cliente.notas,
+                "fecha_nacimiento": cliente.fecha_nacimiento,
             }
         
     def actualizar_cliente(self, id: int, cliente_actualizar: schemas.ClientCreate) -> dict:
@@ -135,6 +139,7 @@ class ClientServices:
                 cliente.direccion = cliente_actualizar.direccion
                 cliente.celular = cliente_actualizar.celular
                 cliente.notas = cliente_actualizar.notas
+                cliente.fecha_nacimiento = cliente_actualizar.fecha_nacimiento
                 return {"message": "Cliente actualizado correctamente",
                         "success" : True, 
                         "data": {
@@ -144,7 +149,8 @@ class ClientServices:
                             "dni":cliente.dni,
                             "direccion": cliente.direccion,
                             "celular": cliente.celular,
-                            "notas":cliente.notas
+                            "notas":cliente.notas,
+                            "fecha_nacimiento": cliente.fecha_nacimiento,
                         }
                 }
             
@@ -229,7 +235,8 @@ class ClientServices:
                 "dni":cliente.dni,
                 "direccion": cliente.direccion,
                 "celular": cliente.celular,
-                "notas":cliente.notas
+                "notas":cliente.notas,
+                "fecha_nacimiento": cliente.fecha_nacimiento,
             }
     
     def obtener_relaciones_cliente(self, id: int) -> dict:

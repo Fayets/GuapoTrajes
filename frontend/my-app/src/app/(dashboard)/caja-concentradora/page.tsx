@@ -50,6 +50,8 @@ export default function CajaConcentradoraPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showModalEnviarChica, setShowModalEnviarChica] = useState(false);
   const [showDetalle, setShowDetalle] = useState(false);
@@ -85,8 +87,12 @@ export default function CajaConcentradoraPage() {
     if (!token || !sucursalId) return;
     setIsLoading(true);
     try {
+      const params = new URLSearchParams();
+      params.set("sucursal_id", String(sucursalId));
+      if (fechaDesde) params.set("fecha_desde", fechaDesde);
+      if (fechaHasta) params.set("fecha_hasta", fechaHasta);
       const response = await fetch(
-        `${API_BASE}/caja_concentradora/movimientos?sucursal_id=${sucursalId}`,
+        `${API_BASE}/caja_concentradora/movimientos?${params.toString()}`,
         { headers: headersAutenticacion() }
       );
       const data = await response.json().catch(() => ({}));
@@ -132,7 +138,35 @@ export default function CajaConcentradoraPage() {
   useEffect(() => {
     fetchMovimientos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, sucursalId]);
+  }, [token, sucursalId, fechaDesde, fechaHasta]);
+
+  const exportarCsv = async () => {
+    if (!token || !sucursalId) return;
+    try {
+      const params = new URLSearchParams();
+      params.set("sucursal_id", String(sucursalId));
+      if (fechaDesde) params.set("fecha_desde", fechaDesde);
+      if (fechaHasta) params.set("fecha_hasta", fechaHasta);
+      const response = await fetch(
+        `${API_BASE}/caja_concentradora/exportar-csv?${params.toString()}`,
+        { headers: headersAutenticacion() }
+      );
+      if (!response.ok) {
+        toast.error("No se pudo exportar el CSV");
+        return;
+      }
+      const blob = await response.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `caja_concentradora_${sucursalId}.csv`;
+      a.click();
+      URL.revokeObjectURL(href);
+      toast.success("CSV descargado");
+    } catch (e: any) {
+      toast.error(e?.message || "Error al exportar");
+    }
+  };
 
   const resetForm = () => {
     setForm({
@@ -435,7 +469,16 @@ export default function CajaConcentradoraPage() {
             Gestión de ingresos y egresos centralizados por sucursal.
           </p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={exportarCsv}
+            disabled={isLoading}
+            className="btn btn-outline-success"
+          >
+            <i className="bi bi-filetype-csv me-2"></i>
+            Exportar CSV
+          </button>
           <button
             onClick={fetchMovimientos}
             disabled={isLoading}
@@ -469,7 +512,46 @@ export default function CajaConcentradoraPage() {
         </div>
       </div>
 
-      <div className="row mb-4">
+      <div className="row g-3 mb-4">
+        <div className="col-12 col-md-6 col-lg-4">
+          <div className="card border h-100">
+            <div className="card-body py-3">
+              <div className="text-muted small mb-2">Filtrar por fecha (opcional)</div>
+              <div className="row g-2 align-items-end">
+                <div className="col-6 col-md-5">
+                  <label className="form-label small mb-0">Desde</label>
+                  <input
+                    type="date"
+                    className="form-control form-control-sm"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                  />
+                </div>
+                <div className="col-6 col-md-5">
+                  <label className="form-label small mb-0">Hasta</label>
+                  <input
+                    type="date"
+                    className="form-control form-control-sm"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                  />
+                </div>
+                <div className="col-12 col-md-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary w-100"
+                    onClick={() => {
+                      setFechaDesde("");
+                      setFechaHasta("");
+                    }}
+                  >
+                    Limpiar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="col-md-3">
           <div className="card border-0 bg-primary bg-opacity-10">
             <div className="card-body">
@@ -480,7 +562,7 @@ export default function CajaConcentradoraPage() {
             </div>
           </div>
         </div>
-        </div>
+      </div>
 
       <div className="card">
         <div className="card-header bg-light">

@@ -26,7 +26,13 @@ from src.controllers.logs_controller import router as logs_router
 from src.controllers.usuario_controller import router as usuario_router
 from src.controllers.health_controller import router as health_router
 from src.controllers.config_productos_controller import router as config_productos_router
-from src.migrations import apply_schema_migrations, ensure_contrato_generado_at_column, ensure_notas_productos_lavanderias, ensure_cliente_columnas_lavanderia_modista
+from src.migrations import (
+    apply_schema_migrations,
+    ensure_contrato_generado_at_column,
+    ensure_notas_productos_lavanderias,
+    ensure_cliente_columnas_lavanderia_modista,
+    ensure_cliente_fecha_nacimiento_y_producto_descripcion_libre,
+)
 from src import schemas, models
 from src.services.usuario_services import UsuariosServices
 from pony.orm import db_session
@@ -125,6 +131,8 @@ ensure_contrato_generado_at_column()
 ensure_notas_productos_lavanderias()
 # Asegurar columnas cliente_nombre y cliente_celular en lavandería/modista
 ensure_cliente_columnas_lavanderia_modista()
+# Fecha de nacimiento (Cliente) y descripción libre (Productos)
+ensure_cliente_fecha_nacimiento_y_producto_descripcion_libre()
 
 # Crear SUPER_ADMIN inicial si corresponde
 ensure_initial_super_admin()

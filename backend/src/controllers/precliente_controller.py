@@ -90,6 +90,11 @@ def convertir_precliente(
     current_user=Depends(get_current_user)
 ):
     try:
-        return servicio.convertir_a_cliente(precliente_id, datos.direccion, datos.dni)
+        return servicio.convertir_a_cliente(
+            precliente_id,
+            datos.direccion,
+            datos.dni,
+            datos.fecha_nacimiento,
+        )
     except HTTPException as e:
         return {"message": e.detail, "success": False, "data": None}

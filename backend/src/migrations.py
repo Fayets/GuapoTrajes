@@ -51,6 +51,34 @@ def ensure_notas_productos_lavanderias() -> None:
     logger.debug("No se pudo añadir columna notas en tabla de lavandería (probados: ProductosLavanderias, productoslavanderias)")
 
 
+def ensure_cliente_fecha_nacimiento_y_producto_descripcion_libre() -> None:
+    """Asegura columnas usadas por el plan GuapoTrajes (Cliente.fecha_nacimiento, Productos.descripcion_libre)."""
+    if not _is_postgres():
+        return
+    for table in ("Cliente", "cliente"):
+        try:
+            with db_session:
+                db.execute(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "fecha_nacimiento" DATE')
+            logger.info("Columna fecha_nacimiento verificada en '%s'", table)
+            break
+        except Exception as e:
+            err = str(e).lower()
+            if "does not exist" in err or "no existe" in err or "no exist" in err:
+                continue
+            logger.warning("fecha_nacimiento en '%s': %s", table, e)
+    for table in ("Productos", "productos"):
+        try:
+            with db_session:
+                db.execute(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "descripcion_libre" TEXT')
+            logger.info("Columna descripcion_libre verificada en '%s'", table)
+            break
+        except Exception as e:
+            err = str(e).lower()
+            if "does not exist" in err or "no existe" in err or "no exist" in err:
+                continue
+            logger.warning("descripcion_libre en '%s': %s", table, e)
+
+
 def ensure_cliente_columnas_lavanderia_modista() -> None:
     """Asegura que las tablas de lavandería y modista tengan columnas cliente_nombre y cliente_celular."""
     if not _is_postgres():
@@ -166,6 +194,10 @@ def apply_schema_migrations() -> None:
                 'ALTER TABLE "Productos" ADD COLUMN IF NOT EXISTS "talle_id" INTEGER REFERENCES "ProductoTalles"("id")',
                 'ALTER TABLE "Productos" ADD COLUMN IF NOT EXISTS "tela_id" INTEGER REFERENCES "ProductoTelas"("id")',
                 'ALTER TABLE "Productos" ADD COLUMN IF NOT EXISTS "color_id" INTEGER REFERENCES "ProductoColores"("id")',
+                # Cliente: fecha de nacimiento opcional
+                'ALTER TABLE "Cliente" ADD COLUMN IF NOT EXISTS "fecha_nacimiento" DATE',
+                # Producto: descripción libre (distintivo manual); título auto sigue en descripcion
+                'ALTER TABLE "Productos" ADD COLUMN IF NOT EXISTS "descripcion_libre" TEXT',
                 # Asegurar columnas codigo en catálogos (para instalaciones existentes)
                 'ALTER TABLE "ProductoLineas" ADD COLUMN IF NOT EXISTS "codigo" VARCHAR(3)',
                 'ALTER TABLE "ProductoTalles" ADD COLUMN IF NOT EXISTS "codigo" VARCHAR(2)',

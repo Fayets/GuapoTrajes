@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
 
@@ -128,6 +128,8 @@ class CajaChicaService:
         current_user,
         tipo: Optional[str] = None,
         estado: Optional[str] = None,
+        fecha_desde: Optional[date] = None,
+        fecha_hasta: Optional[date] = None,
     ) -> Dict[str, Any]:
         usuario = self._obtener_usuario(current_user)
         sucursal = self._obtener_sucursal(sucursal_id)
@@ -136,6 +138,17 @@ class CajaChicaService:
         sucursal_id_val = sucursal.id
         movimientos = list(CajaChica.select())
         movimientos = [cc for cc in movimientos if cc.sucursal.id == sucursal_id_val]
+
+        if fecha_desde is not None:
+            movimientos = [
+                cc for cc in movimientos
+                if cc.fecha and cc.fecha.date() >= fecha_desde
+            ]
+        if fecha_hasta is not None:
+            movimientos = [
+                cc for cc in movimientos
+                if cc.fecha and cc.fecha.date() <= fecha_hasta
+            ]
 
         if tipo:
             tipo_enum = self._parse_enum(tipo, TipoMovimientoCajaChica, "tipo")

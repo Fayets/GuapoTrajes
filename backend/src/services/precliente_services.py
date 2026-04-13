@@ -1,6 +1,7 @@
 from pony.orm import db_session
 from fastapi import HTTPException
 from typing import Optional
+from datetime import date
 from pony.orm.core import TransactionIntegrityError, flush
 import logging
 from src import models, schemas
@@ -104,7 +105,13 @@ class PreclientServices:
                 raise HTTPException(status_code=500, detail="Error inesperado al eliminar el cliente")
             
 
-    def convertir_a_cliente(self, precliente_id: int, direccion: str, dni: str) -> dict:
+    def convertir_a_cliente(
+        self,
+        precliente_id: int,
+        direccion: str,
+        dni: str,
+        fecha_nacimiento: Optional[date] = None,
+    ) -> dict:
         with db_session:
             try:
                 dni = (str(dni).strip() if dni is not None else "") or ""
@@ -133,6 +140,7 @@ class PreclientServices:
                     celular=precliente.celular,
                     direccion=direccion,
                     dni=dni,
+                    fecha_nacimiento=fecha_nacimiento,
                     notas=""
                 )
                 flush()
@@ -154,7 +162,8 @@ class PreclientServices:
                         "dni": cliente.dni,
                         "direccion": cliente.direccion,
                         "celular": cliente.celular,
-                        "notas": cliente.notas or ""
+                        "notas": cliente.notas or "",
+                        "fecha_nacimiento": cliente.fecha_nacimiento,
                     }
                 }
             except HTTPException:

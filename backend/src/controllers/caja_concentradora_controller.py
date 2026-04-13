@@ -1,5 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from typing import Optional, Any, Dict
+from datetime import date
+import csv
+import io
 
 from src.controllers.auth_controller import get_current_user
 from src.services.caja_concentradora_services import CajaConcentradoraServices
@@ -46,6 +50,8 @@ def listar_movimientos(
     sucursal_id: int = Query(..., description="ID de la sucursal"),
     tipo: Optional[str] = Query(None, description="Filtrar por tipo: INGRESO o EGRESO"),
     estado: Optional[str] = Query(None, description="Filtrar por estado"),
+    fecha_desde: Optional[date] = Query(None, description="Filtrar desde esta fecha (inclusive)"),
+    fecha_hasta: Optional[date] = Query(None, description="Filtrar hasta esta fecha (inclusive)"),
     current_user=Depends(get_current_user),
 ):
     """Listar todos los movimientos de caja concentradora."""
@@ -55,11 +61,64 @@ def listar_movimientos(
             current_user=current_user,
             tipo=tipo,
             estado=estado,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
         )
     except HTTPException as exc:
         raise exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Error inesperado al listar movimientos")
+
+
+@router.get("/exportar-csv")
+def exportar_movimientos_csv(
+    sucursal_id: int = Query(...),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    tipo: Optional[str] = Query(None),
+    estado: Optional[str] = Query(None),
+    current_user=Depends(get_current_user),
+):
+    try:
+        data = service.listar_movimientos(
+            sucursal_id=sucursal_id,
+            current_user=current_user,
+            tipo=tipo,
+            estado=estado,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+        )
+        movs = (data.get("data") or {}).get("movimientos") or []
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "id", "fecha", "usuario_nombre", "tipo_movimiento", "origen", "destino",
+            "monto", "descripcion", "estado", "caja_movimiento_id",
+        ])
+        for m in movs:
+            writer.writerow([
+                m.get("id"),
+                m.get("fecha"),
+                m.get("usuario_nombre"),
+                m.get("tipo_movimiento"),
+                m.get("origen"),
+                m.get("destino") or "",
+                m.get("monto"),
+                (m.get("descripcion") or "").replace("\n", " ").replace("\r", " "),
+                m.get("estado"),
+                m.get("caja_movimiento_id") or "",
+            ])
+        output.seek(0)
+        suf = f"{fecha_desde or 'all'}_{fecha_hasta or 'all'}"
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="caja_concentradora_{sucursal_id}_{suf}.csv"'},
+        )
+    except HTTPException as exc:
+        raise exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error al exportar CSV: {exc}")
 
 
 @router.post("/enviar-caja-chica", response_model=Dict[str, Any])

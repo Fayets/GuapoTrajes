@@ -16,13 +16,24 @@ type Cliente = {
   direccion: string;
   celular: string;
   notas: string;
+  fecha_nacimiento?: string | null;
 };
+
+function fechaIsoParaInput(v: string | null | undefined): string {
+  if (!v) return "";
+  const s = String(v);
+  return s.length >= 10 ? s.slice(0, 10) : "";
+}
 
 type Precliente = {
   nombre: string;
   apellido: string;
   celular: string;
 };
+
+function normalizarTextoBusqueda(s: string) {
+  return s.trim().toLowerCase().replace(/[.\s-]/g, "");
+}
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -53,6 +64,7 @@ export default function ClientesPage() {
     direccion: "",
     celular: "",
     notas: "",
+    fecha_nacimiento: "",
   });
 
   const [token, setToken] = useState<string | null>(null);
@@ -76,6 +88,7 @@ export default function ClientesPage() {
       direccion: "",
       celular: precliente.celular,
       notas: "",
+      fecha_nacimiento: "",
     });
     if (precliente.id) {
       setPreclienteSeleccionadoId(precliente.id);
@@ -133,6 +146,7 @@ export default function ClientesPage() {
 
   const nuevoCliente = () => {
     setClienteActual(null);
+    setPreclienteSeleccionadoId(null);
     setFormData({
       nombre: "",
       apellido: "",
@@ -140,12 +154,14 @@ export default function ClientesPage() {
       direccion: "",
       celular: "",
       notas: "",
+      fecha_nacimiento: "",
     });
     setShowModal(true);
   };
 
   const editarCliente = (cliente: Cliente) => {
     setClienteActual(cliente);
+    setPreclienteSeleccionadoId(null);
     setFormData({
       nombre: cliente.nombre,
       apellido: cliente.apellido,
@@ -153,6 +169,7 @@ export default function ClientesPage() {
       direccion: cliente.direccion,
       celular: cliente.celular,
       notas: cliente.notas,
+      fecha_nacimiento: fechaIsoParaInput(cliente.fecha_nacimiento),
     });
     setShowModal(true);
   };
@@ -301,6 +318,9 @@ export default function ClientesPage() {
       direccion: direccionTrim,
       celular: celularTrim,
       notas: formData.notas?.trim() || "",
+      fecha_nacimiento: formData.fecha_nacimiento?.trim()
+        ? formData.fecha_nacimiento.trim()
+        : null,
     };
 
     try {
@@ -322,6 +342,7 @@ export default function ClientesPage() {
         body = JSON.stringify({
           direccion: datosFormateados.direccion,
           dni: datosFormateados.dni,
+          fecha_nacimiento: datosFormateados.fecha_nacimiento,
         });
       } else {
         // Alta normal de cliente
@@ -389,11 +410,19 @@ export default function ClientesPage() {
     }
   };
 
-  const clientesFiltrados = clientes.filter((cliente) =>
-    `${cliente.apellido} ${cliente.nombre}`
+  const terminoBusqueda = busqueda.trim().toLowerCase();
+  const terminoDni = normalizarTextoBusqueda(busqueda);
+
+  const clientesFiltrados = clientes.filter((cliente) => {
+    if (!terminoBusqueda && !terminoDni) return true;
+    const matchNombre = `${cliente.apellido} ${cliente.nombre}`
       .toLowerCase()
-      .includes(busqueda.toLowerCase())
-  );
+      .includes(terminoBusqueda);
+    const matchDni =
+      terminoDni.length > 0 &&
+      normalizarTextoBusqueda(cliente.dni || "").includes(terminoDni);
+    return matchNombre || matchDni;
+  });
   const clientesPaginados = clientesFiltrados.slice(
     offset,
     offset + clientesPorPagina
@@ -421,7 +450,9 @@ export default function ClientesPage() {
             </span>
             <Input
               type="search"
-              placeholder="Buscar clientes..."
+              id="buscar-clientes"
+              placeholder="Buscar por apellido, nombre o DNI…"
+              aria-label="Buscar clientes por apellido, nombre o DNI"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
@@ -537,6 +568,7 @@ export default function ClientesPage() {
         onClose={() => setShowModal(false)}
         onSave={guardarCliente}
         modoEdicion={!!clienteActual}
+        esConversionPrecliente={!!preclienteSeleccionadoId}
       />
 
       {/* Modal para confirmar eliminación */}

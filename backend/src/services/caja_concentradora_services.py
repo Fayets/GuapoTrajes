@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
 
@@ -184,6 +184,8 @@ class CajaConcentradoraServices:
         current_user,
         tipo: Optional[str] = None,
         estado: Optional[str] = None,
+        fecha_desde: Optional[date] = None,
+        fecha_hasta: Optional[date] = None,
     ) -> Dict[str, Any]:
         """Listar todos los movimientos de caja concentradora."""
         usuario = self._obtener_usuario(current_user)
@@ -202,6 +204,17 @@ class CajaConcentradoraServices:
             mov for mov in todos_los_movimientos
             if mov.sucursal and mov.sucursal.id == sucursal.id
         ]
+
+        if fecha_desde is not None:
+            movimientos = [
+                m for m in movimientos
+                if m.fecha and m.fecha.date() >= fecha_desde
+            ]
+        if fecha_hasta is not None:
+            movimientos = [
+                m for m in movimientos
+                if m.fecha and m.fecha.date() <= fecha_hasta
+            ]
 
         # Filtrar por tipo si se especifica
         if tipo:

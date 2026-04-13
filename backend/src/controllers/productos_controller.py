@@ -3,6 +3,7 @@ from pony.orm import *
 from src import schemas
 from src.services.productos_services import ProductoServices
 from src.deps import get_current_user, require_role
+from fastapi import status as http_status
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from src.schemas import ProductUpdateResponse
@@ -62,14 +63,42 @@ def update_product(id: int, product_update: schemas.ProductUpdate, current_user=
         return {"message": "Error inesperado al actualizar el producto.", "success": False}
 
 
-@router.patch("/estado/{id}")
-def actualizar_estado_producto(id: int, payload: Dict[str, str], current_user=Depends(get_current_user)):
+@router.post("/ajuste-masivo-precios", response_model=RegisterMessage)
+def ajuste_masivo_precios(
+    body: schemas.AjusteMasivoPreciosRequest,
+    current_user=Depends(get_current_user),
+):
+    """Ajuste por línea de producto y listas de precio seleccionadas (redondeo a centenas)."""
+    role = getattr(current_user.rol, "value", str(current_user.rol))
+    if role not in ("ADMIN", "SUPER_ADMIN"):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden aplicar ajustes masivos.",
+        )
     try:
-        nuevo_estado = payload.get("estado")
-        if not nuevo_estado:
-            raise HTTPException(status_code=400, detail="El estado es requerido")
+        out = service.aplicar_ajuste_masivo_precios(body, current_user)
+        return out
+    except HTTPException as e:
+        return {"message": e.detail, "success": False}
+    except Exception as e:
+        print(f"❌ ajuste_masivo_precios: {e}")
+        return {"message": "Error inesperado al aplicar el ajuste.", "success": False}
 
-        resultado = service.update_estado_producto(id, nuevo_estado, current_user)
+
+@router.patch("/estado/{id}")
+def actualizar_estado_producto(
+    id: int,
+    payload: schemas.ProductoEstadoPatch,
+    current_user=Depends(get_current_user),
+):
+    try:
+        resultado = service.update_estado_producto(
+            id,
+            payload.estado,
+            current_user,
+            modista_id=payload.modista_id,
+            lavanderia_id=payload.lavanderia_id,
+        )
         return resultado
     except HTTPException as e:
         return {"message": e.detail, "success": False}

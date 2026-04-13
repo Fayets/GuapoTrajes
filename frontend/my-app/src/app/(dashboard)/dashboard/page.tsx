@@ -1,37 +1,100 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { useScanQueueWithScanner } from "@/hooks/use-scan-queue-with-scanner";
-import { ScanQueueModal } from "@/components/scan-queue-modal";
-
-type Rol = "ADMIN" | "EMPLEADO";
+import {
+  ScanQueueModal,
+  type ModistaOption,
+  type LavanderiaOption,
+} from "@/components/scan-queue-modal";
+import {
+  imprimirRemitoEnvioLote,
+  type RemitoImpresionRow,
+} from "@/lib/imprimir-remito-envio";
 
 export default function Dashboard() {
   const { me, loading } = useAuth();
   const [scanModalOpen, setScanModalOpen] = useState(false);
+  const [modistas, setModistas] = useState<ModistaOption[]>([]);
+  const [lavanderias, setLavanderias] = useState<LavanderiaOption[]>([]);
   const { items: scanQueueItems, clearAll, removeLine } =
     useScanQueueWithScanner({ listen: true });
   const totalCola = scanQueueItems.length;
 
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const api = getApiBaseUrl();
+    fetch(`${api}/modistas/all`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { id?: string | number; nombre?: string }[]) => {
+        if (!Array.isArray(data)) return;
+        setModistas(
+          data
+            .map((m) => ({
+              id: String(m.id ?? ""),
+              nombre: m.nombre ?? `Modista ${m.id}`,
+            }))
+            .filter((m) => m.id)
+        );
+      })
+      .catch(() => setModistas([]));
+
+    fetch(`${api}/lavanderia/all`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { id?: string | number; nombre?: string }[]) => {
+        if (!Array.isArray(data)) return;
+        setLavanderias(
+          data
+            .map((l) => ({
+              id: String(l.id ?? ""),
+              nombre: l.nombre ?? `Lavandería ${l.id}`,
+            }))
+            .filter((l) => l.id)
+        );
+      })
+      .catch(() => setLavanderias([]));
+  }, []);
+
   const handleLoteCambiarEstado = async (
-    estado: "LAVANDERIA" | "MODISTA"
-  ): Promise<{ ok: boolean; message?: string }> => {
+    estado: "LAVANDERIA" | "MODISTA",
+    opts: { lavanderiaId?: number; modistaId?: number }
+  ): Promise<{ ok: boolean; message?: string; remitos?: RemitoImpresionRow[] }> => {
     const api = getApiBaseUrl();
     const token = localStorage.getItem("token");
     const rows = [...scanQueueItems];
+    const remitos: RemitoImpresionRow[] = [];
     for (const row of rows) {
+      const body =
+        estado === "MODISTA"
+          ? JSON.stringify({
+              estado,
+              modista_id: opts.modistaId ?? null,
+            })
+          : JSON.stringify({
+              estado,
+              lavanderia_id: opts.lavanderiaId ?? null,
+            });
       const res = await fetch(`${api}/productos/estado/${row.productoId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token ?? ""}`,
         },
-        body: JSON.stringify({ estado }),
+        body,
       });
-      let data: { message?: string; success?: boolean } = {};
+      let data: {
+        message?: string;
+        success?: boolean;
+        remito_impresion?: RemitoImpresionRow;
+      } = {};
       try {
         data = (await res.json()) as typeof data;
       } catch {
@@ -48,9 +111,15 @@ export default function Dashboard() {
             `Error al actualizar «${row.descripcion}»`,
         };
       }
+      if (data.remito_impresion && typeof data.remito_impresion === "object") {
+        remitos.push(data.remito_impresion);
+      }
     }
     clearAll();
-    return { ok: true };
+    if (remitos.length) {
+      imprimirRemitoEnvioLote(remitos);
+    }
+    return { ok: true, remitos };
   };
 
   const modules = [
@@ -123,7 +192,7 @@ export default function Dashboard() {
       icon: "bi-piggy-bank",
       href: "/caja-concentradora",
       color: "bg-success bg-opacity-10 text-success",
-      allow: ["ADMIN"],
+      allow: ["ADMIN"] as const,
     },
     {
       title: "Reportes",
@@ -131,15 +200,15 @@ export default function Dashboard() {
       icon: "bi-bar-chart",
       href: "/reportes",
       color: "bg-dark bg-opacity-10 text-dark",
-      allow: ["ADMIN", "EMPLEADO"],
+      allow: ["ADMIN", "EMPLEADO"] as const,
     },
   ];
 
-  if (loading) return null; // evita parpadeo mientras carga /auth/me
+  if (loading) return null;
 
   const role = me?.role;
   const visibleModules = modules.filter((m) =>
-    m.allow ? (role ? m.allow.includes(role) : false) : true
+    m.allow ? Boolean(role && (m.allow as readonly string[]).includes(role)) : true
   );
 
   return (
@@ -172,6 +241,8 @@ export default function Dashboard() {
         items={scanQueueItems}
         onClearAll={clearAll}
         onRemoveLine={removeLine}
+        modistas={modistas}
+        lavanderias={lavanderias}
         onLoteCambiarEstado={handleLoteCambiarEstado}
       />
 

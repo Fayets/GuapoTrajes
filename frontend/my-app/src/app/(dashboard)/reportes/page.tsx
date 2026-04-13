@@ -1357,12 +1357,48 @@ export default function ReportesPage() {
     nuevoEstado: string
   ) => {
     try {
+      let modistaId: number | undefined;
+      let lavanderiaId: number | undefined;
+      if (nuevoEstado === "MODISTA") {
+        const raw = window.prompt(
+          "Ingresá el ID numérico de la modista (obligatorio para enviar a MODISTA):"
+        );
+        if (!raw?.trim()) {
+          toast.error("Se requiere modista para el estado MODISTA.");
+          return;
+        }
+        modistaId = Number(raw.trim());
+        if (!Number.isFinite(modistaId) || modistaId <= 0) {
+          toast.error("ID de modista inválido.");
+          return;
+        }
+      }
+      if (nuevoEstado === "LAVANDERIA") {
+        const raw = window.prompt(
+          "Ingresá el ID numérico de la lavandería (obligatorio para enviar a LAVANDERIA):"
+        );
+        if (!raw?.trim()) {
+          toast.error("Se requiere lavandería para el estado LAVANDERIA.");
+          return;
+        }
+        lavanderiaId = Number(raw.trim());
+        if (!Number.isFinite(lavanderiaId) || lavanderiaId <= 0) {
+          toast.error("ID de lavandería inválido.");
+          return;
+        }
+      }
       const response = await fetch(
         `${API_BASE}/productos/estado/${productoId}`,
         {
           method: "PATCH",
           headers: getAuthHeaders(),
-          body: JSON.stringify({ estado: nuevoEstado }),
+          body: JSON.stringify(
+            nuevoEstado === "MODISTA"
+              ? { estado: nuevoEstado, modista_id: modistaId }
+              : nuevoEstado === "LAVANDERIA"
+                ? { estado: nuevoEstado, lavanderia_id: lavanderiaId }
+                : { estado: nuevoEstado }
+          ),
         }
       );
 
@@ -1374,6 +1410,12 @@ export default function ReportesPage() {
       const data = await response.json();
       if (data.success) {
         toast.success("Estado actualizado correctamente");
+        if (data.remito_impresion && typeof window !== "undefined") {
+          const { imprimirRemitoEnvioLote } = await import(
+            "@/lib/imprimir-remito-envio"
+          );
+          imprimirRemitoEnvioLote([data.remito_impresion]);
+        }
         // Recargar el reporte
         await obtenerStockPorEstado();
       } else {

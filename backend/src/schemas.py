@@ -220,8 +220,9 @@ class ProductoColorResponse(BaseModel):
 class ProductBase(BaseModel):
     # El código de barras se genera en backend; no se exige en creación.
     codigo_barra: Optional[str] = None
-    # La descripción puede venir vacía; el backend la genera a partir de los atributos.
+    # Título auto: el backend lo genera a partir de los atributos (campo descripcion en BD).
     descripcion: Optional[str] = None
+    descripcion_libre: Optional[str] = None
     linea_id: Optional[int] = None
     tela_id: Optional[int] = None
     talle_id: Optional[int] = None
@@ -262,6 +263,27 @@ class ProductUpdateResponse(BaseModel):
     success: bool
     data: ProductResponse
 
+class ProductoEstadoPatch(BaseModel):
+    estado: str
+    modista_id: Optional[int] = Field(None, description="Obligatorio si estado es MODISTA")
+    lavanderia_id: Optional[int] = Field(None, description="Obligatorio si estado es LAVANDERIA")
+
+
+class AjusteMasivoPreciosRequest(BaseModel):
+    linea_id: int = Field(..., description="ID de línea de producto (ej. sacos, camisas)")
+    sucursal_id: Optional[int] = Field(
+        None,
+        description="Filtrar por sucursal; omitir para actualizar en todas las sucursales",
+    )
+    modo: Literal["porcentaje", "monto_fijo"]
+    direccion: Literal["aumento", "decremento"]
+    valor: float = Field(..., gt=0, description="Porcentaje (>0) o monto fijo (>0) según modo")
+    campos_precio: List[str] = Field(
+        ...,
+        min_length=1,
+        description="Nombres de atributo de precio en Producto",
+    )
+
 class ProductUpdate(BaseModel):
     codigo_barra: Optional[str] = None
     linea_id: Optional[int] = None
@@ -269,6 +291,7 @@ class ProductUpdate(BaseModel):
     tela_id: Optional[int] = None
     color_id: Optional[int] = None
     descripcion: Optional[str] = None
+    descripcion_libre: Optional[str] = None
     costo: Optional[float] = None
     precio_alquiler_lista: Optional[float] = None
     precio_alquiler_efectivo: Optional[float] = None
@@ -292,6 +315,7 @@ class ClientCreate(BaseModel):
     direccion: str
     celular: str
     notas: str
+    fecha_nacimiento: Optional[date] = None
 
 class ClientResponse(ClientCreate):
     id: int
@@ -318,6 +342,7 @@ class PreclientUpdateResponse(BaseModel):
 class ConvertirPreclienteRequest(BaseModel):
     direccion: str
     dni: str
+    fecha_nacimiento: Optional[date] = None
 
 #Evento
 class EventoCreate(BaseModel):
