@@ -2,6 +2,7 @@ from pony.orm import db_session, select
 from fastapi import HTTPException
 from datetime import date, datetime
 from typing import List, Dict, Optional
+import re
 from src.models import Presupuesto, OrdenTrabajo, ItemPresupuesto, Producto, Cliente, CajaMovimiento, Venta, TipoMovimiento, EstadoProducto, ProductoReservado, ProductoLavanderia, ProductoModista, DetalleVenta, DetalleVenta
 
 
@@ -1877,6 +1878,28 @@ class ReportesServices:
             
             # Lista de eventos cronológicos
             eventos = []
+
+            def extraer_orden_ref(*textos) -> Optional[int]:
+                for txt in textos:
+                    if not txt:
+                        continue
+                    m = re.search(r"orden\s*#?\s*(\d+)", str(txt), flags=re.IGNORECASE)
+                    if m:
+                        return int(m.group(1))
+                return None
+
+            def extraer_seq_remito(*textos) -> Optional[int]:
+                # Ej: REM-65-20260414121107-1 -> 20260414121107
+                for txt in textos:
+                    if not txt:
+                        continue
+                    m = re.search(r"REM-[^-]+-(\d{14})", str(txt), flags=re.IGNORECASE)
+                    if m:
+                        try:
+                            return int(m.group(1))
+                        except Exception:
+                            return None
+                return None
             
             # 1. Evento de ingreso al stock
             if producto.fecha_alta and producto.fecha_alta <= fecha_hasta:
@@ -1893,9 +1916,12 @@ class ReportesServices:
             
             # 2. Alquileres (órdenes de trabajo): por ítems de presupuesto asociados al producto.
             # Tras devolución completada suele borrarse ProductoReservado; el presupuesto/orden queda.
-            items_presupuesto = list(ItemPresupuesto.select(
-                lambda ip: ip.producto.id == producto.id
-            ))
+            # Filtrar en Python para evitar inconsistencias del traductor SQL de Pony
+            # con comparaciones de FK en algunos entornos.
+            items_presupuesto = [
+                ip for ip in list(ItemPresupuesto.select())
+                if getattr(ip, "producto", None) and ip.producto.id == producto.id
+            ]
             ordenes_alquiler_vistas = set()
             for ip in items_presupuesto:
                 presupuesto = ip.presupuesto
@@ -1904,9 +1930,21 @@ class ReportesServices:
                 orden = presupuesto.orden_trabajo
                 if not orden or not orden.fecha_evento:
                     continue
+                # Contar alquileres reales: cuando pasa a CLIENTE (contrato)
+                # o cuando la orden quedó cerrada como completada/entregada.
+                estado_orden = str(getattr(orden, "estado", "") or "").strip().lower()
+                tuvo_paso_cliente = bool(getattr(orden, "contrato_generado_at", None))
+                orden_cerrada = estado_orden in {"completada", "entregada"}
+                if not (tuvo_paso_cliente or orden_cerrada):
+                    continue
+                fecha_alquiler_dt = (
+                    orden.contrato_generado_at
+                    if getattr(orden, "contrato_generado_at", None)
+                    else datetime.combine(orden.fecha_evento, datetime.min.time())
+                )
                 if orden.id in ordenes_alquiler_vistas:
                     continue
-                if orden.fecha_evento > fecha_hasta:
+                if fecha_alquiler_dt.date() > fecha_hasta:
                     continue
                 ordenes_alquiler_vistas.add(orden.id)
 
@@ -1930,29 +1968,40 @@ class ReportesServices:
                 )
                 eventos.append({
                     "tipo": "alquiler",
-                    "fecha": orden.fecha_evento.isoformat(),
-                    "fecha_datetime": datetime.combine(orden.fecha_evento, datetime.min.time()),
+                    "fecha": fecha_alquiler_dt.date().isoformat(),
+                    "fecha_datetime": fecha_alquiler_dt,
+                    "_orden_ref": orden.id,
+                    "_fase": 0,
+                    "_ent_id": orden.id,
                     "descripcion": f"Alquilado - Orden #{orden.id}",
                     "detalle": f"Cliente: {nombre_titular} - Evento: {(presupuesto.categoria_evento if presupuesto else None) or 'N/A'} - Estado orden: {orden.estado}",
                     "cliente_nombre": nombre_titular,
                     "orden_id": orden.id,
                     "presupuesto_numero": presupuesto.numero if presupuesto else "N/A",
                     "estado_reserva": pr_actual.estado if pr_actual else None,
-                    "fecha_evento": orden.fecha_evento.isoformat()
+                    "fecha_evento": orden.fecha_evento.isoformat(),
+                    "fecha_contrato": orden.contrato_generado_at.isoformat(),
                 })
             
             # 3. Lavandería
-            productos_lavanderia = list(ProductoLavanderia.select(
-                lambda pl: pl.producto.id == producto.id
-            ))
+            productos_lavanderia = [
+                pl for pl in list(ProductoLavanderia.select())
+                if getattr(pl, "producto", None) and pl.producto.id == producto.id
+            ]
             
             for pl in productos_lavanderia:
                 lav_nombre = pl.lavanderia.nombre if pl.lavanderia else "N/A"
+                orden_ref = extraer_orden_ref(pl.notas)
+                seq_remito = extraer_seq_remito(pl.notas)
                 if pl.fecha_ingreso and pl.fecha_ingreso <= fecha_hasta:
                     eventos.append({
                         "tipo": "lavanderia_ingreso",
                         "fecha": pl.fecha_ingreso.isoformat(),
                         "fecha_datetime": datetime.combine(pl.fecha_ingreso, datetime.min.time()),
+                        "_orden_ref": orden_ref,
+                        "_fase": 1,
+                        "_ent_id": pl.id,
+                        "_seq_hint": seq_remito,
                         "descripcion": f"Ingreso a lavandería: {lav_nombre}",
                         "detalle": f"Producto enviado a lavandería - Notas: {pl.notas or 'Sin notas'}",
                         "lavanderia_nombre": lav_nombre,
@@ -1964,23 +2013,34 @@ class ReportesServices:
                         "tipo": "lavanderia_salida",
                         "fecha": pl.fecha_salida.isoformat(),
                         "fecha_datetime": datetime.combine(pl.fecha_salida, datetime.min.time()),
+                        "_orden_ref": orden_ref,
+                        "_fase": 2,
+                        "_ent_id": pl.id,
+                        "_seq_hint": seq_remito,
                         "descripcion": f"Salida de lavandería: {lav_nombre}",
                         "detalle": f"Producto regresado de lavandería",
                         "lavanderia_nombre": lav_nombre
                     })
             
             # 4. Modista
-            productos_modista = list(ProductoModista.select(
-                lambda pm: pm.producto.id == producto.id
-            ))
+            productos_modista = [
+                pm for pm in list(ProductoModista.select())
+                if getattr(pm, "producto", None) and pm.producto.id == producto.id
+            ]
             
             for pm in productos_modista:
                 mod_nombre = pm.modista.nombre if pm.modista else "N/A"
+                orden_ref = extraer_orden_ref(pm.notas)
+                seq_remito = extraer_seq_remito(pm.notas)
                 if pm.fecha_ingreso and pm.fecha_ingreso <= fecha_hasta:
                     eventos.append({
                         "tipo": "modista_ingreso",
                         "fecha": pm.fecha_ingreso.isoformat(),
                         "fecha_datetime": datetime.combine(pm.fecha_ingreso, datetime.min.time()),
+                        "_orden_ref": orden_ref,
+                        "_fase": 1,
+                        "_ent_id": pm.id,
+                        "_seq_hint": seq_remito,
                         "descripcion": f"Ingreso a modista: {mod_nombre}",
                         "detalle": f"Producto enviado a modista - Notas: {pm.notas or 'Sin notas'}",
                         "modista_nombre": mod_nombre,
@@ -1992,6 +2052,10 @@ class ReportesServices:
                         "tipo": "modista_salida",
                         "fecha": pm.fecha_salida.isoformat(),
                         "fecha_datetime": datetime.combine(pm.fecha_salida, datetime.min.time()),
+                        "_orden_ref": orden_ref,
+                        "_fase": 2,
+                        "_ent_id": pm.id,
+                        "_seq_hint": seq_remito,
                         "descripcion": f"Salida de modista: {mod_nombre}",
                         "detalle": f"Producto regresado de modista",
                         "modista_nombre": mod_nombre
@@ -2029,8 +2093,33 @@ class ReportesServices:
                     "tipo_precio": venta.tipo_precio
                 })
             
-            # Más reciente primero (línea de tiempo hacia atrás)
-            eventos.sort(key=lambda x: x["fecha_datetime"], reverse=True)
+            # Más reciente primero y, dentro del mismo día, intercalar por orden:
+            # alquiler -> ingreso taller -> salida taller.
+            # Ordenar ciclos por secuencia real de remito cuando exista.
+            orden_seq = {}
+            for ev in eventos:
+                oref = ev.get("_orden_ref")
+                if not oref:
+                    continue
+                seq_hint = ev.get("_seq_hint")
+                if seq_hint is None:
+                    continue
+                prev = orden_seq.get(oref)
+                if prev is None or seq_hint < prev:
+                    orden_seq[oref] = seq_hint
+
+            # Timeline descendente (lo último primero):
+            # dentro de un mismo ciclo/fecha, mostrar salida -> ingreso -> alquiler.
+            fase_desc_rank = {2: 0, 1: 1, 0: 2}
+            eventos.sort(
+                key=lambda x: (
+                    -x["fecha_datetime"].date().toordinal(),            # días recientes primero
+                    -orden_seq.get(x.get("_orden_ref"), -1),            # ciclo más nuevo primero
+                    fase_desc_rank.get(x.get("_fase", 9), 9),           # salida -> ingreso -> alquiler
+                    -(x.get("_ent_id", 0) or 0),                        # estabilidad
+                    x["fecha_datetime"],
+                )
+            )
 
             total_eventos = len(eventos)
             ps = max(1, min(int(page_size or 10), 10))
@@ -2040,6 +2129,10 @@ class ReportesServices:
             eventos_pagina = eventos[start : start + ps]
             for ev in eventos_pagina:
                 ev.pop("fecha_datetime", None)
+                ev.pop("_orden_ref", None)
+                ev.pop("_fase", None)
+                ev.pop("_ent_id", None)
+                ev.pop("_seq_hint", None)
             
             # Información del producto
             producto_info = {

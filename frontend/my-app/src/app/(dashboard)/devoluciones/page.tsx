@@ -16,129 +16,6 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { toast } from "sonner";
 
-/** Respuesta `data.remitos` de completar-devolución (varios envíos). */
-type RemitoDevolucionApi = {
-  numero: string;
-  destino: string;
-  lavanderia_nombre?: string | null;
-  modista_nombre?: string | null;
-  cantidad?: number;
-  productos: Array<{
-    producto_id: number;
-    descripcion: string;
-    codigo_barra: string;
-  }>;
-};
-
-function escHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function escJsStr(s: string): string {
-  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, " ");
-}
-
-/** Ventana con remitos (un bloque por envío) y etiquetas con código de barras. */
-function abrirVentanaRemitosYEtiquetas(
-  remitos: RemitoDevolucionApi[],
-  meta: { ordenId: number; presupuesto: string; cliente: string },
-  lanzarImpresion: boolean
-) {
-  const hoy = format(new Date(), "dd/MM/yyyy HH:mm", { locale: es });
-  const bloquesRemito = remitos
-    .map((r, idx) => {
-      const destinoTxt =
-        r.destino === "LAVANDERIA"
-          ? `Lavandería: ${escHtml(r.lavanderia_nombre || "—")}`
-          : r.destino === "MODISTA"
-            ? `Modista: ${escHtml(r.modista_nombre || "—")}`
-            : "Destino: Salón";
-      const filas = (r.productos || [])
-        .map(
-          (p) =>
-            `<tr><td>${escHtml(String(p.producto_id))}</td><td>${escHtml(p.codigo_barra || "—")}</td><td>${escHtml(p.descripcion || "")}</td></tr>`
-        )
-        .join("");
-      return `
-      <div class="remito-box">
-        <div class="d-flex justify-content-between align-items-start mb-2">
-          <div>
-            <strong style="font-size:1.1rem">Remito ${escHtml(r.numero)}</strong>
-            <div class="text-muted small">${idx + 1} / ${remitos.length}</div>
-          </div>
-          <div class="text-end small">${escHtml(hoy)}</div>
-        </div>
-        <p class="mb-1"><strong>Orden</strong> #${meta.ordenId} · <strong>Presupuesto</strong> ${escHtml(meta.presupuesto)}</p>
-        <p class="mb-2"><strong>Cliente</strong> ${escHtml(meta.cliente)}</p>
-        <p class="mb-2"><strong>${destinoTxt}</strong></p>
-        <table class="table table-sm table-bordered mb-0">
-          <thead><tr><th>ID</th><th>Código</th><th>Descripción</th></tr></thead>
-          <tbody>${filas}</tbody>
-        </table>
-      </div>`;
-    })
-    .join("");
-
-  const etiquetasHtml: string[] = [];
-  const barcodeScripts: string[] = [];
-  let k = 0;
-  for (const r of remitos) {
-    for (const p of r.productos || []) {
-      const id = `bc-${k++}`;
-      const code = (p.codigo_barra || "").trim() || "0";
-      etiquetasHtml.push(`
-        <div class="etiqueta">
-          <div class="small text-muted">${escHtml(r.numero)}</div>
-          <svg id="${id}" class="barcode-svg"></svg>
-          <div class="small fw-semibold mt-1">${escHtml(p.descripcion || "")}</div>
-        </div>`);
-      barcodeScripts.push(
-        `try{JsBarcode('#${id}','${escJsStr(code)}',{format:'CODE128',width:1.1,height:32,margin:2,displayValue:true,fontSize:9,textAlign:'center'});}catch(e){console.warn(e);}`
-      );
-    }
-  }
-
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><title>Remitos y etiquetas — Orden #${meta.ordenId}</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<style>
-body{padding:16px;font-family:system-ui,sans-serif;}
-.remito-box{border:1px solid #333;border-radius:6px;padding:14px;margin-bottom:20px;page-break-after:always;}
-.etiqueta{display:inline-block;vertical-align:top;border:1px dashed #555;border-radius:6px;padding:10px;margin:8px;min-width:200px;page-break-inside:avoid;text-align:center;}
-.barcode-svg{display:block;max-width:100%;height:auto;margin:0 auto;}
-@media print{.no-print{display:none!important}.remito-box{page-break-after:always}}
-</style></head><body>
-<h2 class="mb-3">Devolución — remitos</h2>
-${bloquesRemito}
-<h3 class="mt-4 mb-2 no-print">Etiquetas (código de barras)</h3>
-<p class="small text-muted no-print">Revisá la hoja y usá &quot;Imprimir&quot; para remitos y etiquetas juntos, o solo una sección desde el navegador.</p>
-<div class="mb-3">${etiquetasHtml.join("")}</div>
-<div class="no-print d-flex gap-2">
-<button type="button" class="btn btn-primary" onclick="window.print()">Imprimir</button>
-<button type="button" class="btn btn-outline-secondary" onclick="window.close()">Cerrar</button>
-</div>
-<script>
-window.addEventListener('load',function(){
-${barcodeScripts.join("\n")}
-${lanzarImpresion ? "setTimeout(function(){window.print();},500);" : ""}
-});
-</script>
-</body></html>`;
-
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) {
-    toast.error("Permití ventanas emergentes para ver remitos y etiquetas");
-    return;
-  }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-}
-
 // Tipos
 type ProductoReservado = {
   producto_id: number;
@@ -202,7 +79,6 @@ export default function DevolucionesPage() {
   const [asignacionesCompletada, setAsignacionesCompletada] = useState<
     Record<number, AsignacionDevolucionCompleta>
   >({});
-  const [imprimirPostDevolucion, setImprimirPostDevolucion] = useState(true);
 
   const { token } = useAuth();
 
@@ -791,12 +667,6 @@ export default function DevolucionesPage() {
       row.productos_ids.push(pr.producto_id);
     }
 
-    const ordenMeta = {
-      ordenId: ordenSeleccionada.id,
-      presupuesto: ordenSeleccionada.presupuesto_numero,
-      cliente: ordenSeleccionada.cliente_nombre,
-    };
-
     setProcesando(true);
     try {
       const res = await fetch(
@@ -825,10 +695,6 @@ export default function DevolucionesPage() {
       const result = await res.json();
       if (result.success) {
         toast.success(result.message || "Devolución registrada");
-        const remitos = result.data?.remitos as RemitoDevolucionApi[] | undefined;
-        if (remitos?.length && imprimirPostDevolucion) {
-          abrirVentanaRemitosYEtiquetas(remitos, ordenMeta, true);
-        }
         setShowCompletadaModal(false);
         setOrdenSeleccionada(null);
         setAsignacionesCompletada({});
@@ -934,7 +800,6 @@ export default function DevolucionesPage() {
       };
     });
     setAsignacionesCompletada(init);
-    setImprimirPostDevolucion(true);
     setOrdenSeleccionada(orden);
     setShowCompletadaModal(true);
   };
@@ -1254,18 +1119,6 @@ export default function DevolucionesPage() {
                     </tbody>
                   </table>
                 </div>
-                <div className="form-check mt-3">
-                  <input
-                    id="chk-imprimir-devolucion"
-                    type="checkbox"
-                    className="form-check-input"
-                    checked={imprimirPostDevolucion}
-                    onChange={(e) => setImprimirPostDevolucion(e.target.checked)}
-                  />
-                  <label className="form-check-label small" htmlFor="chk-imprimir-devolucion">
-                    Abrir remitos y etiquetas al guardar (impresión automática si el navegador lo permite)
-                  </label>
-                </div>
               </>
             )}
           </div>
@@ -1299,7 +1152,7 @@ export default function DevolucionesPage() {
               ) : (
                 <>
                   <i className="bi bi-check-circle me-2"></i>
-                  Confirmar y generar remitos
+                  Confirmar
                 </>
               )}
             </button>

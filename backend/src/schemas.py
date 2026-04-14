@@ -360,6 +360,16 @@ class RegresarVariosLavanderiaBody(BaseModel):
         description="IDs de producto (Producto.id) actualmente en lavandería activa",
     )
 
+
+class RegresarVariosModistaBody(BaseModel):
+    """Dar de baja varios productos de modista en un solo paso (vuelven a salón)."""
+    productos_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        description="IDs de producto (Producto.id) actualmente en modista activa",
+    )
+
+
 # Modistas
 
 class ModistaCreate(BaseModel):

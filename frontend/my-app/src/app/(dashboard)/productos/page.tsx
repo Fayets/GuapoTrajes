@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import JsBarcode from "jsbarcode";
+import { imprimirEtiqueta50x25DesdeSvg } from "@/lib/imprimir-etiqueta-50x25";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/RoleGate";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -98,6 +99,22 @@ export default function ProductosPage() {
   const [filtroSoloReservados, setFiltroSoloReservados] = useState(false);
   const [productoExpandidoId, setProductoExpandidoId] = useState<number | null>(null);
 
+  /** Envío a lavandería desde el selector de estado (misma idea que devoluciones completas). */
+  const [productoEnvioLavanderia, setProductoEnvioLavanderia] =
+    useState<Producto | null>(null);
+  const [lavanderiasList, setLavanderiasList] = useState<
+    Array<{ id: number; nombre: string }>
+  >([]);
+  const [lavEnvioId, setLavEnvioId] = useState<number | "">("");
+  const [lavEnvioNotas, setLavEnvioNotas] = useState("");
+  const [guardandoLavanderia, setGuardandoLavanderia] = useState(false);
+
+  const [productoEnvioModista, setProductoEnvioModista] = useState<Producto | null>(null);
+  const [modistasList, setModistasList] = useState<Array<{ id: number; nombre: string }>>([]);
+  const [modEnvioId, setModEnvioId] = useState<number | "">("");
+  const [modEnvioNotas, setModEnvioNotas] = useState("");
+  const [guardandoModista, setGuardandoModista] = useState(false);
+
   const API_BASE = getApiBaseUrl();
   const API_URL = `${API_BASE}/productos`;
 
@@ -128,6 +145,156 @@ export default function ProductosPage() {
       })
       .catch(() => {});
   }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const loadLav = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/lavanderia/all`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          setLavanderiasList([]);
+          return;
+        }
+        const data = await res.json();
+        setLavanderiasList(
+          Array.isArray(data)
+            ? data.map((l: { id: number; nombre?: string }) => ({
+                id: Number(l.id),
+                nombre: String(l.nombre ?? l.id),
+              }))
+            : []
+        );
+      } catch {
+        setLavanderiasList([]);
+      }
+    };
+    void loadLav();
+  }, [token, API_BASE]);
+
+  useEffect(() => {
+    if (!token) return;
+    const loadMod = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/modistas/all`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          setModistasList([]);
+          return;
+        }
+        const data = await res.json();
+        setModistasList(
+          Array.isArray(data)
+            ? data.map((m: { id: number; nombre?: string }) => ({
+                id: Number(m.id),
+                nombre: String(m.nombre ?? m.id),
+              }))
+            : []
+        );
+      } catch {
+        setModistasList([]);
+      }
+    };
+    void loadMod();
+  }, [token, API_BASE]);
+
+  const cerrarModalEnvioLavanderia = () => {
+    setProductoEnvioLavanderia(null);
+    setLavEnvioId("");
+    setLavEnvioNotas("");
+    setGuardandoLavanderia(false);
+  };
+
+  const confirmarEnvioLavanderia = async () => {
+    if (!token || !productoEnvioLavanderia) return;
+    const lid = lavEnvioId === "" ? 0 : Number(lavEnvioId);
+    if (!lid) {
+      toast.error("Seleccioná una lavandería");
+      return;
+    }
+    setGuardandoLavanderia(true);
+    try {
+      const res = await fetch(`${API_BASE}/lavanderia/asignar-producto`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          lavanderia_id: lid,
+          producto_id: productoEnvioLavanderia.id,
+          notas: lavEnvioNotas.trim() || null,
+        }),
+      });
+      const result = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        success?: boolean;
+      };
+      if (!res.ok || result?.success === false) {
+        toast.error(result?.message || "No se pudo enviar a lavandería");
+        return;
+      }
+      toast.success(result?.message || "Producto enviado a lavandería");
+      const enviadoId = productoEnvioLavanderia.id;
+      cerrarModalEnvioLavanderia();
+      loadProductos();
+      setProductoActual((prev) =>
+        prev && prev.id === enviadoId ? { ...prev, estado: "LAVANDERIA" } : prev
+      );
+    } finally {
+      setGuardandoLavanderia(false);
+    }
+  };
+
+  const cerrarModalEnvioModista = () => {
+    setProductoEnvioModista(null);
+    setModEnvioId("");
+    setModEnvioNotas("");
+    setGuardandoModista(false);
+  };
+
+  const confirmarEnvioModista = async () => {
+    if (!token || !productoEnvioModista) return;
+    const mid = modEnvioId === "" ? 0 : Number(modEnvioId);
+    if (!mid) {
+      toast.error("Seleccioná una modista");
+      return;
+    }
+    setGuardandoModista(true);
+    try {
+      const res = await fetch(`${API_BASE}/modistas/asignar-producto`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          modista_id: mid,
+          producto_id: productoEnvioModista.id,
+          notas: modEnvioNotas.trim() || null,
+        }),
+      });
+      const result = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        success?: boolean;
+      };
+      if (!res.ok || result?.success === false) {
+        toast.error(result?.message || "No se pudo enviar a modista");
+        return;
+      }
+      toast.success(result?.message || "Producto enviado a modista");
+      const enviadoId = productoEnvioModista.id;
+      cerrarModalEnvioModista();
+      loadProductos();
+      setProductoActual((prev) =>
+        prev && prev.id === enviadoId ? { ...prev, estado: "MODISTA" } : prev
+      );
+    } finally {
+      setGuardandoModista(false);
+    }
+  };
 
   // Carga de productos con paginación y filtro remoto
   const loadProductos = () => {
@@ -640,6 +807,24 @@ export default function ProductosPage() {
                           if (!token) return;
                           const nuevoEstado = e.target.value;
                           const estadoAnterior = producto.estado;
+                          if (
+                            nuevoEstado === "LAVANDERIA" &&
+                            estadoAnterior !== "LAVANDERIA"
+                          ) {
+                            setProductoEnvioLavanderia(producto);
+                            setLavEnvioId("");
+                            setLavEnvioNotas("");
+                            return;
+                          }
+                          if (
+                            nuevoEstado === "MODISTA" &&
+                            estadoAnterior !== "MODISTA"
+                          ) {
+                            setProductoEnvioModista(producto);
+                            setModEnvioId("");
+                            setModEnvioNotas("");
+                            return;
+                          }
                           const payload = { estado: nuevoEstado };
                           try {
                             const response = await fetch(
@@ -818,6 +1003,198 @@ export default function ProductosPage() {
         </div>
       </div>
 
+      <Dialog
+        open={!!productoEnvioLavanderia}
+        onOpenChange={(open) => {
+          if (!open) cerrarModalEnvioLavanderia();
+        }}
+      >
+        <DialogContent
+          className="w-full border-0"
+          dialogClassName="modal-dialog-centered modal-lg"
+          dialogStyle={{ maxWidth: "560px", width: "95%" }}
+        >
+          <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
+            <DialogTitle className="fw-semibold mb-0">Enviar a lavandería</DialogTitle>
+          </DialogHeader>
+          <div className="modal-body px-3 px-md-4 py-3">
+            {productoEnvioLavanderia ? (
+              <>
+                <div className="mb-3 small">
+                  <p className="mb-1 fw-semibold text-dark">
+                    {productoEnvioLavanderia.descripcion}
+                  </p>
+                  <p className="mb-0 text-muted font-monospace">
+                    {productoEnvioLavanderia.codigo_barra || `ID ${productoEnvioLavanderia.id}`}
+                  </p>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-semibold" htmlFor="lav-envio-select">
+                    Lavandería
+                  </label>
+                  <select
+                    id="lav-envio-select"
+                    className="form-select"
+                    value={lavEnvioId === "" ? "" : String(lavEnvioId)}
+                    onChange={(e) =>
+                      setLavEnvioId(e.target.value ? Number(e.target.value) : "")
+                    }
+                  >
+                    <option value="">Seleccionar lavandería…</option>
+                    {lavanderiasList.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-0">
+                  <label className="form-label fw-semibold" htmlFor="lav-envio-notas">
+                    Notas <span className="text-muted fw-normal">(opcional)</span>
+                  </label>
+                  <textarea
+                    id="lav-envio-notas"
+                    className="form-control"
+                    rows={3}
+                    value={lavEnvioNotas}
+                    onChange={(e) => setLavEnvioNotas(e.target.value)}
+                    placeholder="Ej. manchas leves, retiro urgente…"
+                  />
+                </div>
+              </>
+            ) : null}
+          </div>
+          <DialogFooter className="border-top pt-3 d-flex flex-wrap justify-content-end gap-2 px-3 px-md-4 pb-2">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={guardandoLavanderia}
+              onClick={cerrarModalEnvioLavanderia}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={guardandoLavanderia || lavanderiasList.length === 0}
+              onClick={() => void confirmarEnvioLavanderia()}
+            >
+              {guardandoLavanderia ? (
+                <>
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                    aria-hidden
+                  />
+                  Guardando…
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-droplet-half me-2" aria-hidden />
+                  Confirmar envío
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!productoEnvioModista}
+        onOpenChange={(open) => {
+          if (!open) cerrarModalEnvioModista();
+        }}
+      >
+        <DialogContent
+          className="w-full border-0"
+          dialogClassName="modal-dialog-centered modal-lg"
+          dialogStyle={{ maxWidth: "560px", width: "95%" }}
+        >
+          <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
+            <DialogTitle className="fw-semibold mb-0">Enviar a modista</DialogTitle>
+          </DialogHeader>
+          <div className="modal-body px-3 px-md-4 py-3">
+            {productoEnvioModista ? (
+              <>
+                <div className="mb-3 small">
+                  <p className="mb-1 fw-semibold text-dark">
+                    {productoEnvioModista.descripcion}
+                  </p>
+                  <p className="mb-0 text-muted font-monospace">
+                    {productoEnvioModista.codigo_barra || `ID ${productoEnvioModista.id}`}
+                  </p>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label fw-semibold" htmlFor="mod-envio-select">
+                    Modista
+                  </label>
+                  <select
+                    id="mod-envio-select"
+                    className="form-select"
+                    value={modEnvioId === "" ? "" : String(modEnvioId)}
+                    onChange={(e) =>
+                      setModEnvioId(e.target.value ? Number(e.target.value) : "")
+                    }
+                  >
+                    <option value="">Seleccionar modista…</option>
+                    {modistasList.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-0">
+                  <label className="form-label fw-semibold" htmlFor="mod-envio-notas">
+                    Notas <span className="text-muted fw-normal">(opcional)</span>
+                  </label>
+                  <textarea
+                    id="mod-envio-notas"
+                    className="form-control"
+                    rows={3}
+                    value={modEnvioNotas}
+                    onChange={(e) => setModEnvioNotas(e.target.value)}
+                    placeholder="Ej. ajuste de manga, fecha límite…"
+                  />
+                </div>
+              </>
+            ) : null}
+          </div>
+          <DialogFooter className="border-top pt-3 d-flex flex-wrap justify-content-end gap-2 px-3 px-md-4 pb-2">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={guardandoModista}
+              onClick={cerrarModalEnvioModista}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={guardandoModista || modistasList.length === 0}
+              onClick={() => void confirmarEnvioModista()}
+            >
+              {guardandoModista ? (
+                <>
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                    aria-hidden
+                  />
+                  Guardando…
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-scissors me-2" aria-hidden />
+                  Confirmar envío
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal etiqueta */}
       <Dialog open={isModalEtiquetaOpen} onOpenChange={setIsModalEtiquetaOpen}>
         <DialogContent className="sm:max-w-md text-center">
@@ -840,9 +1217,12 @@ export default function ProductosPage() {
               </div>
               <Button
                 variant="secondary"
-                onClick={() =>
-                  imprimirEtiqueta(barcodeRef, productoEtiqueta.descripcion ?? "")
-                }
+                onClick={() => {
+                  const etiqueta = document.getElementById("etiqueta-impresion");
+                  const svg = (etiqueta ? etiqueta : barcodeRef.current) as SVGSVGElement | null;
+                  if (!svg) return;
+                  void imprimirEtiqueta50x25DesdeSvg(svg, productoEtiqueta.descripcion ?? "");
+                }}
               >
                 Imprimir
               </Button>
@@ -1045,12 +1425,34 @@ export default function ProductosPage() {
                         <select
                           className="form-select w-100"
                           value={productoActual?.estado || ""}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const nuevo = e.target.value as EstadoKey;
+                            const prev = productoActual?.estado;
+                            if (
+                              nuevo === "LAVANDERIA" &&
+                              prev !== "LAVANDERIA" &&
+                              productoActual?.id
+                            ) {
+                              setProductoEnvioLavanderia(productoActual as Producto);
+                              setLavEnvioId("");
+                              setLavEnvioNotas("");
+                              return;
+                            }
+                            if (
+                              nuevo === "MODISTA" &&
+                              prev !== "MODISTA" &&
+                              productoActual?.id
+                            ) {
+                              setProductoEnvioModista(productoActual as Producto);
+                              setModEnvioId("");
+                              setModEnvioNotas("");
+                              return;
+                            }
                             setProductoActual({
                               ...productoActual!,
-                              estado: e.target.value as EstadoKey,
-                            })
-                          }
+                              estado: nuevo,
+                            });
+                          }}
                         >
                           <option value="">Seleccione un estado</option>
                           {ESTADOS.map((estado) => (
@@ -1496,142 +1898,4 @@ export default function ProductosPage() {
       </Dialog>
     </div>
   );
-}
-
-function imprimirEtiqueta(
-  barcodeRef: React.RefObject<SVGSVGElement | null>,
-  nombreProducto: string
-) {
-  const etiqueta = document.getElementById("etiqueta-impresion");
-  const svg = (etiqueta ? etiqueta : barcodeRef.current) as SVGSVGElement | null;
-  if (!svg) return;
-
-  const contenido = svg.cloneNode(true) as SVGSVGElement;
-  contenido.style.display = "block";
-  contenido.style.marginInline = "auto";
-
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <title></title>
-  <style>
-    @page {
-      size: 50mm 25mm;
-      margin: 0;
-    }
-    * {
-      box-sizing: border-box;
-      print-color-adjust: exact;
-      -webkit-print-color-adjust: exact;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 50mm;
-      height: 25mm;
-      background: #fff;
-      overflow: hidden;
-      direction: ltr;
-    }
-    body {
-      display: block;
-    }
-    /* text-align:center + inline-flex centra bien en vista previa / impresión térmica */
-    .wrap {
-      width: 50mm;
-      height: 25mm;
-      margin: 0;
-      padding: 0.4mm 1mm 0.3mm;
-      text-align: center;
-      overflow: hidden;
-    }
-    .inner {
-      display: inline-flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      vertical-align: top;
-      max-width: 48mm;
-      gap: 0.35mm;
-      text-align: center;
-    }
-    .product-name {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      max-width: 48mm;
-      text-align: center;
-      font: 600 5.5pt/1.15 system-ui, sans-serif;
-      color: #000;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      overflow: hidden;
-      word-break: break-word;
-      hyphens: auto;
-    }
-    .barcode-slot {
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      width: 100%;
-    }
-    .barcode-slot svg {
-      display: block;
-      margin-inline: auto;
-      max-width: 47mm;
-      max-height: 17mm;
-      width: auto;
-      height: auto;
-    }
-  </style>
-</head>
-<body>
-  <div class="wrap"><div class="inner"></div></div>
-</body>
-</html>`;
-
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  Object.assign(iframe.style, {
-    position: "fixed",
-    left: "-10000px",
-    top: "0",
-    width: "50mm",
-    height: "25mm",
-    border: "none",
-    opacity: "0",
-    pointerEvents: "none",
-  } as Partial<CSSStyleDeclaration>);
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentDocument;
-  const win = iframe.contentWindow;
-  if (!doc || !win) {
-    iframe.remove();
-    return;
-  }
-
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  const inner = doc.querySelector(".inner");
-  if (inner) {
-    const titulo = doc.createElement("p");
-    titulo.className = "product-name";
-    titulo.textContent = nombreProducto.trim() || "\u00A0";
-    const slot = doc.createElement("div");
-    slot.className = "barcode-slot";
-    slot.appendChild(contenido);
-    inner.appendChild(titulo);
-    inner.appendChild(slot);
-  }
-
-  setTimeout(() => {
-    win.focus();
-    win.print();
-    iframe.remove();
-  }, 250);
 }

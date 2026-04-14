@@ -15,6 +15,14 @@ class RegisterMessage(BaseModel):
     success: bool
     data: Optional[Dict] = None
 
+
+class AsignarProductoLavanderiaBody(BaseModel):
+    lavanderia_id: int
+    producto_id: int
+    notas: Optional[str] = None
+    cliente_nombre: Optional[str] = None
+    cliente_celular: Optional[str] = None
+
 @router.post("/register", response_model=RegisterMessage, status_code=201)
 def registrar_lavanderia(lavanderia: schemas.LavanderiaCreate, current_user=Depends(get_current_user)):
     try:
@@ -60,14 +68,30 @@ def eliminar_lavanderia(lavanderia_id: int, current_user=Depends(get_current_use
     except Exception:
         raise HTTPException(status_code=500, detail="Error al eliminar la lavandería")
 
-@router.post("/asignar-producto")
-def asignar_producto_a_lavanderia(lavanderia_id: int, producto_id: int, current_user=Depends(get_current_user)):
+@router.post("/asignar-producto", response_model=RegisterMessage)
+def asignar_producto_a_lavanderia(
+    body: AsignarProductoLavanderiaBody,
+    current_user=Depends(get_current_user),
+):
     try:
-        return servicio.asignar_producto(lavanderia_id, producto_id)
+        return servicio.asignar_producto(
+            body.lavanderia_id,
+            body.producto_id,
+            notas=body.notas,
+            cliente_nombre=body.cliente_nombre,
+            cliente_celular=body.cliente_celular,
+        )
     except HTTPException as e:
         return {"message": e.detail, "success": False, "data": None}
     except Exception as e:
-        return {"message": "Error al asignar producto a lavandería", "success": False, "data": None}
+        import traceback
+
+        traceback.print_exc()
+        return {
+            "message": f"Error al asignar producto a lavandería: {e!s}",
+            "success": False,
+            "data": None,
+        }
 
 
 @router.post("/regresar-producto/{producto_id}", response_model=schemas.RegresoProductoLavanderiaResponse)

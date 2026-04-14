@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getApiBaseUrl } from "@/lib/api-config"
+import { imprimirEtiquetas50x25Lote } from "@/lib/imprimir-etiqueta-50x25"
 import { toast } from "sonner"
 
 type Lavanderia = {
@@ -36,65 +37,32 @@ type ProductoEnLavanderia = {
   cliente_celular?: string
 }
 
+type EstadoColaEtiqueta = "pendiente" | "imprimiendo" | "ok" | "error"
+
+type ItemColaEtiquetaVisual = {
+  key: string
+  productoId: number
+  codigo_barra: string
+  descripcion: string
+  estado: EstadoColaEtiqueta
+}
+
+function filaColaDesdeProducto(p: ProductoEnLavanderia, indice: number): ItemColaEtiquetaVisual {
+  return {
+    key: `etq-${p.id}-${indice}`,
+    productoId: p.id,
+    codigo_barra: p.codigo_barra || "",
+    descripcion: p.descripcion || "",
+    estado: "pendiente",
+  }
+}
+
 function escHtml(s: string): string {
   return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-}
-
-function escJsStr(s: string): string {
-  return String(s)
-    .replace(/\\/g, "\\\\")
-    .replace(/'/g, "\\'")
-    .replace(/\r?\n/g, " ")
-}
-
-/** Ventana nueva: etiquetas con código de barras (sin cola de escaneo). */
-function abrirVentanaEtiquetasProductos(items: ProductoEnLavanderia[]) {
-  if (items.length === 0) {
-    toast.error("No hay prendas para etiquetar")
-    return
-  }
-  const bloques: string[] = []
-  const scripts: string[] = []
-  items.forEach((p, k) => {
-    const id = `bc-lav-${k}`
-    const code = (p.codigo_barra || "").trim() || "0"
-    bloques.push(
-      `<div class="etiq"><svg id="${id}"></svg><div class="desc">${escHtml(p.descripcion || "")}</div><div class="cod text-muted small">${escHtml(code)}</div></div>`
-    )
-    scripts.push(
-      `try{JsBarcode('#${id}','${escJsStr(code)}',{format:'CODE128',width:1.15,height:38,margin:2,displayValue:true,fontSize:9});}catch(e){console.warn(e);}`
-    )
-  })
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><title>Etiquetas</title>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<style>
-body{font-family:system-ui,sans-serif;padding:12px;}
-.etiq{display:inline-block;vertical-align:top;border:1px dashed #444;border-radius:8px;padding:10px 12px;margin:8px;min-width:220px;page-break-inside:avoid;}
-.etiq .desc{font-size:12px;font-weight:600;margin-top:6px;max-width:280px;}
-@media print{.no-print{display:none!important}}
-</style></head><body>
-<h2 class="h5 mb-2">Etiquetas (${items.length})</h2>
-<div class="no-print mb-2"><button type="button" class="btn btn-primary btn-sm" onclick="window.print()">Imprimir</button>
-<button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">Cerrar</button></div>
-<div>${bloques.join("")}</div>
-<script>
-window.addEventListener('load',function(){
-${scripts.join("\n")}
-});
-</script>
-</body></html>`
-  const w = window.open("", "_blank", "width=900,height=700")
-  if (!w) {
-    toast.error("Permití ventanas emergentes para imprimir etiquetas")
-    return
-  }
-  w.document.open()
-  w.document.write(html)
-  w.document.close()
 }
 
 function abrirRemitoRecepcionLavanderia(
@@ -153,6 +121,8 @@ export default function LavanderiaPage() {
   const [cargandoPrendas, setCargandoPrendas] = useState(false)
   const [volvioPorId, setVolvioPorId] = useState<Record<number, boolean>>({})
   const [registrandoBolsa, setRegistrandoBolsa] = useState(false)
+  const [imprimiendoEtiquetas, setImprimiendoEtiquetas] = useState(false)
+  const [colaVisualEtiquetas, setColaVisualEtiquetas] = useState<ItemColaEtiquetaVisual[]>([])
 
   useEffect(() => {
     const t = localStorage.getItem("token")
@@ -201,6 +171,7 @@ export default function LavanderiaPage() {
     if (!token || !lavanderiaRecepcionId) {
       setProductosEnLavanderia([])
       setVolvioPorId({})
+      setColaVisualEtiquetas([])
       return
     }
     const id = Number(lavanderiaRecepcionId)
@@ -228,10 +199,12 @@ export default function LavanderiaPage() {
         if (!cancelled) {
           setProductosEnLavanderia(Array.isArray(data) ? data : [])
           setVolvioPorId({})
+          setColaVisualEtiquetas([])
         }
       } catch (e) {
         if (!cancelled) {
           setProductosEnLavanderia([])
+          setColaVisualEtiquetas([])
           toast.error(e instanceof Error ? e.message : "Error al cargar prendas")
         }
       } finally {
@@ -310,17 +283,63 @@ export default function LavanderiaPage() {
     }
   }
 
-  const handleImprimirEtiquetasMarcados = () => {
+  const handleImprimirEtiquetasMarcados = async () => {
     const sel = productosMarcadosVolvieron
     if (sel.length === 0) {
       toast.error("Marcá las prendas cuyas etiquetas querés imprimir")
       return
     }
-    abrirVentanaEtiquetasProductos(sel)
+    const colaInicial = sel.map((p, i) => filaColaDesdeProducto(p, i))
+    setColaVisualEtiquetas(colaInicial.map((r) => ({ ...r, estado: "imprimiendo" as const })))
+    setImprimiendoEtiquetas(true)
+    try {
+      const payload = sel.map((p) => ({
+        codigoBarra: p.codigo_barra || "0",
+        descripcion: p.descripcion || "",
+      }))
+      const { porIndice } = await imprimirEtiquetas50x25Lote(payload)
+      const ok = porIndice.filter((s) => s === "ok").length
+      const err = porIndice.filter((s) => s === "error").length
+      setColaVisualEtiquetas((prev) =>
+        prev.map((row, j) => ({
+          ...row,
+          estado: porIndice[j] === "ok" ? "ok" : "error",
+        }))
+      )
+      if (err === 0) {
+        toast.success(
+          `${ok} etiqueta(s) en un solo envío a impresión (50×25 mm, una hoja por etiqueta)`
+        )
+      } else if (ok === 0) {
+        toast.error("No se pudo armar ninguna etiqueta. Revisá los códigos de barras.")
+      } else {
+        toast.warning(
+          `Listo parcial: ${ok} en el mismo trabajo de impresión, ${err} con error al generar el código`
+        )
+      }
+    } finally {
+      setImprimiendoEtiquetas(false)
+    }
   }
 
-  const handleImprimirEtiquetaUna = (p: ProductoEnLavanderia) => {
-    abrirVentanaEtiquetasProductos([p])
+  const handleImprimirEtiquetaUna = async (p: ProductoEnLavanderia) => {
+    const fila = filaColaDesdeProducto(p, 0)
+    setColaVisualEtiquetas([{ ...fila, estado: "imprimiendo" }])
+    setImprimiendoEtiquetas(true)
+    try {
+      const { porIndice } = await imprimirEtiquetas50x25Lote([
+        { codigoBarra: p.codigo_barra || "0", descripcion: p.descripcion || "" },
+      ])
+      const ok = porIndice[0] === "ok"
+      setColaVisualEtiquetas([{ ...fila, estado: ok ? "ok" : "error" }])
+      if (ok) {
+        toast.success("Etiqueta enviada a impresión")
+      } else {
+        toast.error("No se pudo generar la etiqueta (código inválido)")
+      }
+    } finally {
+      setImprimiendoEtiquetas(false)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -504,7 +523,7 @@ export default function LavanderiaPage() {
         <div className="card-header py-2">
           <h2 className="h6 mb-0 fw-semibold text-secondary">Bolsa: qué volvió</h2>
           <p className="small text-muted mb-0 mt-1">
-            Lavandería → marcá lo de la bolsa → remito, salón o imprimir etiquetas.
+            Lavandería → marcá lo de la bolsa → remito, salón o imprimir etiquetas. Mismo formato 50×25 mm que en Productos; las marcadas salen en un solo cuadro de impresión (una hoja por etiqueta).
           </p>
         </div>
         <div className="card-body">
@@ -566,14 +585,121 @@ export default function LavanderiaPage() {
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
-                disabled={!lavanderiaRecepcionId}
-                onClick={handleImprimirEtiquetasMarcados}
+                disabled={
+                  !lavanderiaRecepcionId ||
+                  imprimiendoEtiquetas ||
+                  productosMarcadosVolvieron.length === 0
+                }
+                onClick={() => void handleImprimirEtiquetasMarcados()}
               >
                 <i className="bi bi-printer me-1" aria-hidden />
-                Etiquetas (marcadas)
+                {imprimiendoEtiquetas ? "Imprimiendo cola…" : "Imprimir cola (marcadas)"}
               </button>
             </div>
           </div>
+          {lavanderiaRecepcionId &&
+            productosEnLavanderia.length > 0 &&
+            !cargandoPrendas && (
+              <p className="small text-secondary mb-2">
+                Prendas marcadas para cola:{" "}
+                <strong>{productosMarcadosVolvieron.length}</strong>. Un solo “Imprimir”
+                del navegador: cada etiqueta sigue siendo una hoja 50×25 mm.
+              </p>
+            )}
+          {colaVisualEtiquetas.length > 0 && (
+            <div className="border rounded mb-3 overflow-hidden bg-body">
+              <div className="border-bottom px-3 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <h2 className="h6 mb-0">Cola de impresión</h2>
+                {imprimiendoEtiquetas ? (
+                  <span className="badge bg-primary">En curso</span>
+                ) : (
+                  <span className="badge bg-secondary">Finalizado</span>
+                )}
+              </div>
+              <div className="p-3">
+                <p className="text-muted small mb-3">
+                  Misma idea que la <strong>Cola de escaneo</strong> del dashboard: una
+                  fila por etiqueta. Al terminar el único envío a impresión, cada fila
+                  pasa a listo o error (50×25&nbsp;mm por hoja).
+                </p>
+                <ul className="list-group list-group-flush border rounded">
+                  {colaVisualEtiquetas.map((row) => (
+                    <li
+                      key={row.key}
+                      className={`list-group-item d-flex flex-column flex-md-row align-items-md-center gap-2 ${
+                        row.estado === "imprimiendo" ? "list-group-item-primary" : ""
+                      }`}
+                    >
+                      <div className="flex-grow-1 min-w-0">
+                        <div className="fw-medium text-truncate" title={row.descripcion}>
+                          {row.descripcion || "—"}
+                        </div>
+                        <div className="small text-muted font-monospace">
+                          {row.codigo_barra || `ID ${row.productoId}`}
+                        </div>
+                      </div>
+                      <div className="align-self-md-center flex-shrink-0">
+                        {row.estado === "pendiente" && (
+                          <span className="badge bg-light text-dark border">Pendiente</span>
+                        )}
+                        {row.estado === "imprimiendo" && (
+                          <span className="text-primary small d-inline-flex align-items-center gap-2">
+                            <span
+                              className="spinner-border spinner-border-sm"
+                              role="status"
+                              aria-hidden
+                            />
+                            Imprimiendo…
+                          </span>
+                        )}
+                        {row.estado === "ok" && (
+                          <span className="badge bg-success">
+                            <i className="bi bi-check-lg me-1" aria-hidden />
+                            Listo
+                          </span>
+                        )}
+                        {row.estado === "error" && (
+                          <span className="badge bg-danger">
+                            <i className="bi bi-exclamation-lg me-1" aria-hidden />
+                            Error
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="border-top px-3 py-2 d-flex flex-wrap gap-2 align-items-center">
+                <span className="me-auto text-muted small">
+                  {(() => {
+                    const n = colaVisualEtiquetas.length
+                    const hechas = colaVisualEtiquetas.filter(
+                      (r) => r.estado === "ok" || r.estado === "error"
+                    ).length
+                    return `${hechas} / ${n} · ${n === 1 ? "1 etiqueta" : `${n} etiquetas`}`
+                  })()}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  disabled={imprimiendoEtiquetas}
+                  onClick={() => {
+                    if (imprimiendoEtiquetas) return
+                    if (
+                      typeof window !== "undefined" &&
+                      !window.confirm("¿Vaciar toda la cola?")
+                    ) {
+                      return
+                    }
+                    setColaVisualEtiquetas([])
+                    toast.success("Cola vaciada.")
+                  }}
+                >
+                  Vaciar cola
+                </button>
+              </div>
+            </div>
+          )}
           {!lavanderiaRecepcionId ? (
             <p className="text-muted small mb-0">
               Seleccioná una lavandería para ver las prendas que están allá.
@@ -639,8 +765,9 @@ export default function LavanderiaPage() {
                           <button
                             type="button"
                             className="btn btn-sm btn-outline-primary"
-                            title="Abrir ventana para imprimir esta etiqueta"
-                            onClick={() => handleImprimirEtiquetaUna(p)}
+                            title="Imprimir esta etiqueta (50×25 mm, mismo formato que Productos)"
+                            disabled={imprimiendoEtiquetas}
+                            onClick={() => void handleImprimirEtiquetaUna(p)}
                           >
                             <i className="bi bi-printer" aria-hidden />
                           </button>

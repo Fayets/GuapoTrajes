@@ -202,6 +202,7 @@ export default function PresupuestosPage() {
   const [presupuestoAConvertir, setPresupuestoAConvertir] = useState<{
     id: number;
     cliente: string;
+    total: number;
   } | null>(null);
 
   /** True si el modal se abrió importando ítems desde la cola del dashboard; al guardar OK se vacía localStorage. */
@@ -1010,6 +1011,10 @@ export default function PresupuestosPage() {
       alert("Monto inválido.");
       return;
     }
+    if (monto > presupuestoAConvertir.total) {
+      alert("La seña no puede ser mayor al total del presupuesto.");
+      return;
+    }
 
     if (!cuentaDestinoId) {
       alert("Debes seleccionar una cuenta destino.");
@@ -1361,6 +1366,7 @@ export default function PresupuestosPage() {
                                 setPresupuestoAConvertir({
                                   id: p.id,
                                   cliente: p.cliente_nombre,
+                                  total: p.total,
                                 });
                                 setSenia("");
                                 setCuentaDestinoId(null);
@@ -1484,6 +1490,13 @@ export default function PresupuestosPage() {
           </DialogHeader>
 
           <div className="modal-body px-3 px-md-4">
+            {(() => {
+              const montoSenia = parseFloat(senia);
+              const seniaExcedeTotal =
+                !!presupuestoAConvertir &&
+                !Number.isNaN(montoSenia) &&
+                montoSenia > presupuestoAConvertir.total;
+              return (
             <div className="card shadow-sm mb-4">
               <div className="card-body p-4">
                 <div className="mb-4">
@@ -1494,7 +1507,19 @@ export default function PresupuestosPage() {
                     placeholder="Ingresá el monto recibido"
                     value={senia}
                     onChange={(e) => setSenia(e.target.value)}
+                    min={0}
+                    max={presupuestoAConvertir?.total}
                   />
+                  {!!presupuestoAConvertir && (
+                    <div className="small text-muted mt-2">
+                      Máximo permitido: ${presupuestoAConvertir.total.toLocaleString("es-AR")}
+                    </div>
+                  )}
+                  {seniaExcedeTotal && (
+                    <div className="text-danger small mt-2">
+                      La seña no puede ser mayor al total del presupuesto.
+                    </div>
+                  )}
                 </div>
 
                 <MetodoPagoSelector
@@ -1543,6 +1568,8 @@ export default function PresupuestosPage() {
                 </div>
               </div>
             </div>
+              );
+            })()}
           </div>
 
           <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
@@ -1555,7 +1582,15 @@ export default function PresupuestosPage() {
             <button
               className="btn btn-primary"
               onClick={confirmarSenia}
-              disabled={!metodoPagoId || !cuentaDestinoId || !senia || parseFloat(senia) <= 0}
+              disabled={
+                !metodoPagoId ||
+                !cuentaDestinoId ||
+                !senia ||
+                parseFloat(senia) <= 0 ||
+                (!!presupuestoAConvertir &&
+                  !Number.isNaN(parseFloat(senia)) &&
+                  parseFloat(senia) > presupuestoAConvertir.total)
+              }
             >
               Confirmar
             </button>

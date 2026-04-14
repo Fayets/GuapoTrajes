@@ -2,7 +2,9 @@ from pony.orm import db_session, flush
 from fastapi import HTTPException
 from pony.orm.core import TransactionIntegrityError
 from src import models, schemas
-#from src.schemas import RegresoProductoLavanderiaResponse
+from src.services.productos_services import _producto_to_response_dict
+
+# from src.schemas import RegresoProductoLavanderiaResponse
 from datetime import date
 from typing import List, Optional
 
@@ -44,9 +46,15 @@ class LavanderiaServices:
             lavanderia.delete()
             return {"message": "Lavandería eliminada correctamente"}
         
-    def asignar_producto(self, lavanderia_id: int, producto_id: int) -> dict:
+    def asignar_producto(
+        self,
+        lavanderia_id: int,
+        producto_id: int,
+        notas: Optional[str] = None,
+        cliente_nombre: Optional[str] = None,
+        cliente_celular: Optional[str] = None,
+    ) -> dict:
         with db_session:
-            # Verificamos si la lavandería y el producto existen
             lavanderia = models.Lavanderia.get(id=lavanderia_id)
             producto = models.Producto.get(id=producto_id)
 
@@ -55,20 +63,42 @@ class LavanderiaServices:
             if not producto:
                 raise HTTPException(status_code=404, detail="Producto no encontrado")
 
-            # Creamos la relación ProductoLavanderia
-            models.ProductoLavanderia(
-                producto=producto,
-                lavanderia=lavanderia
-            )
+            hoy = date.today()
+            # No usar select(lambda … producto == entidad): Pony no traduce bien la captura;
+            # recorremos las relaciones cargadas en la misma sesión.
+            for pl in list(producto.productos_lavanderias):
+                if pl.fecha_salida is None:
+                    pl.fecha_salida = hoy
+            for pm in list(producto.productos_modistas):
+                if pm.fecha_salida is None:
+                    pm.fecha_salida = hoy
 
-            # Actualizamos el estado del producto a LAVANDERIA (sin importar el estado previo)
+            notas_val = (notas or "").strip() or None
+            cli_n = (cliente_nombre or "").strip() or None
+            cli_c = (cliente_celular or "").strip() or None
+
+            # Pony: no pasar None a Optional(str) en el constructor (falla la validación).
+            pl_kwargs = {
+                "producto": producto,
+                "lavanderia": lavanderia,
+                "fecha_ingreso": hoy,
+            }
+            if notas_val is not None:
+                pl_kwargs["notas"] = notas_val
+            if cli_n is not None:
+                pl_kwargs["cliente_nombre"] = cli_n
+            if cli_c is not None:
+                pl_kwargs["cliente_celular"] = cli_c
+            models.ProductoLavanderia(**pl_kwargs)
+
             producto.estado = models.EstadoProducto.LAVANDERIA
             producto.inmovilizado = False
+            flush()
 
             return {
                 "message": "Producto asignado a lavandería exitosamente",
                 "success": True,
-                "data": producto.to_dict()
+                "data": _producto_to_response_dict(producto),
             }
         
 

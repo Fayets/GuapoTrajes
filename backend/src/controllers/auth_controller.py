@@ -3,9 +3,8 @@ from src import schemas
 from src.services.usuario_services import UsuariosServices
 from jose import jwt, JWTError
 from pydantic import BaseModel
-from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta
-from ..security import SECRET_KEY, ALGORITHM, secret_fingerprint, decode_token
+from ..security import SECRET_KEY, ALGORITHM
 from ..schemas import UsuarioOut
 from ..deps import get_current_user
 from src import models
@@ -20,7 +19,6 @@ servicio = UsuariosServices()
 logger = logging.getLogger("guapotrajes")
 
 ACCESS_TOKEN_DURATION = 60
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 class RegisterMessage(BaseModel):
     message: str
@@ -31,31 +29,6 @@ class RegisterMessage(BaseModel):
 @router.get("/_debug/header")
 async def debug_header(authorization: str = Header(None)):
     return {"authorization": authorization}
-
-
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    """ Verifica el token y obtiene el usuario actual """
-    try:
-        payload = decode_token(token)
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id = payload.get("sub")
-
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Token inválido (ID no encontrado)")
-
-        try:
-            user_id = (user_id)  # Asegurar que el ID es UUID válido
-        except ValueError:
-            raise HTTPException(status_code=401, detail="Token inválido (ID malformado)")
-
-        user = servicio.buscar_usuario_por_id(user_id)
-
-        if not user:
-            raise HTTPException(status_code=401, detail="Usuario no encontrado")
-
-        return user
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
 
 
 @router.post("/verify-token")
