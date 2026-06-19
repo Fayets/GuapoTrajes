@@ -50,6 +50,16 @@ logging.basicConfig(
 logger = logging.getLogger("guapotrajes")
 
 
+def _cors_origins() -> list[str]:
+    raw = config("CORS_ORIGINS", default="")
+    if raw.strip():
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+
 def ensure_initial_super_admin():
     """
     Crea un usuario SUPER_ADMIN inicial solo en desarrollo o con BOOTSTRAP_ADMIN=true.
@@ -150,10 +160,10 @@ ensure_initial_super_admin()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
     expose_headers=["X-Total-Count", "X-Page", "X-Size"],
 )
 
