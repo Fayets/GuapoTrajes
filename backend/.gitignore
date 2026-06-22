@@ -1,0 +1,21 @@
+#cache
+__pycache__/
+
+#dependencias
+/node_modules
+
+#Entornos virtuales ale
+venv/
+.env
+.venv/
+
+# logs
+logs/
+/logs/
+*.log
+
+# Importación masiva local (no subir al repo)
+scripts/import_productos_csv.py
+scripts/limpiar_pre_importacion_csv.py
+scripts/generate_productos_plantilla_excel.py
+templates/productos_plantilla_carga_masiva.xlsx

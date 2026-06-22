@@ -1,0 +1,16 @@
+logs/
+*.log
+.venv/
+venv/
+backend/.venv/
+backend/.venv-clean/
+backend/venv/
+node_modules/
+.next/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.DS_Store
+**/.DS_Store
+.env
+.env.local

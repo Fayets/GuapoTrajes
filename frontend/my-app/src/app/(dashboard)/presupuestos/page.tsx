@@ -1,0 +1,2531 @@
+"use client";
+
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useSearchParams, usePathname, useRouter } from "next/navigation";
+import { flushSync } from "react-dom";
+import { toast } from "sonner";
+import PresupuestoModal from "@/components/modales/presupuestoModal";
+import { getApiBaseUrl } from "@/lib/api-config";
+import { fetchAllProductos } from "@/lib/fetch-productos";
+import { formatDescripcionProducto } from "@/lib/descripcion-producto";
+import {
+  inferirTipoPrecioProducto,
+  normalizarTipoPrecioProducto,
+  precioProductoPorTipo,
+  type TipoPrecioProducto,
+} from "@/lib/tipos-precio-producto";
+import { fechaNegocioYmd, formatDdMmYyyyDesdeIso } from "@/lib/fecha-calendario";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { useAuth } from "@/context/auth-context";
+import {
+  MetodoPagoSelector,
+  METODO_PAGO_CUENTA_CORRIENTE_ID,
+  type MetodoPagoComplemento,
+} from "@/components/metodo-pago-selector";
+import {
+  GUAPO_PRESUPUESTO_IMPORT_PAYLOAD,
+  clearScanQueue,
+  type ScanQueueRow,
+} from "@/lib/scan-queue";
+import { imprimirEtiquetas100x50Lote } from "@/lib/imprimir-etiqueta-100x50";
+import {
+  construirEtiquetaResumenConjunto,
+  imprimirEtiquetaResumenConjunto,
+} from "@/lib/imprimir-etiqueta-conjunto-completo";
+import {
+  isPlausibleProductBarcode,
+  shouldIgnoreBarcodeTarget,
+} from "@/lib/barcode-scan";
+
+// Tipos
+
+type Cliente = {
+  id: number;
+  nombre: string;
+  apellido: string;
+  celular?: string;
+  telefono?: string;
+};
+
+type Precliente = {
+  id: number;
+  nombre: string;
+  apellido: string;
+  celular: string;
+};
+
+type Producto = {
+  id: number;
+  descripcion: string;
+  descripcion_extra?: string | null;
+  codigo_barra: string;
+  precio_alquiler_lista: number;
+  precio_alquiler_efectivo?: number;
+  precio_venta_nuevo_lista?: number;
+  precio_venta_nuevo_efectivo?: number;
+  precio_de_venta_medio_uso?: number;
+  precio_venta?: number;
+  precio_liquidacion?: number;
+  inmovilizado: boolean;
+  estado?: string;
+  /** false = no disponible por ventana de reserva (backend); null/undefined = sin evaluar fechas */
+  disponible_en_fechas?: boolean | null;
+};
+
+type ItemPresupuesto = {
+  id: number;
+  productoId: number;
+  productoNombre: string;
+  cantidad: number;
+  tipoPrecio: TipoPrecioProducto;
+  precioUnitario: number;
+  subtotal: number;
+};
+
+type Presupuesto = {
+  id: number;
+  numero: string;
+  fecha_evento: string;
+  cliente_id?: number | null;
+  precliente_id?: number | null;
+  cliente_nombre: string;
+  cliente_dni?: string | null;
+  es_precliente?: boolean;
+  cliente_celular?: string | null;
+  items: ItemPresupuesto[];
+  total: number;
+  estado:
+    | "pendiente"
+    | "aprobado"
+    | "rechazado"
+    | "vencido"
+    | "convertido_orden"
+    | "cancelada";
+  observaciones: string;
+  fecha_retiro?: string;
+  fecha_devolucion?: string;
+  categoria_evento?: string;
+  nombre_agasajado?: string;
+  lugar_evento?: string;
+  seña_pagada?: number;
+  payment_method?: string; // Cambiado de metodo_pago
+  orden_id?: number | null;
+};
+
+type PresupuestoResponse = {
+  id: number;
+  numero: string;
+  cliente_id?: number | null;
+  precliente_id?: number | null;
+  cliente_nombre: string;
+  es_precliente?: boolean;
+  fecha_evento: string;
+  fecha_retiro?: string;
+  fecha_devolucion?: string;
+  categoria_evento?: string;
+  nombre_agasajado?: string;
+  lugar_evento?: string;
+  observaciones?: string;
+  total: number;
+  estado: string;
+  items: ItemPresupuesto[];
+  seña_pagada?: number;
+  payment_method?: string; // Cambiado de metodo_pago
+  orden_id?: number | null;
+};
+
+export default function PresupuestosPage() {
+  const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [presupuestoActual, setPresupuestoActual] =
+    useState<Presupuesto | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [clienteFiltro, setClienteFiltro] = useState("");
+  const [productoFiltro, setProductoFiltro] = useState("");
+  const [presupuestoSeleccionado, setPresupuestoSeleccionado] =
+    useState<PresupuestoResponse | null>(null);
+  const [verModoLectura, setVerModoLectura] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [metodoPago, setMetodoPago] = useState(""); // Compatibilidad
+  const [metodoPagoId, setMetodoPagoId] = useState<number | null>(null);
+  const [submetodoPagoId, setSubmetodoPagoId] = useState<number | null>(null);
+  const [totalConDescuento, setTotalConDescuento] = useState<number | null>(
+    null
+  );
+  const [porcentajeDescuento, setPorcentajeDescuento] = useState<number | null>(
+    null
+  );
+  const [motivoDescuentoExtra, setMotivoDescuentoExtra] = useState<string>("");
+  const [mostrarModalMotivoDescuento, setMostrarModalMotivoDescuento] = useState(false);
+  const [descuentoPendiente, setDescuentoPendiente] = useState<{ porcentaje: number; total: number } | null>(null);
+
+  const { me, loading } = useAuth();
+  const esAdmin = me?.role === "ADMIN";
+  if (loading) return null;
+
+  // Métodos de pago consistentes con ventas
+  const metodosPago = [
+    { value: "EFECTIVO", label: "Efectivo" },
+    { value: "DEBITO", label: "Débito" },
+    { value: "CREDITO", label: "Crédito" },
+    { value: "BILLETERA_VIRTUAL", label: "Transferencia" },
+    { value: "TRANSFERENCIA", label: "Transferencia" },
+  ];
+  const [eventos, setEventos] = useState<string[]>([]);
+
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [formData, setFormData] = useState<{
+    clienteId: string;
+    preclienteId?: number | null;
+    observaciones: string;
+    fechaEvento: string;
+    fechaRetiro: string;
+    fechaDevolucion: string;
+    categoria: string;
+    agasajado: string;
+    lugar: string;
+  }>({
+    clienteId: "",
+    preclienteId: null,
+    observaciones: "",
+    fechaEvento: "",
+    fechaRetiro: "",
+    fechaDevolucion: "",
+    categoria: "",
+    agasajado: "",
+    lugar: "",
+  });
+
+  const [preclientes, setPreclientes] = useState<Precliente[]>([]);
+  const [modoClientePrecliente, setModoClientePrecliente] = useState<"cliente" | "precliente">("cliente");
+  const [preclienteForm, setPreclienteForm] = useState({ nombre: "", apellido: "", telefono: "" });
+  const [preclienteNombreSeleccionado, setPreclienteNombreSeleccionado] = useState<string | null>(null);
+  const preclienteIdRef = useRef<number | null>(null);
+
+  /** Fuente única de verdad: quién está seleccionado para este presupuesto (cliente o precliente). Usado en resumen, guardado y UI. */
+  const [clienteOPreclienteSeleccionado, setClienteOPreclienteSeleccionado] = useState<
+    { tipo: "cliente"; id: number; nombre: string } | { tipo: "precliente"; id: number; nombre: string } | null
+  >(null);
+
+  const [items, setItems] = useState<ItemPresupuesto[]>([]);
+  const [avisoAgregarProducto, setAvisoAgregarProducto] = useState<string | null>(
+    null
+  );
+  const [nuevoItem, setNuevoItem] = useState({
+    productoId: "",
+    porcentaje: "",
+  });
+
+  const [modalSeniaAbierto, setModalSeniaAbierto] = useState(false);
+  const [conjuntoSeparadoSenia, setConjuntoSeparadoSenia] = useState(false);
+  const [senia, setSenia] = useState("");
+  const [cuentaDestinoId, setCuentaDestinoId] = useState<number | null>(null);
+  const [cuentasDestino, setCuentasDestino] = useState<Array<{ id: number; nombre_titular: string; sucursal_id: number }>>([]);
+  const [presupuestoAConvertir, setPresupuestoAConvertir] = useState<{
+    id: number;
+    cliente: string;
+    cliente_nombre: string;
+    total: number;
+    cliente_id?: number | null;
+    es_precliente?: boolean;
+    items: ItemPresupuesto[];
+    fecha_evento: string;
+    fecha_retiro: string;
+    categoria_evento: string;
+    lugar_evento: string;
+  } | null>(null);
+  const [saldoClienteSenia, setSaldoClienteSenia] = useState(0);
+  const [metodoPagoComplementoSenia, setMetodoPagoComplementoSenia] =
+    useState<MetodoPagoComplemento | null>(null);
+  const [modalEtiquetasOrdenAbierto, setModalEtiquetasOrdenAbierto] =
+    useState(false);
+  const [ordenEtiquetasPendiente, setOrdenEtiquetasPendiente] = useState<{
+    ordenId: number;
+    clienteNombre: string;
+    productos: Array<{
+      producto_id: number;
+      codigo_barra?: string;
+      producto_descripcion?: string;
+    }>;
+  } | null>(null);
+  const [imprimiendoEtiquetasOrden, setImprimiendoEtiquetasOrden] =
+    useState(false);
+  const [modalEtiquetaResumenOrdenAbierto, setModalEtiquetaResumenOrdenAbierto] =
+    useState(false);
+  const [ordenResumenPendiente, setOrdenResumenPendiente] = useState<{
+    ordenId: number;
+    clienteNombre: string;
+    fechaRetiro: string;
+    fechaEvento: string;
+    categoriaEvento: string;
+    lugarEvento: string;
+    productos: Array<{
+      linea: string | null;
+      talle: string | null;
+      color: string | null;
+      descripcion: string;
+      cantidad: number;
+    }>;
+  } | null>(null);
+  const [imprimiendoEtiquetaResumenOrden, setImprimiendoEtiquetaResumenOrden] =
+    useState(false);
+
+  /** True si el modal se abrió importando ítems desde la cola del dashboard; al guardar OK se vacía localStorage. */
+  const importedFromQueueRef = useRef(false);
+  /** Ítems de la cola pendientes de validar cuando haya fechas cargadas. */
+  const pendingQueueImportRef = useRef<ScanQueueRow[] | null>(null);
+  const nuevoPresupuestoRef = useRef<() => void>(() => {});
+  const abrirPresupuestoEdicionRef = useRef<(p: Presupuesto) => void>(() => {});
+
+  const API_BASE = getApiBaseUrl();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const adaptPresupuestoDesdeApi = useCallback((p: any): Presupuesto => {
+    const items = (p.items ?? []).map((item: any) => {
+      const productoId =
+        item.productoId ?? item.producto_id ?? item.producto?.id ?? 0;
+      const precioUnitario =
+        item.precioUnitario ??
+        item.precio_unitario ??
+        item.producto?.precio_alquiler_lista ??
+        0;
+      const cantidad = item.cantidad ?? 0;
+      const subtotal = item.subtotal ?? cantidad * precioUnitario;
+      const productoPrecios = {
+        precio_alquiler_lista:
+          item.producto?.precio_alquiler_lista ?? precioUnitario,
+        precio_alquiler_efectivo: item.producto?.precio_alquiler_efectivo,
+        precio_venta_nuevo_lista: item.producto?.precio_venta_nuevo_lista,
+        precio_venta_nuevo_efectivo: item.producto?.precio_venta_nuevo_efectivo,
+        precio_de_venta_medio_uso: item.producto?.precio_de_venta_medio_uso,
+        precio_venta: item.producto?.precio_venta,
+        precio_liquidacion: item.producto?.precio_liquidacion,
+      };
+      const tipoPrecio: TipoPrecioProducto = item.tipoPrecio
+        ? normalizarTipoPrecioProducto(item.tipoPrecio)
+        : inferirTipoPrecioProducto(productoPrecios, precioUnitario);
+      return {
+        id: item.id ?? `${productoId}-${cantidad}`,
+        productoId,
+        productoNombre:
+          item.productoNombre ??
+          item.producto_nombre ??
+          item.producto_descripcion ??
+          item.descripcion ??
+          item.producto?.descripcion ??
+          "Producto",
+        cantidad,
+        tipoPrecio,
+        precioUnitario,
+        subtotal,
+      };
+    });
+    return {
+      ...p,
+      orden_id: p.orden_id ?? null,
+      items,
+    };
+  }, []);
+
+  useEffect(() => {
+    fetchClientes();
+    fetchProductos();
+    fetchPresupuestos();
+  }, []);
+
+  useEffect(() => {
+    if (!modalSeniaAbierto || !presupuestoAConvertir?.cliente_id) {
+      setSaldoClienteSenia(0);
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const cid = Number(presupuestoAConvertir.cliente_id);
+    const ac = new AbortController();
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/pagos/saldo/${cid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ac.signal,
+        });
+        if (ac.signal.aborted) return;
+        if (r.ok) {
+          const j = await r.json();
+          if (j.cliente_id != null && Number(j.cliente_id) !== cid) {
+            console.warn("[seña] saldo: respuesta con cliente_id distinto al pedido", j.cliente_id, cid);
+          }
+          const s = Number(j.saldo_actual);
+          setSaldoClienteSenia(Number.isFinite(s) ? Math.round(s) : 0);
+        } else {
+          setSaldoClienteSenia(0);
+        }
+      } catch {
+        if (ac.signal.aborted) return;
+        setSaldoClienteSenia(0);
+      }
+    })();
+    return () => ac.abort();
+  }, [modalSeniaAbierto, presupuestoAConvertir?.cliente_id, API_BASE]);
+
+  // Mantener el ref sincronizado con el precliente seleccionado (por si el estado se pierde en algún render)
+  useEffect(() => {
+    if (formData.preclienteId != null && formData.preclienteId !== undefined) {
+      preclienteIdRef.current = Number(formData.preclienteId);
+    }
+  }, [formData.preclienteId]);
+
+  // Nombre para el resumen: fuente única clienteOPreclienteSeleccionado o presupuesto en vista
+  const resumenClienteNombre =
+    clienteOPreclienteSeleccionado?.nombre ??
+    presupuestoSeleccionado?.cliente_nombre ??
+    "-";
+
+  const fetchClientes = async () => {
+    try {
+      const token = localStorage.getItem("token"); // o donde guardes el token JWT
+      const res = await fetch(`${API_BASE}/clientes/all`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // agregas el Bearer token aquí
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Error ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      setClientes(data);
+    } catch (error) {
+      console.error("Error fetching clientes:", error);
+    }
+  };
+
+  const fetchProductos = useCallback(
+    async (opts?: {
+      fechaRetiro?: string;
+      fechaDevolucion?: string;
+      ordenExcluirId?: number;
+    }) => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const params: Record<string, string | number> = {};
+        if (opts?.fechaRetiro && opts?.fechaDevolucion) {
+          params.fecha_retiro = opts.fechaRetiro;
+          params.fecha_devolucion = opts.fechaDevolucion;
+        }
+        if (opts?.ordenExcluirId != null) {
+          params.orden_excluir_id = opts.ordenExcluirId;
+        }
+        const data = (await fetchAllProductos(token, params)) as Producto[];
+        setProductos(data);
+      } catch (error) {
+        console.error("Error fetching productos:", error);
+      }
+    },
+    []
+  );
+
+  const fechasAlquilerEfectivas = useCallback(() => {
+    const fechaEvento = fechaNegocioYmd(formData.fechaEvento);
+    const fechaRetiro =
+      fechaNegocioYmd(formData.fechaRetiro) || fechaEvento || "";
+    const fechaDevolucion =
+      fechaNegocioYmd(formData.fechaDevolucion) || fechaEvento || "";
+    return { fechaEvento, fechaRetiro, fechaDevolucion };
+  }, [formData.fechaEvento, formData.fechaRetiro, formData.fechaDevolucion]);
+
+  useEffect(() => {
+    if (!showModal || verModoLectura) return;
+    const { fechaRetiro, fechaDevolucion } = fechasAlquilerEfectivas();
+    const ordenExcluirId = presupuestoSeleccionado?.orden_id ?? undefined;
+    if (fechaRetiro && fechaDevolucion) {
+      void fetchProductos({
+        fechaRetiro,
+        fechaDevolucion,
+        ordenExcluirId,
+      });
+    } else {
+      void fetchProductos({ ordenExcluirId });
+    }
+  }, [
+    showModal,
+    verModoLectura,
+    formData.fechaEvento,
+    formData.fechaRetiro,
+    formData.fechaDevolucion,
+    presupuestoSeleccionado?.orden_id,
+    fetchProductos,
+    fechasAlquilerEfectivas,
+  ]);
+
+  const fetchPreclientes = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/preclientes/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPreclientes(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Error fetching preclientes:", e);
+      setPreclientes([]);
+    }
+  };
+
+  const handleClienteChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const raw = e.target.value;
+    if (!raw) {
+      preclienteIdRef.current = null;
+      setClienteOPreclienteSeleccionado(null);
+      setFormData((prev) => ({ ...prev, clienteId: "", preclienteId: null }));
+      setPreclienteNombreSeleccionado(null);
+      return;
+    }
+    if (raw.startsWith("p-")) {
+      const id = Number(raw.slice(2));
+      const p = preclientes.find((x) => Number(x.id) === id);
+      if (p) {
+        const nombre = `${p.apellido} ${p.nombre}`.trim();
+        preclienteIdRef.current = id;
+        setClienteOPreclienteSeleccionado({ tipo: "precliente", id, nombre });
+        setFormData((prev) => ({ ...prev, preclienteId: id, clienteId: "" }));
+        setPreclienteNombreSeleccionado(nombre);
+      }
+      return;
+    }
+    const idStr = raw.startsWith("c-") ? raw.slice(2) : raw;
+    preclienteIdRef.current = null;
+    setFormData((prev) => ({ ...prev, clienteId: idStr, preclienteId: null }));
+    setPreclienteNombreSeleccionado(null);
+    const c = clientes.find((x) => String(x.id) === idStr);
+    setClienteOPreclienteSeleccionado(
+      c ? { tipo: "cliente", id: c.id, nombre: `${c.apellido} ${c.nombre}`.trim() } : null
+    );
+  };
+
+  const selectClientePreclienteValue =
+    clienteOPreclienteSeleccionado?.tipo === "cliente"
+      ? `c-${clienteOPreclienteSeleccionado.id}`
+      : clienteOPreclienteSeleccionado?.tipo === "precliente"
+        ? `p-${clienteOPreclienteSeleccionado.id}`
+        : "";
+
+  const crearPreclienteYUsar = async () => {
+    const { nombre, apellido, telefono } = preclienteForm;
+    if (!nombre.trim() || !apellido.trim() || !telefono.trim()) {
+      toast.error("Completá nombre, apellido y teléfono del precliente.");
+      return;
+    }
+    const telNorm = telefono.replace(/\s/g, "");
+    const yaExiste = preclientes.some((p) => (p.celular || "").replace(/\s/g, "") === telNorm);
+    if (yaExiste) {
+      toast.error("Ya existe un precliente con este teléfono. Seleccionalo del listado.");
+      return;
+    }
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/preclientes/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          apellido: apellido.trim(),
+          celular: telefono.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!data.success || !data.data?.id) {
+        toast.error(data.message || "Error al crear el precliente.");
+        return;
+      }
+      const id = Number(data.data.id);
+      const nombreCompleto = `${apellido.trim()} ${nombre.trim()}`.trim();
+      const nuevoPrecliente: Precliente = {
+        id,
+        nombre: nombre.trim(),
+        apellido: apellido.trim(),
+        celular: telefono.trim(),
+      };
+      preclienteIdRef.current = id;
+      flushSync(() => {
+        setPreclientes((prev) => (prev.some((p) => Number(p.id) === id) ? prev : [...prev, nuevoPrecliente]));
+        setClienteOPreclienteSeleccionado({ tipo: "precliente", id, nombre: nombreCompleto });
+        setFormData((prev) => ({ ...prev, preclienteId: id, clienteId: "" }));
+        setPreclienteNombreSeleccionado(nombreCompleto);
+        setModoClientePrecliente("cliente");
+        setPreclienteForm({ nombre: "", apellido: "", telefono: "" });
+      });
+      fetchPreclientes().catch(() => {}); // actualizar en segundo plano; no mostrar error para no tapar el éxito
+      toast("Precliente creado", {
+        duration: 4000,
+        unstyled: true,
+        style: {
+          background: "#dcfce7",
+          borderLeft: "4px solid #16a34a",
+          color: "#166534",
+          padding: "12px 16px",
+          borderRadius: "8px",
+          fontWeight: 500,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+        },
+        className: "toast-precliente-ok",
+      });
+    } catch (e) {
+      console.error(e);
+      toast.error("Error de conexión al crear el precliente.");
+    }
+  };
+
+  const handleItemChange = (name: string, value: string | number) => {
+    setAvisoAgregarProducto(null);
+    setNuevoItem((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleProductoFiltroChange = (value: string) => {
+    setAvisoAgregarProducto(null);
+    setProductoFiltro(value);
+  };
+
+  const ordenExcluirDisponibilidadQuery = () => {
+    const oid = presupuestoSeleccionado?.orden_id;
+    return oid != null ? `&orden_excluir_id=${encodeURIComponent(String(oid))}` : "";
+  };
+
+  const normalizarProductoDesdeApi = (raw: Record<string, unknown>): Producto => ({
+    id: Number(raw.id),
+    descripcion: String(raw.descripcion ?? ""),
+    descripcion_extra:
+      raw.descripcion_extra != null ? String(raw.descripcion_extra) : null,
+    codigo_barra: String(raw.codigo_barra ?? ""),
+    precio_alquiler_lista: Number(raw.precio_alquiler_lista ?? 0),
+    precio_alquiler_efectivo: Number(raw.precio_alquiler_efectivo ?? 0),
+    precio_venta_nuevo_lista: Number(raw.precio_venta_nuevo_lista ?? 0),
+    precio_venta_nuevo_efectivo: Number(raw.precio_venta_nuevo_efectivo ?? 0),
+    precio_de_venta_medio_uso: Number(raw.precio_de_venta_medio_uso ?? 0),
+    precio_venta: Number(raw.precio_venta ?? 0),
+    precio_liquidacion: Number(raw.precio_liquidacion ?? 0),
+    inmovilizado: Boolean(raw.inmovilizado),
+    estado: raw.estado != null ? String(raw.estado) : undefined,
+    disponible_en_fechas:
+      raw.disponible_en_fechas === true
+        ? true
+        : raw.disponible_en_fechas === false
+          ? false
+          : null,
+  });
+
+  const validarProductoParaAgregar = useCallback(async (
+    producto: Producto,
+    itemsActuales: ItemPresupuesto[]
+  ): Promise<string | null> => {
+    const { fechaEvento, fechaRetiro, fechaDevolucion } = fechasAlquilerEfectivas();
+    const nombre = formatDescripcionProducto(
+      producto.descripcion,
+      producto.descripcion_extra
+    );
+
+    if (!fechaEvento) {
+      return "Completá la fecha del evento antes de agregar productos.";
+    }
+    if (!fechaRetiro || !fechaDevolucion) {
+      return "Completá las fechas de retiro y devolución antes de agregar productos.";
+    }
+
+    if (itemsActuales.some((i) => i.productoId === producto.id)) {
+      return "Este producto ya está en el presupuesto (cada prenda es única).";
+    }
+
+    if (producto.inmovilizado) {
+      return `El producto ${nombre} no está disponible (inmovilizado).`;
+    }
+
+    const estado = (producto.estado ?? "").trim().toUpperCase();
+    if (estado && estado !== "SALON") {
+      return `El producto ${nombre} no está disponible (estado actual: ${estado}). Debe estar en salón.`;
+    }
+
+    if (producto.disponible_en_fechas === false) {
+      return `El producto ${nombre} no está disponible en las fechas elegidas (reservado en otra orden).`;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `${API_BASE}/productos/${producto.id}/disponibilidad?fecha_retiro=${encodeURIComponent(fechaRetiro)}&fecha_devolucion=${encodeURIComponent(fechaDevolucion)}${ordenExcluirDisponibilidadQuery()}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      if (!res.ok) {
+        return "No se pudo verificar la disponibilidad. Intentá de nuevo.";
+      }
+      const data = (await res.json()) as { disponible?: boolean };
+      if (!data.disponible) {
+        return `El producto ${nombre} no está disponible en las fechas elegidas (conflicto con otra reserva).`;
+      }
+    } catch (error) {
+      console.error("Error al verificar disponibilidad", error);
+      return "No se pudo verificar la disponibilidad. Intentá de nuevo.";
+    }
+
+    return null;
+  }, [fechasAlquilerEfectivas, presupuestoSeleccionado?.orden_id, items]);
+
+  const resetCamposAgregarProducto = useCallback(() => {
+    setProductoFiltro("");
+    setNuevoItem((prev) => ({ ...prev, productoId: "" }));
+  }, []);
+
+  const appendItemPresupuesto = (producto: Producto) => {
+    if (items.some((i) => i.productoId === producto.id)) {
+      return;
+    }
+    const tipoPrecio: TipoPrecioProducto = "precio_alquiler_lista";
+    const precioUnitario = precioProductoPorTipo(producto, tipoPrecio);
+    const newItem: ItemPresupuesto = {
+      id: Date.now(),
+      productoId: producto.id,
+      productoNombre: formatDescripcionProducto(
+        producto.descripcion,
+        producto.descripcion_extra
+      ),
+      cantidad: 1,
+      tipoPrecio,
+      precioUnitario,
+      subtotal: precioUnitario,
+    };
+    setItems((prev) => [...prev, newItem]);
+    setNuevoItem({ productoId: "", porcentaje: "" });
+  };
+
+  const agregarProductoAlPresupuesto = useCallback(
+    async (producto: Producto): Promise<boolean> => {
+      const error = await validarProductoParaAgregar(producto, items);
+      if (error) {
+        setAvisoAgregarProducto(error);
+        resetCamposAgregarProducto();
+        return false;
+      }
+      setAvisoAgregarProducto(null);
+      appendItemPresupuesto(producto);
+      resetCamposAgregarProducto();
+      return true;
+    },
+    [items, validarProductoParaAgregar, resetCamposAgregarProducto]
+  );
+
+  const resolverProductoPorCodigo = useCallback(
+    async (codigoRaw: string): Promise<Producto | null> => {
+    const codigo = codigoRaw.trim();
+    if (!codigo) return null;
+
+    const local = productos.find(
+      (p) =>
+        (p.codigo_barra ?? "").trim().toLowerCase() === codigo.toLowerCase()
+    );
+    if (local) return local;
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `${API_BASE}/productos/get/${encodeURIComponent(codigo)}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      if (!res.ok) return null;
+      const raw = (await res.json()) as Record<string, unknown>;
+      const producto = normalizarProductoDesdeApi(raw);
+      setProductos((prev) =>
+        prev.some((p) => p.id === producto.id) ? prev : [...prev, producto]
+      );
+      return producto;
+    } catch {
+      return null;
+    }
+    },
+    [productos]
+  );
+
+  const agregarPorCodigoBarra = useCallback(
+    async (codigoRaw: string) => {
+      const codigo = codigoRaw.trim();
+      if (!codigo) return;
+      const producto = await resolverProductoPorCodigo(codigo);
+      if (!producto) {
+        setAvisoAgregarProducto("Código no encontrado.");
+        resetCamposAgregarProducto();
+        return;
+      }
+      await agregarProductoAlPresupuesto(producto);
+    },
+    [
+      resolverProductoPorCodigo,
+      agregarProductoAlPresupuesto,
+      resetCamposAgregarProducto,
+    ]
+  );
+
+  const agregarProductoPorId = useCallback(
+    async (productoId: string) => {
+      if (!productoId) return;
+      const producto = productos.find((p) => p.id === Number(productoId));
+      if (!producto) return;
+      await agregarProductoAlPresupuesto(producto);
+    },
+    [productos, agregarProductoAlPresupuesto]
+  );
+
+  useEffect(() => {
+    if (!showModal || verModoLectura) return;
+
+    const bufferRef = { current: "" };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (shouldIgnoreBarcodeTarget(e.target)) {
+        bufferRef.current = "";
+        return;
+      }
+      if (e.key === "Enter") {
+        const code = bufferRef.current.trim();
+        bufferRef.current = "";
+        if (!code || !isPlausibleProductBarcode(code)) return;
+        e.preventDefault();
+        void agregarPorCodigoBarra(code);
+        return;
+      }
+      if (e.key.length === 1) {
+        const ch = e.key;
+        if (ch >= " " && ch <= "~") {
+          bufferRef.current += ch;
+          if (bufferRef.current.length > 64) {
+            bufferRef.current = bufferRef.current.slice(-64);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showModal, verModoLectura, agregarPorCodigoBarra]);
+
+  const procesarColaPendiente = useCallback(
+    async (rows: ScanQueueRow[]) => {
+      let agregados = 0;
+      let rechazados = 0;
+      const itemsLocales = [...items];
+
+      for (const row of rows) {
+        let producto = productos.find((p) => p.id === row.productoId);
+        if (!producto) {
+          const resuelto = await resolverProductoPorCodigo(row.codigoBarra);
+          producto =
+            resuelto ??
+            ({
+              id: row.productoId,
+              descripcion: row.descripcion,
+              codigo_barra: row.codigoBarra,
+              precio_alquiler_lista: row.precio_alquiler_efectivo,
+              inmovilizado: false,
+            } satisfies Producto);
+        }
+
+        const error = await validarProductoParaAgregar(producto, itemsLocales);
+        if (error) {
+          toast.error(`${row.descripcion}: ${error}`);
+          rechazados += 1;
+          continue;
+        }
+
+        const tipoPrecio: TipoPrecioProducto = "precio_alquiler_lista";
+        const precioUnitario = precioProductoPorTipo(producto, tipoPrecio);
+        itemsLocales.push({
+          id: Date.now() + itemsLocales.length,
+          productoId: producto.id,
+          productoNombre: formatDescripcionProducto(
+            producto.descripcion,
+            producto.descripcion_extra
+          ),
+          cantidad: 1,
+          tipoPrecio,
+          precioUnitario,
+          subtotal: precioUnitario,
+        });
+        agregados += 1;
+      }
+
+      if (agregados > 0) {
+        setItems(itemsLocales);
+        toast.success(
+          `Se agregaron ${agregados} prenda(s) de la cola del escáner.`
+        );
+      }
+      if (rechazados > 0) {
+        toast.warning(
+          `${rechazados} prenda(s) de la cola no se pudieron agregar.`
+        );
+      }
+    },
+    [items, productos, validarProductoParaAgregar]
+  );
+
+  useEffect(() => {
+    const pending = pendingQueueImportRef.current;
+    if (!showModal || verModoLectura || !pending?.length) return;
+
+    const { fechaEvento, fechaRetiro, fechaDevolucion } = fechasAlquilerEfectivas();
+    if (!fechaEvento || !fechaRetiro || !fechaDevolucion) return;
+
+    pendingQueueImportRef.current = null;
+    void procesarColaPendiente(pending);
+  }, [
+    showModal,
+    verModoLectura,
+    formData.fechaEvento,
+    formData.fechaRetiro,
+    formData.fechaDevolucion,
+    fechasAlquilerEfectivas,
+    procesarColaPendiente,
+  ]);
+
+  const eliminarItem = (id: number) => {
+    setItems(items.filter((item) => item.id !== Number(id)));
+  };
+
+  const cambiarTipoPrecioItem = (
+    itemId: number,
+    tipo: TipoPrecioProducto
+  ) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const producto = productos.find((p) => p.id === item.productoId);
+        const precioUnitario = producto
+          ? precioProductoPorTipo(producto, tipo)
+          : item.precioUnitario;
+        return {
+          ...item,
+          tipoPrecio: normalizarTipoPrecioProducto(tipo),
+          precioUnitario,
+          subtotal: precioUnitario * item.cantidad,
+        };
+      })
+    );
+    setTotalConDescuento(null);
+    setPorcentajeDescuento(null);
+  };
+
+  const calcularTotal = () => {
+    return items.reduce((total, item) => total + item.subtotal, 0);
+  };
+
+  const nuevoPresupuesto = () => {
+    setPresupuestoActual(null);
+    setPresupuestoSeleccionado(null);
+    setVerModoLectura(false);
+    preclienteIdRef.current = null;
+    setClienteOPreclienteSeleccionado(null);
+    setFormData({
+      clienteId: "",
+      preclienteId: null,
+      observaciones: "",
+      fechaEvento: "",
+      fechaRetiro: "",
+      fechaDevolucion: "",
+      categoria: "",
+      agasajado: "",
+      lugar: "",
+    });
+    setPreclienteNombreSeleccionado(null);
+    setModoClientePrecliente("cliente");
+    setPreclienteForm({ nombre: "", apellido: "", telefono: "" });
+    setItems([]);
+    setAvisoAgregarProducto(null);
+    setProductoFiltro("");
+    setNuevoItem({ productoId: "", porcentaje: "" });
+    setTotalConDescuento(null);
+    setPorcentajeDescuento(null);
+    setShowModal(true);
+    fetchPreclientes();
+  };
+
+  nuevoPresupuestoRef.current = nuevoPresupuesto;
+
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(GUAPO_PRESUPUESTO_IMPORT_PAYLOAD);
+    } catch {
+      /* ignore */
+    }
+    if (!raw?.trim()) return;
+    try {
+      sessionStorage.removeItem(GUAPO_PRESUPUESTO_IMPORT_PAYLOAD);
+    } catch {
+      /* ignore */
+    }
+    let parsed: { items?: ScanQueueRow[] };
+    try {
+      parsed = JSON.parse(raw) as { items?: ScanQueueRow[] };
+    } catch {
+      return;
+    }
+    const rows = parsed?.items;
+    if (!Array.isArray(rows) || rows.length === 0) return;
+
+    importedFromQueueRef.current = true;
+    pendingQueueImportRef.current = rows;
+
+    flushSync(() => {
+      nuevoPresupuestoRef.current();
+    });
+    flushSync(() => {
+      setProductos((prev) => {
+        const next = [...prev];
+        for (const row of rows) {
+          if (!next.some((p) => p.id === row.productoId)) {
+            next.push({
+              id: row.productoId,
+              descripcion: row.descripcion,
+              codigo_barra: row.codigoBarra,
+              precio_alquiler_lista: row.precio_alquiler_efectivo,
+              inmovilizado: false,
+            });
+          }
+        }
+        return next;
+      });
+    });
+    toast.info(
+      "Cola importada. Completá las fechas del evento para validar y agregar cada prenda."
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- import one-shot al montar; ref apunta a nuevoPresupuesto actualizado
+  }, []);
+
+  const guardarPresupuesto = async () => {
+    const sel = clienteOPreclienteSeleccionado;
+    const tieneCliente = sel?.tipo === "cliente";
+    const tienePrecliente = sel?.tipo === "precliente";
+    const preclienteId = sel?.tipo === "precliente" ? sel.id : formData.preclienteId ?? preclienteIdRef.current;
+    const faltan: string[] = [];
+    if (!tieneCliente && !tienePrecliente) faltan.push("seleccioná un cliente o cargá/elegí un precliente");
+    if (items.length === 0) faltan.push("al menos un ítem");
+    if (!formData.fechaEvento) faltan.push("fecha del evento");
+    if (!formData.categoria) faltan.push("categoría del evento");
+    if (faltan.length > 0) {
+      toast.error("Completá lo que falta: " + faltan.join(", "));
+      return;
+    }
+
+    const totalOriginal = calcularTotal();
+    const tieneDescuento =
+      totalConDescuento !== null && porcentajeDescuento !== null;
+    const totalFinal = tieneDescuento
+      ? (totalConDescuento as number)
+      : totalOriginal;
+
+    let itemsParaEnviar = [...items];
+
+    if (tieneDescuento && totalOriginal > 0) {
+      const factor = totalFinal / totalOriginal;
+
+      let acumulado = 0;
+      itemsParaEnviar = items.map((item, index) => {
+        let nuevoSubtotal = Math.round(item.subtotal * factor);
+
+        if (index === items.length - 1) {
+          const diferencia = totalFinal - (acumulado + nuevoSubtotal);
+          nuevoSubtotal += diferencia;
+        }
+
+        acumulado += nuevoSubtotal;
+
+        const nuevoPrecioUnitario = nuevoSubtotal / item.cantidad;
+
+        return {
+          ...item,
+          precioUnitario: nuevoPrecioUnitario,
+          subtotal: nuevoSubtotal,
+        };
+      });
+    }
+
+    const descuentoMaximoEstandar = esAdmin ? 50 : 15; // 50% para admin, 15% para empleados
+    const tieneDescuentoExtra = porcentajeDescuento !== null && porcentajeDescuento > descuentoMaximoEstandar;
+
+    const payload: Record<string, unknown> = {
+      fecha_evento: fechaNegocioYmd(formData.fechaEvento) || formData.fechaEvento,
+      fecha_retiro: formData.fechaRetiro
+        ? fechaNegocioYmd(formData.fechaRetiro) || formData.fechaRetiro
+        : null,
+      fecha_devolucion: formData.fechaDevolucion
+        ? fechaNegocioYmd(formData.fechaDevolucion) || formData.fechaDevolucion
+        : null,
+      categoria_evento: formData.categoria,
+      nombre_agasajado: formData.agasajado,
+      lugar_evento: formData.lugar,
+      observaciones: formData.observaciones,
+      items: itemsParaEnviar.map((item) => ({
+        producto_id: item.productoId,
+        cantidad: item.cantidad,
+        precio_unitario: item.precioUnitario,
+        subtotal: item.subtotal,
+      })),
+      extra_discount_percentage: tieneDescuentoExtra ? porcentajeDescuento : null,
+      extra_discount_amount: tieneDescuentoExtra ? (totalOriginal - totalFinal) : null,
+      extra_discount_reason: tieneDescuentoExtra ? motivoDescuentoExtra : null,
+    };
+    if (tienePrecliente && preclienteId != null) {
+      (payload as any).precliente_id = Number(preclienteId);
+    } else if (tieneCliente && sel?.tipo === "cliente") {
+      (payload as any).cliente_id = sel.id;
+    } else {
+      (payload as any).cliente_id = parseInt(formData.clienteId, 10);
+    }
+
+    const editando =
+      Boolean(presupuestoSeleccionado?.id) && !verModoLectura;
+    const url = editando
+      ? `${API_BASE}/presupuestos/${presupuestoSeleccionado!.id}`
+      : `${API_BASE}/presupuestos/`;
+    const method = editando ? "PUT" : "POST";
+
+    try {
+      toast.loading("Guardando presupuesto...", { id: "guardar-presupuesto" });
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const responseText = await res.text();
+
+      if (res.ok) {
+        try {
+          JSON.parse(responseText);
+        } catch {
+          // Respuesta OK pero no es JSON
+        }
+        toast.success(
+          editando ? "Presupuesto actualizado correctamente" : "Presupuesto generado correctamente",
+          { id: "guardar-presupuesto" }
+        );
+        if (importedFromQueueRef.current) {
+          clearScanQueue();
+          importedFromQueueRef.current = false;
+        }
+        preclienteIdRef.current = null;
+        setClienteOPreclienteSeleccionado(null);
+        setPresupuestoSeleccionado(null);
+        setShowModal(false);
+        setTotalConDescuento(null);
+        setPorcentajeDescuento(null);
+        setMotivoDescuentoExtra("");
+        fetchPresupuestos();
+      } else {
+        let mensaje = "Error al guardar presupuesto";
+        try {
+          const errorData = JSON.parse(responseText);
+          const detail = errorData.detail;
+          if (Array.isArray(detail) && detail.length > 0) {
+            mensaje = detail.map((d: { msg?: string; loc?: string[] }) => d.msg || (d.loc && d.loc.join(" ")) || "").filter(Boolean).join(". ") || mensaje;
+          } else if (detail && typeof detail === "string") {
+            mensaje = detail;
+          } else if (errorData.message) {
+            mensaje = errorData.message;
+          }
+        } catch {
+          if (responseText) mensaje = responseText.slice(0, 200);
+        }
+        console.error("Error al guardar presupuesto:", res.status, responseText);
+        toast.error(mensaje, { id: "guardar-presupuesto" });
+      }
+    } catch (error) {
+      console.error("Error de conexión:", error);
+      toast.error("Error de conexión al guardar presupuesto", { id: "guardar-presupuesto" });
+    }
+  };
+
+  const fetchPresupuestos = async () => {
+    setCargando(true);
+    try {
+      const res = await fetch(`${API_BASE}/presupuestos/`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Respuesta inválida:", res.status, errText);
+        throw new Error("Error al obtener presupuestos");
+      }
+
+      const data = await res.json();
+      console.log("Presupuestos desde backend:", data);
+      if (!Array.isArray(data)) {
+        console.warn("La respuesta de presupuestos no es un array:", data);
+        setPresupuestos([]); // Prevención
+      } else {
+        const presupuestosAdaptados = data.map(adaptPresupuestoDesdeApi);
+
+        setPresupuestos(presupuestosAdaptados);
+      }
+    } catch (error) {
+      console.error("Error en fetchPresupuestos:", error);
+      setPresupuestos([]); // Prevención adicional
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  // Normalizar texto para búsqueda (minúsculas, sin acentos)
+  const normalizarParaBusqueda = (s: string): string =>
+    (s ?? "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .trim();
+
+  // Filtrar presupuestos por DNI, apellido solo, nombre solo o apellido + nombre
+  const presupuestosFiltrados = (() => {
+    const termino = normalizarParaBusqueda(busqueda);
+    if (!termino) return presupuestos;
+    return presupuestos.filter((p) => {
+      const nombreCompleto = (p.cliente_nombre ?? "").trim();
+      const dni = (p.cliente_dni ?? "").toString().trim();
+      if (normalizarParaBusqueda(dni).includes(termino)) return true;
+      const partes = nombreCompleto.split(/\s+/).filter(Boolean);
+      const apellido = partes[0] ?? "";
+      const nombre = partes.slice(1).join(" ") ?? "";
+      const apellidoNorm = normalizarParaBusqueda(apellido);
+      const nombreNorm = normalizarParaBusqueda(nombre);
+      const completoNorm = normalizarParaBusqueda(nombreCompleto);
+      return (
+        apellidoNorm.includes(termino) ||
+        nombreNorm.includes(termino) ||
+        completoNorm.includes(termino)
+      );
+    });
+  })();
+
+  const getEstadoClass = (estado: string) => {
+    switch (estado) {
+      case "aprobado":
+        return "bg-success";
+      case "rechazado":
+        return "bg-danger";
+      case "cancelada":
+        return "bg-danger";
+      case "vencido":
+        return "bg-secondary";
+      case "convertido_orden":
+        return "bg-success"; // nuevo estado
+      default:
+        return "bg-warning";
+    }
+  };
+
+  const convertirEnOrden = async (
+    presupuestoId: number,
+    clienteNombre: string,
+    metodoPago: string
+  ) => {
+    const seña = prompt(
+      `Ingrese el monto de la seña recibida de ${clienteNombre}:`
+    );
+    if (!seña || isNaN(parseFloat(seña))) {
+      alert("Monto inválido.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/ordenes/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          presupuesto_id: presupuestoId,
+          seña_pagada: parseFloat(seña),
+          payment_method: metodoPago, // Cambiado a payment_method
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Orden de trabajo generada con éxito.");
+      } else {
+        const error = await res.json();
+        toast.error(`Error al generar orden: ${error.detail}`);
+      }
+    } catch (err) {
+      console.error("Error al convertir en orden:", err);
+      toast.error("Error inesperado al generar orden.");
+    }
+  };
+
+  function toPresupuestoResponse(p: Presupuesto): PresupuestoResponse {
+    return {
+      id: p.id,
+      numero: p.numero,
+      cliente_id: p.cliente_id,
+      precliente_id: p.precliente_id,
+      cliente_nombre: p.cliente_nombre,
+      es_precliente: p.es_precliente ?? false,
+      fecha_evento: p.fecha_evento,
+      total: p.total,
+      estado: p.estado,
+      items: p.items,
+      observaciones: p.observaciones,
+      fecha_retiro: p["fecha_retiro"] || "",
+      fecha_devolucion: p["fecha_devolucion"] || "",
+      categoria_evento: p["categoria_evento"] || "",
+      nombre_agasajado: p["nombre_agasajado"] || "",
+      lugar_evento: p["lugar_evento"] || "",
+      orden_id: p.orden_id ?? null,
+    };
+  }
+
+  const abrirPresupuestoInterno = (presupuesto: Presupuesto, verLectura: boolean) => {
+    const pr = toPresupuestoResponse(presupuesto);
+    setPresupuestoSeleccionado(pr);
+    const nombre = pr.cliente_nombre?.trim();
+    if (pr.es_precliente && pr.precliente_id != null && nombre) {
+      setClienteOPreclienteSeleccionado({ tipo: "precliente", id: pr.precliente_id, nombre });
+    } else if (pr.cliente_id != null && nombre) {
+      setClienteOPreclienteSeleccionado({ tipo: "cliente", id: pr.cliente_id, nombre });
+    } else {
+      setClienteOPreclienteSeleccionado(null);
+    }
+    setFormData({
+      clienteId: pr.cliente_id != null ? String(pr.cliente_id) : "",
+      preclienteId: pr.precliente_id ?? null,
+      fechaEvento: fechaNegocioYmd(pr.fecha_evento) || pr.fecha_evento || "",
+      fechaRetiro: fechaNegocioYmd(pr.fecha_retiro || "") || pr.fecha_retiro || "",
+      fechaDevolucion:
+        fechaNegocioYmd(pr.fecha_devolucion || "") || pr.fecha_devolucion || "",
+      categoria: pr.categoria_evento || "",
+      agasajado: pr.nombre_agasajado || "",
+      lugar: pr.lugar_evento || "",
+      observaciones: pr.observaciones || "",
+    });
+
+    setItems(pr.items);
+    setTotalConDescuento(null);
+    setPorcentajeDescuento(null);
+    setVerModoLectura(verLectura);
+    setShowModal(true);
+  };
+
+  const abrirPresupuestoVista = (presupuesto: Presupuesto) => {
+    abrirPresupuestoInterno(presupuesto, true);
+  };
+
+  const abrirPresupuestoEdicion = (presupuesto: Presupuesto) => {
+    setPresupuestoActual(presupuesto);
+    abrirPresupuestoInterno(presupuesto, false);
+  };
+
+  abrirPresupuestoEdicionRef.current = abrirPresupuestoEdicion;
+
+  useEffect(() => {
+    const raw = searchParams.get("editar");
+    if (!raw?.trim()) return;
+    const pid = parseInt(raw, 10);
+    if (Number.isNaN(pid)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE}/presupuestos/${pid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          toast.error("No se pudo cargar el presupuesto para editar.");
+          return;
+        }
+        const data = await res.json();
+        if (cancelled) return;
+        const p = adaptPresupuestoDesdeApi(data);
+        abrirPresupuestoEdicionRef.current(p);
+        router.replace(pathname || "/presupuestos");
+      } catch {
+        toast.error("Error al abrir el presupuesto.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams.get("editar"), API_BASE, adaptPresupuestoDesdeApi, pathname, router]);
+  type ProductoEtiquetaOrden = {
+    producto_id: number;
+    codigo_barra?: string;
+    producto_descripcion?: string;
+  };
+
+  const productosParaEtiquetasDesdePresupuesto = (
+    items: ItemPresupuesto[]
+  ): ProductoEtiquetaOrden[] =>
+    items.map((item) => {
+      const prod = productos.find((p) => p.id === item.productoId);
+      return {
+        producto_id: item.productoId,
+        codigo_barra: prod?.codigo_barra ?? "",
+        producto_descripcion:
+          item.productoNombre ||
+          formatDescripcionProducto(prod?.descripcion, prod?.descripcion_extra) ||
+          "",
+      };
+    });
+
+  const productosResumenDesdeItemsPresupuesto = (items: ItemPresupuesto[]) =>
+    items.map((item) => {
+      const prod = productos.find((p) => p.id === item.productoId);
+      return {
+        linea: null,
+        talle: null,
+        color: null,
+        descripcion:
+          item.productoNombre ||
+          formatDescripcionProducto(prod?.descripcion, prod?.descripcion_extra) ||
+          "Prenda",
+        cantidad: item.cantidad,
+      };
+    });
+
+  const abrirModalResumenTrasCrearOrden = async (
+    orderId: number,
+    snapshot: {
+      cliente_nombre: string;
+      fecha_evento: string;
+      fecha_retiro: string;
+      categoria_evento: string;
+      lugar_evento: string;
+      items: ItemPresupuesto[];
+    }
+  ) => {
+    let productos = productosResumenDesdeItemsPresupuesto(snapshot.items);
+
+    try {
+      const resOrden = await fetch(`${API_BASE}/ordenes/${orderId}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      if (resOrden.ok) {
+        const orden = await resOrden.json();
+        const reservados = orden.productos_reservados || [];
+        if (reservados.length > 0) {
+          productos = reservados.map(
+            (pr: { producto_descripcion?: string; cantidad?: number }) => ({
+              linea: null,
+              talle: null,
+              color: null,
+              descripcion: pr.producto_descripcion || "Prenda",
+              cantidad: pr.cantidad ?? 1,
+            })
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo cargar la orden para etiqueta resumen:", e);
+    }
+
+    if (productos.length === 0) {
+      toast.info(
+        "Orden creada. No hay prendas en el presupuesto para imprimir la etiqueta resumen."
+      );
+      return;
+    }
+
+    setOrdenResumenPendiente({
+      ordenId: orderId,
+      clienteNombre: snapshot.cliente_nombre,
+      fechaRetiro: formatDdMmYyyyDesdeIso(snapshot.fecha_retiro) || "—",
+      fechaEvento: formatDdMmYyyyDesdeIso(snapshot.fecha_evento) || "—",
+      categoriaEvento: snapshot.categoria_evento || "",
+      lugarEvento: snapshot.lugar_evento || "",
+      productos,
+    });
+    setModalEtiquetaResumenOrdenAbierto(true);
+  };
+
+  const abrirModalEtiquetasTrasCrearOrden = async (
+    orderId: number,
+    snapshot: {
+      cliente_nombre: string;
+      items: ItemPresupuesto[];
+    }
+  ) => {
+    let lista: ProductoEtiquetaOrden[] = [];
+    try {
+      const resOrden = await fetch(`${API_BASE}/ordenes/${orderId}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      if (resOrden.ok) {
+        const orden = await resOrden.json();
+        const reservados = orden.productos_reservados || [];
+        if (reservados.length > 0) {
+          lista = reservados.map(
+            (pr: {
+              producto_id: number;
+              codigo_barra?: string;
+              producto_descripcion?: string;
+            }) => ({
+              producto_id: pr.producto_id,
+              codigo_barra: pr.codigo_barra ?? "",
+              producto_descripcion: pr.producto_descripcion ?? "",
+            })
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo cargar la orden para etiquetas:", e);
+    }
+
+    if (lista.length === 0 && snapshot.items.length > 0) {
+      lista = productosParaEtiquetasDesdePresupuesto(snapshot.items);
+    }
+
+    if (lista.length === 0) {
+      toast.info(
+        "Orden creada. No hay prendas en el presupuesto para imprimir etiquetas."
+      );
+      return;
+    }
+
+    setOrdenEtiquetasPendiente({
+      ordenId: orderId,
+      clienteNombre: snapshot.cliente_nombre,
+      productos: lista,
+    });
+    setModalEtiquetasOrdenAbierto(true);
+  };
+
+  const confirmarSenia = async () => {
+    if (!presupuestoAConvertir) return;
+
+    const monto = parseFloat(senia);
+    if (isNaN(monto) || monto <= 0) {
+      alert("Monto inválido.");
+      return;
+    }
+    if (monto > presupuestoAConvertir.total) {
+      alert("La seña no puede ser mayor al total del presupuesto.");
+      return;
+    }
+
+    if (metodoPagoId == null) {
+      alert("Debes seleccionar un método de pago.");
+      return;
+    }
+
+    if (
+      metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
+      (!presupuestoAConvertir.cliente_id || saldoClienteSenia <= 0)
+    ) {
+      toast.error("No hay saldo en cuenta corriente para usar como método de pago.");
+      return;
+    }
+
+    const esCC =
+      metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
+      !!presupuestoAConvertir.cliente_id &&
+      saldoClienteSenia > 0;
+    const creditoAplicado = esCC ? Math.min(saldoClienteSenia, monto) : 0;
+    const montoCaja = Math.max(monto - creditoAplicado, 0);
+
+    if (esCC && monto > saldoClienteSenia + 1e-9 && !metodoPagoComplementoSenia?.metodoId) {
+      alert("Indicá el método de pago para el importe que ingresa en caja.");
+      return;
+    }
+
+    if (montoCaja > 1e-9 && !cuentaDestinoId) {
+      alert("Debes seleccionar una cuenta destino.");
+      return;
+    }
+
+    const eraConjuntoSeparado = conjuntoSeparadoSenia;
+
+    try {
+      const cajaMetodoId = esCC ? metodoPagoComplementoSenia?.metodoId ?? null : metodoPagoId;
+      const cajaSubId = esCC
+        ? metodoPagoComplementoSenia?.submetodoId ?? null
+        : submetodoPagoId || null;
+
+      const res = await fetch(`${API_BASE}/ordenes/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          presupuesto_id: presupuestoAConvertir.id,
+          seña_pagada: monto,
+          credito_aplicado: creditoAplicado,
+          metodo_pago_id: montoCaja > 1e-9 ? cajaMetodoId : null,
+          submetodo_pago_id: montoCaja > 1e-9 ? cajaSubId : null,
+          payment_method: null,
+          cuenta_destino_id: montoCaja > 1e-9 ? cuentaDestinoId : null,
+          conjunto_separado: conjuntoSeparadoSenia,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const orderId = Number(data?.data?.id ?? data?.id);
+        if (!orderId || Number.isNaN(orderId)) {
+          toast.error(
+            "Orden creada, pero no se pudo obtener el ID para las etiquetas."
+          );
+          fetchPresupuestos();
+          return;
+        }
+
+        const snapshotEtiquetas = {
+          cliente_nombre: presupuestoAConvertir.cliente_nombre,
+          items: [...presupuestoAConvertir.items],
+        };
+        const snapshotResumen = {
+          cliente_nombre: presupuestoAConvertir.cliente_nombre,
+          fecha_evento: presupuestoAConvertir.fecha_evento,
+          fecha_retiro: presupuestoAConvertir.fecha_retiro,
+          categoria_evento: presupuestoAConvertir.categoria_evento,
+          lugar_evento: presupuestoAConvertir.lugar_evento,
+          items: [...presupuestoAConvertir.items],
+        };
+
+        toast.success("Orden de trabajo generada con éxito.");
+        setModalSeniaAbierto(false);
+        setSenia("");
+        setConjuntoSeparadoSenia(false);
+        setCuentaDestinoId(null);
+        setMetodoPago("");
+        setMetodoPagoId(null);
+        setSubmetodoPagoId(null);
+        setMetodoPagoComplementoSenia(null);
+        setPresupuestoAConvertir(null);
+        fetchPresupuestos();
+
+        if (eraConjuntoSeparado) {
+          await abrirModalResumenTrasCrearOrden(orderId, snapshotResumen);
+        } else {
+          await abrirModalEtiquetasTrasCrearOrden(orderId, snapshotEtiquetas);
+        }
+      } else {
+        const error = await res.json();
+        toast.error(`Error al generar orden: ${error.detail}`);
+      }
+    } catch (err) {
+      console.error("Error al generar orden:", err);
+      toast.error("Error inesperado.");
+    }
+  };
+
+  const registrarEtiquetasArmadoEnOrden = async (ordenId: number) => {
+    const res = await fetch(
+      `${API_BASE}/ordenes/${ordenId}/registrar-etiquetas-armado`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      }
+    );
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        typeof body.detail === "string"
+          ? body.detail
+          : body.message || "No se pudo registrar la impresión"
+      );
+    }
+  };
+
+  const imprimirEtiquetaResumenOrdenRecienCreada = async () => {
+    if (!ordenResumenPendiente) return;
+    setImprimiendoEtiquetaResumenOrden(true);
+    try {
+      const payload = construirEtiquetaResumenConjunto({
+        ordenId: ordenResumenPendiente.ordenId,
+        clienteNombre: ordenResumenPendiente.clienteNombre,
+        fechaRetiro: ordenResumenPendiente.fechaRetiro,
+        fechaEvento: ordenResumenPendiente.fechaEvento,
+        categoriaEvento: ordenResumenPendiente.categoriaEvento,
+        lugarEvento: ordenResumenPendiente.lugarEvento,
+        productos: ordenResumenPendiente.productos,
+      });
+      const resultado = await imprimirEtiquetaResumenConjunto(payload);
+      if (resultado.resultado === "ok") {
+        const msg =
+          resultado.metodo === "qz" && resultado.impresora
+            ? `Etiqueta resumen enviada a ${resultado.impresora}.`
+            : resultado.mensajeAyuda ||
+              `Etiqueta resumen de la orden #${ordenResumenPendiente.ordenId} enviada a impresión.`;
+        toast.success(msg);
+        setModalEtiquetaResumenOrdenAbierto(false);
+        setOrdenResumenPendiente(null);
+      } else {
+        toast.error("No se pudo abrir la impresión de la etiqueta resumen.");
+      }
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : "Error al imprimir etiqueta resumen";
+      toast.error(msg);
+    } finally {
+      setImprimiendoEtiquetaResumenOrden(false);
+    }
+  };
+
+  const imprimirEtiquetasOrdenRecienCreada = async () => {
+    if (!ordenEtiquetasPendiente) return;
+    setImprimiendoEtiquetasOrden(true);
+    try {
+      const payload = ordenEtiquetasPendiente.productos.map((p) => ({
+        codigoBarra: p.codigo_barra || "0",
+        clienteNombre: ordenEtiquetasPendiente.clienteNombre || "Cliente",
+        prendaDescripcion: p.producto_descripcion || "Prenda para armar",
+      }));
+      const { porIndice } = await imprimirEtiquetas100x50Lote(payload);
+      const ok = porIndice.filter((s) => s === "ok").length;
+      if (ok === 0) {
+        toast.error(
+          "No se pudo generar ninguna etiqueta. Revisá los códigos de barras."
+        );
+        return;
+      }
+      await registrarEtiquetasArmadoEnOrden(ordenEtiquetasPendiente.ordenId);
+      toast.success(
+        `${ok} etiqueta(s) enviadas a impresión. La reimpresión desde Reportes quedó deshabilitada para esta orden.`
+      );
+      setModalEtiquetasOrdenAbierto(false);
+      setOrdenEtiquetasPendiente(null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Error al imprimir etiquetas";
+      toast.error(msg);
+    } finally {
+      setImprimiendoEtiquetasOrden(false);
+    }
+  };
+
+  const eliminarPresupuesto = async (id: number) => {
+    const confirmar = confirm(
+      "¿Estás seguro que querés eliminar este presupuesto?"
+    );
+    if (!confirmar) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/presupuestos/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      if (res.ok) {
+        alert("Presupuesto eliminado.");
+        fetchPresupuestos(); // Recargar tabla
+      } else {
+        const error = await res.json();
+        alert(`Error al eliminar: ${error.detail}`);
+      }
+    } catch (err) {
+      console.error("Error al eliminar presupuesto:", err);
+      alert("Error inesperado al eliminar presupuesto.");
+    }
+  };
+
+  const normalizarTelefono = (telefono?: string): string | null => {
+    if (!telefono) return null;
+    let limpio = telefono.replace(/\D/g, "");
+    if (!limpio) return null;
+    limpio = limpio.replace(/^0+/, "");
+
+    if (limpio.startsWith("54")) {
+      if (!limpio.startsWith("549")) {
+        limpio = `549${limpio.slice(2)}`;
+      }
+    } else {
+      if (limpio.startsWith("9")) {
+        limpio = limpio.slice(1);
+      }
+      limpio = `549${limpio}`;
+    }
+
+    return limpio;
+  };
+
+  const handleEnviarWhatsapp = (presupuesto: Presupuesto) => {
+    const cliente = presupuesto.cliente_id != null ? clientes.find((c) => c.id === presupuesto.cliente_id) : null;
+    const telefonoCliente = (cliente?.celular || cliente?.telefono) ?? presupuesto.cliente_celular ?? null;
+
+    if (!telefonoCliente) {
+      alert(
+        presupuesto.es_precliente
+          ? "No se encontró teléfono del precliente."
+          : "No se encontró información del cliente asociado al presupuesto."
+      );
+      return;
+    }
+    const telefonoNormalizado = normalizarTelefono(telefonoCliente);
+    if (!telefonoNormalizado) {
+      alert("El número de teléfono del cliente es inválido.");
+      return;
+    }
+
+    const nombreCliente =
+      (cliente ? `${cliente.apellido ?? ""} ${cliente.nombre ?? ""}`.trim() : null) ||
+      presupuesto.cliente_nombre ||
+      "";
+
+    const totalFormateado = presupuesto.total.toLocaleString("es-AR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    const formatearFecha = (fecha?: string) => {
+      if (!fecha) return null;
+      const s = formatDdMmYyyyDesdeIso(fecha);
+      return s || fecha;
+    };
+
+    const detalles: string[] = [];
+    const fechaEvento = formatearFecha(presupuesto.fecha_evento);
+    if (fechaEvento) detalles.push(`Fecha del evento: ${fechaEvento}`);
+
+    const fechaRetiro = formatearFecha(presupuesto.fecha_retiro);
+    if (fechaRetiro) detalles.push(`Fecha de retiro: ${fechaRetiro}`);
+
+    const fechaDevolucion = formatearFecha(presupuesto.fecha_devolucion);
+    if (fechaDevolucion)
+      detalles.push(`Fecha de devolución: ${fechaDevolucion}`);
+
+    if (presupuesto.categoria_evento) {
+      detalles.push(`Categoría: ${presupuesto.categoria_evento}`);
+    }
+
+    if (presupuesto.nombre_agasajado) {
+      detalles.push(`Agasajado/a: ${presupuesto.nombre_agasajado}`);
+    }
+
+    if (presupuesto.lugar_evento) {
+      detalles.push(`Lugar: ${presupuesto.lugar_evento}`);
+    }
+
+    if (presupuesto.observaciones) {
+      detalles.push(`Observaciones: ${presupuesto.observaciones}`);
+    }
+
+    const detalleProductos =
+      presupuesto.items?.length > 0
+        ? presupuesto.items
+            .map((item, index) => {
+              const nombreProducto =
+                item.productoNombre ||
+                (item as any).producto_descripcion ||
+                "Producto";
+              const subtotal = (
+                item.subtotal ?? item.cantidad * (item.precioUnitario ?? 0)
+              ).toLocaleString("es-AR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              });
+              return `${index + 1}) ${nombreProducto} - $${subtotal}`;
+            })
+            .join("\n")
+        : "Sin productos asociados.";
+
+    let mensaje = `Hola ${nombreCliente}, te envío el presupuesto N° ${presupuesto.numero} por un total de $${totalFormateado}.`;
+
+    if (detalles.length > 0) {
+      mensaje += `\n\nDetalles:\n${detalles
+        .map((detalle) => `- ${detalle}`)
+        .join("\n")}`;
+    }
+
+    mensaje += `\n\nProductos incluidos:\n${detalleProductos}`;
+
+    const url = `https://api.whatsapp.com/send?phone=${telefonoNormalizado}&text=${encodeURIComponent(
+      mensaje
+    )}`;
+
+    window.open(url, "_blank");
+  };
+
+  const aplicarDescuento = () => {
+    const porcentaje = Number(nuevoItem.porcentaje);
+    const total = calcularTotal();
+
+    if (!porcentaje || isNaN(porcentaje)) {
+      alert("Seleccioná un porcentaje de descuento válido.");
+      return;
+    }
+
+    const descuentoMaximoEstandar = esAdmin ? 50 : 15; // 50% para admin, 15% para empleados
+
+    // Si el descuento es mayor al estándar, pedir motivo
+    if (porcentaje > descuentoMaximoEstandar) {
+      setDescuentoPendiente({ porcentaje, total });
+      setMostrarModalMotivoDescuento(true);
+      return;
+    }
+
+    // Si es descuento estándar, aplicar directamente
+    const descuento = (total * porcentaje) / 100;
+    const totalFinal = total - descuento;
+
+    setTotalConDescuento(totalFinal);
+    setPorcentajeDescuento(porcentaje);
+    setMotivoDescuentoExtra(""); // Limpiar motivo para descuentos estándar
+  };
+
+  const confirmarDescuentoExtra = () => {
+    if (!motivoDescuentoExtra.trim()) {
+      alert("El motivo es obligatorio para descuentos mayores al estándar.");
+      return;
+    }
+
+    if (descuentoPendiente) {
+      const descuento = (descuentoPendiente.total * descuentoPendiente.porcentaje) / 100;
+      const totalFinal = descuentoPendiente.total - descuento;
+
+      setTotalConDescuento(totalFinal);
+      setPorcentajeDescuento(descuentoPendiente.porcentaje);
+      setMostrarModalMotivoDescuento(false);
+      setDescuentoPendiente(null);
+    }
+  };
+
+  return (
+    <div className="container py-4 p-2">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h1 className="fw-bold">Presupuestos</h1>
+          <p className="text-muted">Gestión y seguimiento de presupuestos.</p>
+        </div>
+        <button className="btn btn-primary" onClick={nuevoPresupuesto}>
+          <i className="bi bi-plus me-2"></i>
+          Nuevo Presupuesto
+        </button>
+      </div>
+
+      {/* Tabla */}
+      {cargando ? (
+        <div className="d-flex justify-content-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="card-body border-bottom">
+            <label htmlFor="presupuestos-busqueda" className="form-label visually-hidden">
+              Buscar por DNI, apellido, nombre o apellido y nombre
+            </label>
+            <input
+              id="presupuestos-busqueda"
+              type="search"
+              className="form-control"
+              placeholder="Buscar por DNI, apellido, nombre o apellido y nombre..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              aria-label="Buscar presupuestos por cliente"
+            />
+          </div>
+          <div className="table-responsive">
+            <table className="table table-striped table-hover">
+              <thead className="table-light">
+                <tr>
+                  <th>N°</th>
+                  <th>Cliente</th>
+                  <th>Fecha Evento</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                  <th className="text-center">Acciones</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {presupuestosFiltrados.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center text-muted py-4">
+                      {presupuestos.length === 0
+                        ? "No hay presupuestos cargados."
+                        : "Ningún presupuesto coincide con la búsqueda."}
+                    </td>
+                  </tr>
+                ) : (
+                  presupuestosFiltrados.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.numero}</td>
+                      <td>{p.cliente_nombre}</td>
+                      <td>
+                        {p.fecha_evento ? formatDdMmYyyyDesdeIso(p.fecha_evento) : "Sin fecha"}
+                      </td>
+
+                      <td>${p.total.toLocaleString()}</td>
+                      <td>
+                        <span className={`badge ${getEstadoClass(p.estado)}`}>
+                          {p.estado.charAt(0).toUpperCase() + p.estado.slice(1)}
+                        </span>
+                      </td>
+                      <td className="text-center">
+                        <div className="btn-group">
+                          <button
+                            className="btn btn-sm btn-success"
+                            title="Enviar por WhatsApp"
+                            onClick={() => handleEnviarWhatsapp(p)}
+                          >
+                            <i className="bi bi-whatsapp me-1"></i>
+                            WhatsApp
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            title="Ver presupuesto"
+                            onClick={() => abrirPresupuestoVista(p)}
+                          >
+                            Ver
+                          </button>
+                          {p.estado.toLowerCase() !== "cancelada" && (
+                            <button
+                              className="btn btn-sm btn-primary"
+                              type="button"
+                              title="Editar fechas e ítems"
+                              onClick={() => abrirPresupuestoEdicion(p)}
+                            >
+                              Editar
+                            </button>
+                          )}
+                          {p.estado.toLowerCase() === "convertido_orden" ||
+                          p.estado.toLowerCase() === "aprobado" ||
+                          p.estado.toLowerCase() === "cancelada" ? (
+                            <div></div>
+                          ) : (
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              title="Convertir en orden"
+                              onClick={async () => {
+                                setPresupuestoAConvertir({
+                                  id: p.id,
+                                  cliente: p.cliente_nombre,
+                                  cliente_nombre: p.cliente_nombre,
+                                  total: p.total,
+                                  cliente_id: p.cliente_id ?? null,
+                                  es_precliente: !!p.es_precliente,
+                                  items: p.items ?? [],
+                                  fecha_evento: p.fecha_evento,
+                                  fecha_retiro: p.fecha_retiro || "",
+                                  categoria_evento: p.categoria_evento || "",
+                                  lugar_evento: p.lugar_evento || "",
+                                });
+                                setSenia("");
+                                setCuentaDestinoId(null);
+                                setMetodoPagoId(null);
+                                setSubmetodoPagoId(null);
+                                setMetodoPagoComplementoSenia(null);
+                                
+                                // Cargar cuentas destino activas de la sucursal del usuario
+                                try {
+                                  const sucursalId = me?.sucursalId || 1;
+                                  const token = localStorage.getItem("token");
+                                  const res = await fetch(`${API_BASE}/cuentas-destino/sucursal/${sucursalId}?solo_activas=true`, {
+                                    headers: {
+                                      Authorization: `Bearer ${token}`,
+                                    },
+                                  });
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    setCuentasDestino(Array.isArray(data) ? data : []);
+                                  }
+                                } catch (error) {
+                                  console.error("Error al cargar cuentas destino:", error);
+                                }
+                                
+                                setConjuntoSeparadoSenia(false);
+                                setModalSeniaAbierto(true);
+                              }}
+                            >
+                              Generar Orden
+                            </button>
+                          )}
+                          {p.estado.toLowerCase() === "convertido_orden" ||
+                          p.estado.toLowerCase() === "aprobado" ||
+                          p.estado.toLowerCase() === "cancelada" ? (
+                            <div></div>
+                          ) : (
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => eliminarPresupuesto(p.id)}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      <PresupuestoModal
+        esAdmin={esAdmin}
+        show={showModal}
+        verModoLectura={verModoLectura}
+        presupuestoSeleccionado={presupuestoSeleccionado}
+        formData={formData}
+        setFormData={setFormData}
+        clientes={clientes}
+        clienteFiltro={clienteFiltro}
+        setClienteFiltro={setClienteFiltro}
+        handleClienteChange={handleClienteChange}
+        selectClientePreclienteValue={selectClientePreclienteValue}
+        modoClientePrecliente={modoClientePrecliente}
+        setModoClientePrecliente={setModoClientePrecliente}
+        preclienteForm={preclienteForm}
+        setPreclienteForm={setPreclienteForm}
+        preclienteNombreSeleccionado={preclienteNombreSeleccionado}
+        resumenClienteNombre={resumenClienteNombre}
+        clienteOPreclienteSeleccionado={clienteOPreclienteSeleccionado}
+        preclientes={preclientes}
+        onSelectPrecliente={(id, nombre) => {
+          preclienteIdRef.current = id;
+          setClienteOPreclienteSeleccionado({ tipo: "precliente", id, nombre });
+          setFormData((prev) => ({ ...prev, preclienteId: id, clienteId: "" }));
+          setPreclienteNombreSeleccionado(nombre);
+        }}
+        crearPreclienteYUsar={crearPreclienteYUsar}
+        onActualizarListas={async () => {
+          await Promise.all([fetchClientes(), fetchPreclientes()]);
+        }}
+        onClearPrecliente={() => {
+          preclienteIdRef.current = null;
+          setClienteOPreclienteSeleccionado(null);
+          setFormData((prev) => ({ ...prev, preclienteId: null }));
+          setPreclienteNombreSeleccionado(null);
+        }}
+        productos={productos}
+        productoFiltro={productoFiltro}
+        setProductoFiltro={handleProductoFiltroChange}
+        avisoAgregarProducto={avisoAgregarProducto}
+        nuevoItem={nuevoItem}
+        handleItemChange={handleItemChange}
+        agregarPorCodigoBarra={agregarPorCodigoBarra}
+        agregarProductoPorId={agregarProductoPorId}
+        eliminarItem={eliminarItem}
+        cambiarTipoPrecioItem={cambiarTipoPrecioItem}
+        items={items}
+        calcularTotal={calcularTotal}
+        guardarPresupuesto={guardarPresupuesto}
+        totalConDescuento={totalConDescuento}
+        porcentajeDescuento={porcentajeDescuento}
+        aplicarDescuento={aplicarDescuento}
+        onClose={() => {
+          setShowModal(false);
+          setVerModoLectura(false);
+          setPresupuestoSeleccionado(null);
+          setAvisoAgregarProducto(null);
+        }}
+      />
+
+      {/* Modal de Seña */}
+      <Dialog
+        open={modalSeniaAbierto}
+        onOpenChange={(open) => {
+          setModalSeniaAbierto(open);
+          if (!open) setConjuntoSeparadoSenia(false);
+        }}
+      >
+        <DialogContent
+          className="w-full border-0"
+          dialogClassName="modal-dialog-centered modal-lg"
+          dialogStyle={{ maxWidth: "640px", width: "95%" }}
+        >
+          <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
+            <DialogTitle className="fw-semibold">Ingrese seña</DialogTitle>
+            <DialogDescription className="mb-0">
+              Seña recibida de {presupuestoAConvertir?.cliente}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="modal-body px-3 px-md-4">
+            {(() => {
+              const montoSenia = parseFloat(senia);
+              const seniaExcedeTotal =
+                !!presupuestoAConvertir &&
+                !Number.isNaN(montoSenia) &&
+                montoSenia > presupuestoAConvertir.total;
+              return (
+            <div className="card shadow-sm mb-4">
+              <div className="card-body p-4">
+                <div className="mb-4">
+                  <label className="form-label fw-bold">Monto de la seña</label>
+                  <input
+                    type="number"
+                    className="form-control w-100"
+                    placeholder="Ingresá el monto recibido"
+                    value={senia}
+                    onChange={(e) => setSenia(e.target.value)}
+                    min={0}
+                    max={presupuestoAConvertir?.total}
+                  />
+                  {!!presupuestoAConvertir && (
+                    <div className="small text-muted mt-2">
+                      Máximo permitido: ${presupuestoAConvertir.total.toLocaleString("es-AR")}
+                    </div>
+                  )}
+                  {seniaExcedeTotal && (
+                    <div className="text-danger small mt-2">
+                      La seña no puede ser mayor al total del presupuesto.
+                    </div>
+                  )}
+                </div>
+
+                <MetodoPagoSelector
+                  sucursalId={me?.sucursalId}
+                  metodoPagoId={metodoPagoId}
+                  submetodoPagoId={submetodoPagoId}
+                  saldoCuentaCorriente={
+                    presupuestoAConvertir?.cliente_id && !presupuestoAConvertir?.es_precliente
+                      ? saldoClienteSenia
+                      : null
+                  }
+                  montoReferencia={senia ? parseFloat(senia) || null : null}
+                  onMetodoChange={(metodoId, submetodoId, metodoDisplay, complemento) => {
+                    setMetodoPagoId(metodoId);
+                    setSubmetodoPagoId(submetodoId);
+                    setMetodoPago(metodoDisplay);
+                    setMetodoPagoComplementoSenia(complemento ?? null);
+                    if (metodoDisplay && /efectivo/i.test(metodoDisplay.trim())) {
+                      const cuentaEfectivo = cuentasDestino.find((c) =>
+                        /efectivo/i.test((c.nombre_titular || "").trim())
+                      );
+                      if (cuentaEfectivo) setCuentaDestinoId(cuentaEfectivo.id);
+                    }
+                  }}
+                  required={true}
+                  showError={metodoPagoId == null}
+                />
+
+                {(() => {
+                  const mt = parseFloat(senia || "0") || 0;
+                  const esCC =
+                    metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
+                    !!presupuestoAConvertir?.cliente_id &&
+                    saldoClienteSenia > 0;
+                  const cred = esCC ? Math.min(saldoClienteSenia, mt) : 0;
+                  const montoCajaUi = Math.max(mt - cred, 0);
+                  return montoCajaUi > 1e-6 ? (
+                    <div className="mb-4">
+                      <label className="form-label fw-bold">
+                        Cuenta Destino <span className="text-danger">*</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={cuentaDestinoId || ""}
+                        onChange={(e) => setCuentaDestinoId(Number(e.target.value) || null)}
+                      >
+                        <option value="">Seleccionar cuenta destino</option>
+                        {cuentasDestino.map((cuenta) => (
+                          <option key={cuenta.id} value={cuenta.id}>
+                            {cuenta.nombre_titular}
+                          </option>
+                        ))}
+                      </select>
+                      {!cuentaDestinoId && (
+                        <div className="text-danger small mt-2">
+                          Debes seleccionar una cuenta destino
+                        </div>
+                      )}
+                      {cuentasDestino.length === 0 && (
+                        <div className="text-warning small mt-2">
+                          No hay cuentas destino activas disponibles. Contactá a un administrador.
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="small text-muted mb-0">
+                      Si la seña se cubre solo con cuenta corriente, no se registra movimiento de caja.
+                    </p>
+                  );
+                })()}
+
+                <div className="border rounded-3 p-3 mt-3 bg-success bg-opacity-10">
+                  <div className="form-check mb-0">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="conjunto-separado-senia"
+                      checked={conjuntoSeparadoSenia}
+                      onChange={(e) => setConjuntoSeparadoSenia(e.target.checked)}
+                    />
+                    <label
+                      className="form-check-label fw-semibold"
+                      htmlFor="conjunto-separado-senia"
+                    >
+                      Conjunto ya separado en perchero
+                    </label>
+                  </div>
+                  <p className="small text-muted mb-0 mt-2 ps-4">
+                    Marcá esta opción si las prendas del presupuesto ya quedaron
+                    separadas y colgadas. Al crear la orden se abrirá la
+                    impresión de la <strong>etiqueta resumen</strong> (XP-470B)
+                    en lugar de las etiquetas individuales por prenda.
+                  </p>
+                </div>
+              </div>
+            </div>
+              );
+            })()}
+          </div>
+
+          <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
+            <button
+              className="btn btn-light border"
+              onClick={() => {
+                setModalSeniaAbierto(false);
+                setConjuntoSeparadoSenia(false);
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={confirmarSenia}
+              disabled={(() => {
+                const mt = parseFloat(senia || "0") || 0;
+                const esCC =
+                  metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
+                  !!presupuestoAConvertir?.cliente_id &&
+                  saldoClienteSenia > 0;
+                const cred = esCC ? Math.min(saldoClienteSenia, mt) : 0;
+                const montoCajaUi = Math.max(mt - cred, 0);
+                const faltaComplemento =
+                  esCC &&
+                  mt > saldoClienteSenia + 1e-9 &&
+                  !metodoPagoComplementoSenia?.metodoId;
+                return (
+                  metodoPagoId == null ||
+                  faltaComplemento ||
+                  (montoCajaUi > 1e-6 && !cuentaDestinoId) ||
+                  !senia ||
+                  mt <= 0 ||
+                  (!!presupuestoAConvertir &&
+                    !Number.isNaN(parseFloat(senia)) &&
+                    parseFloat(senia) > presupuestoAConvertir.total)
+                );
+              })()}
+            >
+              Confirmar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: etiqueta resumen del conjunto (conjunto ya separado) */}
+      <Dialog
+        open={modalEtiquetaResumenOrdenAbierto}
+        onOpenChange={(open) => {
+          if (!open && !imprimiendoEtiquetaResumenOrden) {
+            setModalEtiquetaResumenOrdenAbierto(false);
+            setOrdenResumenPendiente(null);
+          }
+        }}
+      >
+        <DialogContent
+          className="w-full border-0"
+          dialogClassName="modal-dialog-centered"
+          dialogStyle={{ maxWidth: "480px", width: "95%" }}
+        >
+          <DialogHeader className="border-bottom pb-3">
+            <DialogTitle>Etiqueta resumen del conjunto</DialogTitle>
+            <DialogDescription className="mb-0">
+              Orden #{ordenResumenPendiente?.ordenId} ·{" "}
+              {ordenResumenPendiente?.clienteNombre}
+              <br />
+              <span className="small">
+                El conjunto quedó marcado como ya separado. Imprimí la etiqueta
+                resumen (XP-470B) para el perchero; no se ofrecen etiquetas
+                individuales por prenda en este caso.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="modal-body py-3">
+            <p className="mb-0 small text-muted">
+              {ordenResumenPendiente?.productos.length ?? 0} prenda(s) en el
+              conjunto.
+            </p>
+          </div>
+          <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2">
+            <button
+              type="button"
+              className="btn btn-light border"
+              onClick={() => {
+                setModalEtiquetaResumenOrdenAbierto(false);
+                setOrdenResumenPendiente(null);
+              }}
+              disabled={imprimiendoEtiquetaResumenOrden}
+            >
+              Omitir
+            </button>
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={() => void imprimirEtiquetaResumenOrdenRecienCreada()}
+              disabled={imprimiendoEtiquetaResumenOrden}
+            >
+              {imprimiendoEtiquetaResumenOrden ? (
+                <>
+                  <i className="bi bi-arrow-clockwise spin me-2"></i>
+                  Imprimiendo...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-printer-fill me-2"></i>
+                  Imprimir etiqueta resumen (XP-470B)
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: etiquetas de armado al crear la orden */}
+      <Dialog
+        open={modalEtiquetasOrdenAbierto}
+        onOpenChange={(open) => {
+          if (!open && !imprimiendoEtiquetasOrden) {
+            setModalEtiquetasOrdenAbierto(false);
+            setOrdenEtiquetasPendiente(null);
+          }
+        }}
+      >
+        <DialogContent
+          className="w-full border-0"
+          dialogClassName="modal-dialog-centered"
+          dialogStyle={{ maxWidth: "480px", width: "95%" }}
+        >
+          <DialogHeader className="border-bottom pb-3">
+            <DialogTitle>Etiquetas para armar (100×50)</DialogTitle>
+            <DialogDescription className="mb-0">
+              Orden #{ordenEtiquetasPendiente?.ordenId} ·{" "}
+              {ordenEtiquetasPendiente?.clienteNombre}
+              <br />
+              <span className="small">
+                Si imprimís ahora desde la orden, no podrás volver a imprimir
+                estas etiquetas desde Reportes → Prendas a armar.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="modal-body py-3">
+            <p className="mb-0 small text-muted">
+              {ordenEtiquetasPendiente?.productos.length ?? 0} prenda(s) en la
+              orden.
+            </p>
+          </div>
+          <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2">
+            <button
+              type="button"
+              className="btn btn-light border"
+              onClick={() => {
+                setModalEtiquetasOrdenAbierto(false);
+                setOrdenEtiquetasPendiente(null);
+              }}
+              disabled={imprimiendoEtiquetasOrden}
+            >
+              Omitir
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void imprimirEtiquetasOrdenRecienCreada()}
+              disabled={imprimiendoEtiquetasOrden}
+            >
+              {imprimiendoEtiquetasOrden ? (
+                <>
+                  <i className="bi bi-arrow-clockwise spin me-2"></i>
+                  Imprimiendo...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-printer me-2"></i>
+                  Imprimir etiquetas
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de motivo para descuento extra */}
+      <Dialog open={mostrarModalMotivoDescuento} onOpenChange={setMostrarModalMotivoDescuento}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Motivo del Descuento Extra</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted mb-3">
+              El descuento de {descuentoPendiente?.porcentaje}% supera el máximo estándar. 
+              Por favor, ingresá el motivo de este descuento extra.
+            </p>
+            <label className="form-label fw-bold">Motivo (obligatorio)</label>
+            <textarea
+              className="form-control"
+              rows={4}
+              value={motivoDescuentoExtra}
+              onChange={(e) => setMotivoDescuentoExtra(e.target.value)}
+              placeholder="Ej: Cliente habitual con compra grande, promoción especial, etc."
+            />
+          </div>
+          <DialogFooter>
+            <button
+              className="btn btn-light border"
+              onClick={() => {
+                setMostrarModalMotivoDescuento(false);
+                setDescuentoPendiente(null);
+                setMotivoDescuentoExtra("");
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={confirmarDescuentoExtra}
+            >
+              Aplicar Descuento
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

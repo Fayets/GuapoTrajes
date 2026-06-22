@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Pytest
+        env:
+          SECRET: ci_test_secret_key
+          ENV: test
+          BOOTSTRAP_ADMIN: "false"
+        run: pytest -q
+
+  frontend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/my-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/my-app/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/my-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/my-app/package-lock.json
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+      - name: E2E smoke (opcional en CI)
+        env:
+          E2E_RUN: "1"
+          E2E_START_DEV: "1"
+          CI: "true"
+        run: npm run test:e2e

@@ -1,0 +1,20 @@
+# Dependencias de producción — GuapoTrajes backend
+bcrypt
+cryptography
+fastapi
+numpy
+openpyxl
+packaging
+pandas
+pillow
+pony
+psycopg2-binary
+pydantic
+python-dateutil
+python-decouple
+python-dotenv
+python-jose
+pytz
+reportlab
+typing_extensions
+uvicorn
