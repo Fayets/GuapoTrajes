@@ -374,6 +374,7 @@ export default function EtiquetasInventarioPage() {
 
     const exitosos: number[] = [];
     const estadosFinales: ColaEstado[] = items.map(() => "error");
+    let metodoImpresion: "qz" | "navegador" | undefined;
 
     try {
       for (let offset = 0; offset < items.length; offset += CHUNK_IMPRESION) {
@@ -382,7 +383,8 @@ export default function EtiquetasInventarioPage() {
           codigoBarra: p.codigo_barra || "0",
           descripcion: formatDescripcionProducto(p.descripcion, p.descripcion_extra),
         }));
-        const { porIndice } = await imprimirEtiquetas50x25Lote(payload);
+        const { porIndice, metodo } = await imprimirEtiquetas50x25Lote(payload);
+        if (metodo) metodoImpresion = metodo;
         chunk.forEach((p, j) => {
           const globalIdx = offset + j;
           if (porIndice[j] === "ok") {
@@ -406,7 +408,9 @@ export default function EtiquetasInventarioPage() {
       const err = items.length - ok;
       if (err === 0) {
         toast.success(
-          `${ok} etiqueta(s) enviada(s) a impresión (50×25 mm, una hoja por etiqueta)`
+          metodoImpresion === "navegador"
+            ? `${ok} etiqueta(s) listas. En Chrome desactivá «Encabezados y pies de página» y poné márgenes en Ninguno.`
+            : `${ok} etiqueta(s) enviada(s) a la Zebra (50×25 mm)`
         );
       } else if (ok === 0) {
         toast.error("No se pudo armar ninguna etiqueta. Revisá los códigos de barras.");

@@ -13,6 +13,7 @@ import JsBarcode from "jsbarcode";
 import {
   ETIQUETA_50X25_PREVIEW_CSS,
   imprimirEtiqueta50x25DesdeSvg,
+  descripcionParaEtiqueta50x25,
   JSBARCODE_OPTS_50X25,
 } from "@/lib/imprimir-etiqueta-50x25";
 import { toast } from "sonner";
@@ -1262,17 +1263,17 @@ export default function ProductosPage() {
               <div className="overflow-hidden rounded border bg-white p-2 text-center">
                 <style>{ETIQUETA_50X25_PREVIEW_CSS}</style>
                 <div className="etiqueta-50x25-preview">
-                  <div className="wrap">
-                    <div className="inner">
-                      <p className="product-name">
-                        {formatDescripcionProducto(
+                  <div className="label">
+                    <p className="product-name">
+                      {descripcionParaEtiqueta50x25(
+                        formatDescripcionProducto(
                           productoEtiqueta.descripcion,
                           productoEtiqueta.descripcion_extra
-                        )}
-                      </p>
-                      <div className="barcode-slot">
-                        <svg ref={barcodeRef} id="etiqueta-impresion" />
-                      </div>
+                        )
+                      )}
+                    </p>
+                    <div className="barcode-slot">
+                      <svg ref={barcodeRef} id="etiqueta-impresion" />
                     </div>
                   </div>
                 </div>
