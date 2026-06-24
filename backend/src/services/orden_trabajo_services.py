@@ -16,6 +16,7 @@ from src.models import (
     Modista,
 )
 from datetime import datetime, timedelta, date
+from src.fechas_ar import ahora_ar
 from typing import List, Optional, Any
 import logging
 
@@ -304,7 +305,7 @@ class OrdenTrabajoServices:
 
                 if monto_efectivo > 1e-9 and cuenta_destino is not None:
                     movimiento = CajaMovimiento(
-                        fecha_hora=datetime.now(),
+                        fecha_hora=ahora_ar(),
                         tipo="INGRESO",
                         monto=monto_efectivo,
                         payment_method=payment_method_enum,  # Para compatibilidad (opcional)
@@ -707,7 +708,7 @@ class OrdenTrabajoServices:
                 movimiento_caja = None
                 if monto_efectivo > 1e-9 and cuenta_destino is not None:
                     movimiento_caja = CajaMovimiento(
-                        fecha_hora=datetime.now(),
+                        fecha_hora=ahora_ar(),
                         tipo="INGRESO",
                         monto=monto_efectivo,
                         payment_method=payment_method_enum,

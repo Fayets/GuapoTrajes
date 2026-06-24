@@ -211,6 +211,50 @@ def ensure_descripcion_extra_productos() -> None:
     logger.debug("No se pudo añadir descripcion_extra (probados: Productos, productos)")
 
 
+def ensure_caja_movimientos_fecha_hora_ar() -> None:
+    """
+    Corrige movimientos de caja guardados en UTC (backend en Render) a hora Argentina.
+    Se ejecuta una sola vez en producción.
+    """
+    if not _is_postgres():
+        return
+    env = config("ENV", default="production").lower()
+    if env != "production":
+        logger.debug("Patch caja_movimientos_fecha_hora_ar omitido (ENV=%s)", env)
+        return
+
+    patch_name = "caja_movimientos_fecha_hora_ar"
+    try:
+        with db_session:
+            db.execute(
+                'CREATE TABLE IF NOT EXISTS "_schema_patches" ('
+                '"name" VARCHAR(255) PRIMARY KEY, '
+                '"applied_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)'
+            )
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute('SELECT 1 FROM "_schema_patches" WHERE "name" = %s', (patch_name,))
+            if cur.fetchone():
+                logger.debug("Patch %s ya aplicado", patch_name)
+                return
+            cur.execute(
+                'UPDATE "CajaMovimientos" SET "fecha_hora" = '
+                '("fecha_hora" AT TIME ZONE \'UTC\') AT TIME ZONE \'America/Argentina/Buenos_Aires\''
+            )
+            cur.execute('INSERT INTO "_schema_patches" ("name") VALUES (%s)', (patch_name,))
+            conn.commit()
+            logger.info(
+                "Patch %s aplicado: fechas de caja diaria normalizadas a hora Argentina",
+                patch_name,
+            )
+    except Exception as e:
+        err = str(e).lower()
+        if "does not exist" in err and "cajamovimientos" in err.replace(" ", ""):
+            logger.debug("Omitiendo patch %s: tabla CajaMovimientos aún no existe", patch_name)
+            return
+        logger.warning("Error aplicando patch %s: %s", patch_name, e)
+
+
 def apply_schema_migrations() -> None:
     """Aplica migraciones mínimas necesarias para el nuevo flujo financiero."""
     if not _is_postgres():

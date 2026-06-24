@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from pony.orm import db_session, flush, select
 
+from src.fechas_ar import ahora_ar
+
 from src.models import (
     CajaConcentradora,
     CajaMovimiento,
@@ -60,7 +62,7 @@ class CajaConcentradoraServices:
             texto = f"{etiqueta} {descripcion}"
 
         CajaMovimiento(
-            fecha_hora=datetime.now(),
+            fecha_hora=ahora_ar(),
             tipo=tipo,
             monto=float(monto),
             payment_method="EFECTIVO",

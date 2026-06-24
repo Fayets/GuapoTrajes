@@ -9,12 +9,12 @@ export const JSBARCODE_OPTS_50X25 = {
   format: "CODE128" as const,
   lineColor: "#000",
   background: "#ffffff",
-  width: 1.15,
-  height: 20,
+  width: 1.1,
+  height: 16,
   margin: 0,
   displayValue: true,
-  fontSize: 8,
-  textMargin: 1,
+  fontSize: 7,
+  textMargin: 0,
   textAlign: "center" as const,
 }
 
@@ -24,31 +24,37 @@ const ETIQUETA_50X25_CONTENT_CSS = `
     width: 50mm;
     height: 25mm;
     margin: 0;
-    padding: 0.4mm 1mm 0.3mm;
-    text-align: center;
+    padding: 0.5mm 1mm 0.4mm;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
   }
   .inner {
-    display: inline-flex;
+    display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    vertical-align: top;
+    justify-content: flex-end;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
     max-width: 48mm;
-    gap: 0.5mm;
+    gap: 0.3mm;
     text-align: center;
   }
   .product-name {
     margin: 0;
     padding: 0;
     width: 100%;
-    max-width: 48mm;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 12.5mm;
     text-align: center;
-    font: 600 10pt/1.2 system-ui, sans-serif;
+    font: 600 8pt/1.12 system-ui, sans-serif;
     color: #000;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
+    -webkit-line-clamp: 3;
     overflow: hidden;
     word-break: break-word;
     hyphens: auto;
@@ -56,15 +62,18 @@ const ETIQUETA_50X25_CONTENT_CSS = `
   .barcode-slot {
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: flex-end;
     width: 100%;
-    margin-top: 0.5mm;
+    flex: 0 0 9.5mm;
+    min-height: 9.5mm;
+    max-height: 9.5mm;
+    overflow: hidden;
   }
   .barcode-slot svg {
     display: block;
     margin-inline: auto;
     max-width: 47mm;
-    max-height: 7mm;
+    max-height: 9mm;
     width: auto;
     height: auto;
   }
@@ -83,23 +92,30 @@ export const ETIQUETA_50X25_PREVIEW_CSS = `
     width: 100%;
     height: 100%;
     padding: 2px 4px 1px;
+    display: flex;
+    flex-direction: column;
   }
   .etiqueta-50x25-preview .inner {
     max-width: 100%;
     gap: 2px;
+    flex: 1 1 auto;
+    min-height: 0;
   }
   .etiqueta-50x25-preview .product-name {
     max-width: 100%;
-    font-size: 13px;
-    line-height: 1.2;
-    -webkit-line-clamp: 4;
+    max-height: 70px;
+    font-size: 11px;
+    line-height: 1.12;
+    -webkit-line-clamp: 3;
   }
   .etiqueta-50x25-preview .barcode-slot {
-    margin-top: 2px;
+    flex: 0 0 52px;
+    min-height: 52px;
+    max-height: 52px;
   }
   .etiqueta-50x25-preview .barcode-slot svg {
     max-width: 100%;
-    max-height: 40px;
+    max-height: 48px;
   }
   ${ETIQUETA_50X25_CONTENT_CSS}
 `

@@ -61,6 +61,28 @@ def parse_fecha_query_presupuesto(s: str) -> date:
     return parse_fecha_presupuesto_entrada(raw)
 
 
+def ahora_ar() -> datetime:
+    """Hora actual en Argentina como datetime naive (convención de almacenamiento en BD)."""
+    return datetime.now(ZONA_ARGENTINA).replace(tzinfo=None)
+
+
+def normalizar_fecha_hora_ar(val: datetime) -> datetime:
+    """Normaliza un datetime a hora Argentina naive."""
+    if val.tzinfo is None:
+        return val
+    return val.astimezone(ZONA_ARGENTINA).replace(tzinfo=None)
+
+
+def formatear_hora_ar(val: datetime, fmt: str = "%H:%M") -> str:
+    """Formatea la hora de un instante en Argentina."""
+    return normalizar_fecha_hora_ar(val).strftime(fmt)
+
+
+def formatear_fecha_ar(val: datetime, fmt: str = "%Y-%m-%d") -> str:
+    """Formatea la fecha de un instante en Argentina."""
+    return normalizar_fecha_hora_ar(val).strftime(fmt)
+
+
 def fecha_presupuesto_api_ymd(val) -> Optional[str]:
     """Serializa fecha de presupuesto a 'YYYY-MM-DD' (día civil Argentina si era datetime)."""
     if val is None:
