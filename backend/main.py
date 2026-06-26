@@ -25,7 +25,7 @@ from src.controllers.logs_controller import router as logs_router
 from src.controllers.usuario_controller import router as usuario_router
 from src.controllers.health_controller import router as health_router
 from src.controllers.config_productos_controller import router as config_productos_router
-from src.migrations import apply_schema_migrations, ensure_contrato_generado_at_column, ensure_etiquetas_armado_impresas_at_column, ensure_etiqueta_inventario_impresa_at_column, ensure_conjunto_separado_column, ensure_producto_reservado_modista_columns, ensure_notas_productos_lavanderias, ensure_cliente_columnas_lavanderia_modista, ensure_descripcion_extra_productos
+from src.migrations import apply_schema_migrations, ensure_contrato_generado_at_column, ensure_etiquetas_armado_impresas_at_column, ensure_etiqueta_inventario_impresa_at_column, ensure_conjunto_separado_column, ensure_producto_reservado_modista_columns, ensure_notas_productos_lavanderias, ensure_cliente_columnas_lavanderia_modista, ensure_descripcion_extra_productos, ensure_caja_movimientos_fecha_hora_ar
 from src import schemas, models
 from src.services.usuario_services import UsuariosServices
 from pony.orm import db_session
@@ -153,6 +153,7 @@ ensure_notas_productos_lavanderias()
 ensure_cliente_columnas_lavanderia_modista()
 # Asegurar descripcion_extra en productos (compatibilidad para instalaciones existentes)
 ensure_descripcion_extra_productos()
+ensure_caja_movimientos_fecha_hora_ar()
 
 # Crear SUPER_ADMIN inicial si corresponde
 ensure_initial_super_admin()

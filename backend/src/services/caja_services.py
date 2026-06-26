@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from pony.orm import db_session, select, sum, count, flush
 from datetime import date, datetime
+from src.fechas_ar import ahora_ar, formatear_fecha_ar, formatear_hora_ar, instante_a_fecha_ar
 from src.models import CajaMovimiento, Venta, Usuario, Sucursal, TipoMovimiento, MetodoPago, CuentaDestino, Presupuesto, CierreCaja, Cliente
 from fastapi import HTTPException
 from typing import List, Dict, Optional
@@ -92,7 +93,7 @@ class CajaServices:
                 pass
         
         movimiento_kwargs = {
-            "fecha_hora": datetime.now(),
+            "fecha_hora": ahora_ar(),
             "tipo": movimiento_data["tipo"],
             "monto": float(movimiento_data["monto"]),
             "payment_method": payment_method_enum,  # Para compatibilidad (opcional)
@@ -145,7 +146,7 @@ class CajaServices:
         descripcion = transferencia_data.get("descripcion") or "Transferencia a Caja Chica"
 
         movimiento = CajaMovimiento(
-            fecha_hora=datetime.now(),
+            fecha_hora=ahora_ar(),
             tipo=TipoMovimiento.EGRESO,
             monto=float(monto),
             payment_method=MetodoPago.EFECTIVO,
@@ -241,7 +242,7 @@ class CajaServices:
         descripcion = transferencia_data.get("descripcion") or "Transferencia a Caja Concentradora"
 
         movimiento = CajaMovimiento(
-            fecha_hora=datetime.now(),
+            fecha_hora=ahora_ar(),
             tipo=TipoMovimiento.EGRESO,
             monto=float(monto),
             payment_method=MetodoPago.EFECTIVO,
@@ -364,7 +365,7 @@ class CajaServices:
             # Filtrar por fecha y sucursal
             movimientos_filtrados = []
             for cm in all_movimientos:
-                if cm.fecha_hora.date() != fecha or cm.sucursal.id != sucursal_id:
+                if instante_a_fecha_ar(cm.fecha_hora) != fecha or cm.sucursal.id != sucursal_id:
                     continue
 
                 # Determinar método de pago del movimiento (display)
@@ -437,7 +438,7 @@ class CajaServices:
                 
                 movimientos.append({
                     "id": cm.id,
-                    "hora": cm.fecha_hora.strftime("%H:%M"),
+                    "hora": formatear_hora_ar(cm.fecha_hora),
                     "origen": origen_display,
                     "tipo": cm.tipo,
                     "payment_method": metodo_pago_display or "SIN_METODO",
@@ -492,7 +493,7 @@ class CajaServices:
 
             movimientos_filtrados = []
             for cm in CajaMovimiento.select():
-                fecha_mov = cm.fecha_hora.date()
+                fecha_mov = instante_a_fecha_ar(cm.fecha_hora)
                 if fecha_mov < fecha_desde or fecha_mov > fecha_hasta:
                     continue
                 if cm.sucursal.id != sucursal_id:
@@ -522,7 +523,9 @@ class CajaServices:
 
                 movimientos_filtrados.append(cm)
 
-            movimientos_filtrados.sort(key=lambda x: (x.fecha_hora.date(), x.fecha_hora), reverse=True)
+            movimientos_filtrados.sort(
+                key=lambda x: (instante_a_fecha_ar(x.fecha_hora), x.fecha_hora), reverse=True
+            )
 
             movimientos = []
             resumen_por_metodo: Dict[str, float] = {}
@@ -574,8 +577,8 @@ class CajaServices:
                 movimientos.append(
                     {
                         "id": cm.id,
-                        "fecha": cm.fecha_hora.strftime("%Y-%m-%d"),
-                        "hora": cm.fecha_hora.strftime("%H:%M:%S"),
+                        "fecha": formatear_fecha_ar(cm.fecha_hora),
+                        "hora": formatear_hora_ar(cm.fecha_hora, "%H:%M:%S"),
                         "origen": origen_display,
                         "tipo": cm.tipo,
                         "categoria": categoria,
@@ -614,7 +617,7 @@ class CajaServices:
             # Filtrar por fecha y sucursal
             movimientos_filtrados = []
             for cm in all_movimientos:
-                if (cm.fecha_hora.date() == fecha and cm.sucursal.id == sucursal_id):
+                if (instante_a_fecha_ar(cm.fecha_hora) == fecha and cm.sucursal.id == sucursal_id):
                     movimientos_filtrados.append(cm)
             
             # Agrupar por método de pago
@@ -673,7 +676,7 @@ class CajaServices:
             all_movimientos = list(CajaMovimiento.select())
             saldo = 0.0
             for cm in all_movimientos:
-                if cm.fecha_hora.date() != fecha or cm.sucursal.id != sucursal_id:
+                if instante_a_fecha_ar(cm.fecha_hora) != fecha or cm.sucursal.id != sucursal_id:
                     continue
                 if not self._es_efectivo(cm):
                     continue
@@ -902,7 +905,7 @@ class CajaServices:
                 origen_display = self._origen_con_cliente(cm.origen) if cm.origen else (cm.origen or "")
                 movimientos.append({
                     "id": cm.id,
-                    "hora": cm.fecha_hora.strftime("%H:%M"),
+                    "hora": formatear_hora_ar(cm.fecha_hora),
                     "origen": origen_display,
                     "tipo": cm.tipo,
                     "payment_method": metodo_pago_display,
@@ -985,9 +988,9 @@ class CajaServices:
                     continue
                 
                 # Verificar fechas si se especifican
-                if fecha_desde and cm.fecha_hora.date() < fecha_desde:
+                if fecha_desde and instante_a_fecha_ar(cm.fecha_hora) < fecha_desde:
                     continue
-                if fecha_hasta and cm.fecha_hora.date() > fecha_hasta:
+                if fecha_hasta and instante_a_fecha_ar(cm.fecha_hora) > fecha_hasta:
                     continue
                 
                 # Buscar en el origen (concepto/referencia)
@@ -1035,8 +1038,8 @@ class CajaServices:
                 movimientos.append({
                     "id": cm.id,
                     "fecha_hora": cm.fecha_hora,
-                    "fecha": cm.fecha_hora.strftime("%Y-%m-%d"),
-                    "hora": cm.fecha_hora.strftime("%H:%M"),
+                    "fecha": formatear_fecha_ar(cm.fecha_hora),
+                    "hora": formatear_hora_ar(cm.fecha_hora),
                     "origen": origen_display,
                     "tipo": cm.tipo,
                     "payment_method": metodo_pago_display,
@@ -1101,8 +1104,8 @@ class CajaServices:
                 movimientos.append({
                     "id": cm.id,
                     "fecha_hora": cm.fecha_hora,
-                    "fecha": cm.fecha_hora.strftime("%Y-%m-%d"),
-                    "hora": cm.fecha_hora.strftime("%H:%M"),
+                    "fecha": formatear_fecha_ar(cm.fecha_hora),
+                    "hora": formatear_hora_ar(cm.fecha_hora),
                     "tipo": cm.tipo,
                     "monto": cm.monto,
                     "payment_method": metodo_pago_display,

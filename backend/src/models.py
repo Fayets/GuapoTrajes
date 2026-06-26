@@ -3,6 +3,7 @@ from enum import Enum
 from decimal import Decimal
 from .db import db
 from datetime import date, datetime 
+from src.fechas_ar import ahora_ar
 
 # Definicion de los roles
 class Roles(str, Enum):
@@ -260,7 +261,7 @@ class ReciboOrden(db.Entity):
     """Recibo generado por cada pago (seña o adicional). Siempre se guarda para historial."""
     id = PrimaryKey(int, auto=True)
     orden_trabajo = Required(OrdenTrabajo, reverse="recibos")
-    fecha_hora = Required(datetime, default=lambda: datetime.now())
+    fecha_hora = Required(datetime, default=ahora_ar)
     monto = Required(float)
     motivo = Required(str, default="Pago")  # Seña, Alquilado, Cancelación, etc.
     cliente_nombre = Required(str)
@@ -353,7 +354,7 @@ class EstadoMovimientoCajaChica(str, Enum):
 class Venta(db.Entity):
     id = PrimaryKey(int, auto=True)
     fecha = Required(date, default=lambda: date.today())  # Columna que existe en la BD
-    fecha_hora = Required(datetime, default=lambda: datetime.now())
+    fecha_hora = Required(datetime, default=ahora_ar)
     cliente = Required(Cliente, column="cliente")  # Columna que existe en la BD
     tipo_precio = Required(str)  # <- Usa str y validalo como Enum desde FastAPI
     payment_method = Required(str)  # Cambiado a str para coincidir con la BD (compatibilidad hacia atrás)
@@ -384,7 +385,7 @@ class DetalleVenta(db.Entity):
 
 class CajaMovimiento(db.Entity):
     id = PrimaryKey(int, auto=True)
-    fecha_hora = Required(datetime, default=lambda: datetime.now())
+    fecha_hora = Required(datetime, default=ahora_ar)
     tipo = Required(TipoMovimiento)
     monto = Required(float)
     payment_method = Optional(MetodoPago)  # Compatibilidad hacia atrás (opcional)
@@ -464,7 +465,7 @@ class CierreCaja(db.Entity):
     fecha = Required(date)  # Día que se cierra
     sucursal = Required(Sucursal)
     usuario = Required(Usuario, column="usuario_id")  # Quién cerró
-    fecha_hora = Required(datetime, default=lambda: datetime.now())  # Momento del cierre
+    fecha_hora = Required(datetime, default=ahora_ar)  # Momento del cierre
     _table_ = "CierresCaja"
 
 
