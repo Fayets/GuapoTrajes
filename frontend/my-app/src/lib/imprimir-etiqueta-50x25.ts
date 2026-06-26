@@ -15,7 +15,7 @@ export const JSBARCODE_OPTS_50X25 = {
   lineColor: "#000",
   background: "#ffffff",
   width: 1.15,
-  height: 18,
+  height: 20,
   margin: 0,
   displayValue: true,
   fontSize: 7,
@@ -60,16 +60,16 @@ const ETIQUETA_50X25_CONTENT_CSS = `
     align-items: center;
     width: 100%;
     margin-top: 0.2mm;
-    height: 7mm;
-    min-height: 7mm;
-    max-height: 7mm;
+    height: 10mm;
+    min-height: 10mm;
+    max-height: 10mm;
     overflow: hidden;
   }
   .barcode-slot svg {
     display: block;
     margin: 0 auto;
     max-width: 46mm;
-    max-height: 5mm;
+    max-height: 8mm;
     width: auto;
     height: auto;
   }
@@ -128,13 +128,13 @@ export const ETIQUETA_50X25_PREVIEW_CSS = `
   }
   .etiqueta-50x25-preview .barcode-slot {
     margin-top: 1px;
-    height: 39px;
-    min-height: 39px;
-    max-height: 39px;
+    height: 56px;
+    min-height: 56px;
+    max-height: 56px;
   }
   .etiqueta-50x25-preview .barcode-slot svg {
     max-width: 100%;
-    max-height: 28px;
+    max-height: 45px;
   }
   ${ETIQUETA_50X25_CONTENT_CSS}
 `
