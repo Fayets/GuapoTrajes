@@ -46,12 +46,12 @@ const ETIQUETA_50X25_CONTENT_CSS = `
     align-self: start;
     width: 100%;
     text-align: center;
-    font: 700 7pt/1.08 system-ui, sans-serif;
+    font: 600 8.5pt/1.12 system-ui, sans-serif;
     color: #000;
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     word-break: break-word;
   }
   .barcode-slot {
@@ -59,16 +59,17 @@ const ETIQUETA_50X25_CONTENT_CSS = `
     justify-content: center;
     align-items: center;
     width: 100%;
-    height: 11mm;
-    min-height: 11mm;
-    max-height: 11mm;
+    margin-top: 0.2mm;
+    height: 7mm;
+    min-height: 7mm;
+    max-height: 7mm;
     overflow: hidden;
   }
   .barcode-slot svg {
     display: block;
     margin: 0 auto;
     max-width: 46mm;
-    max-height: 10mm;
+    max-height: 5mm;
     width: auto;
     height: auto;
   }
@@ -121,27 +122,28 @@ export const ETIQUETA_50X25_PREVIEW_CSS = `
     padding: 3px 5px 2px;
   }
   .etiqueta-50x25-preview .product-name {
-    font-size: 10px;
-    line-height: 1.08;
-    -webkit-line-clamp: 2;
+    font-size: 8.5pt;
+    line-height: 1.12;
+    -webkit-line-clamp: 3;
   }
   .etiqueta-50x25-preview .barcode-slot {
-    height: 58px;
-    min-height: 58px;
-    max-height: 58px;
+    margin-top: 1px;
+    height: 39px;
+    min-height: 39px;
+    max-height: 39px;
   }
   .etiqueta-50x25-preview .barcode-slot svg {
     max-width: 100%;
-    max-height: 52px;
+    max-height: 28px;
   }
   ${ETIQUETA_50X25_CONTENT_CSS}
 `
 
-/** Normaliza texto para la etiqueta: máx. ~2 líneas legibles. */
+/** Normaliza texto para la etiqueta: máx. ~3 líneas legibles. */
 export function descripcionParaEtiqueta50x25(descripcion: string): string {
   const texto = (descripcion || "").replace(/\s+/g, " ").trim()
   if (!texto) return "\u00A0"
-  const max = 72
+  const max = 108
   if (texto.length <= max) return texto
   const corte = texto.lastIndexOf(" ", max - 1)
   const idx = corte > 24 ? corte : max
