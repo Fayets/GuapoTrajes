@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import JsBarcode from "jsbarcode";
-import { imprimirEtiqueta50x25DesdeSvg } from "@/lib/imprimir-etiqueta-50x25";
+import { imprimirEtiqueta50x25DesdeSvg, JSBARCODE_OPTS_50X25 } from "@/lib/imprimir-etiqueta-50x25";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/RoleGate";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -487,17 +487,7 @@ export default function ProductosPage() {
           JsBarcode(
             barcodeRef.current,
             productoEtiqueta.codigo_barra || "000000000000",
-            {
-              format: "CODE128",
-              lineColor: "#000",
-              background: "#ffffff",
-              width: 1.15,
-              height: 30,
-              margin: 0,
-              displayValue: true,
-              fontSize: 7,
-              textMargin: 1,
-            }
+            JSBARCODE_OPTS_50X25
           );
         }
       }, 200);
@@ -1266,7 +1256,7 @@ export default function ProductosPage() {
           {productoEtiqueta && (
             <div className="space-y-4">
               <div className="overflow-hidden rounded border bg-white p-2 text-center">
-                <p className="mb-1.5 px-0.5 text-xs font-semibold leading-tight">
+                <p className="mb-1.5 px-0.5 text-[8.5pt] font-semibold leading-tight line-clamp-3">
                   {formatDescripcionProducto(
                     productoEtiqueta.descripcion,
                     productoEtiqueta.descripcion_extra
@@ -1276,7 +1266,7 @@ export default function ProductosPage() {
                   <svg
                     ref={barcodeRef}
                     id="etiqueta-impresion"
-                    className="max-h-[100px] w-full max-w-[280px]"
+                    className="mt-0.5 max-h-[19px] w-full max-w-[280px]"
                   />
                 </div>
               </div>

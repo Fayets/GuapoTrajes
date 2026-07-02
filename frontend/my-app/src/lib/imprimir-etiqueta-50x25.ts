@@ -4,6 +4,71 @@
  */
 import JsBarcode from "jsbarcode"
 
+/** Opciones JsBarcode compartidas (impresión y preview del modal de productos). */
+export const JSBARCODE_OPTS_50X25 = {
+  format: "CODE128" as const,
+  lineColor: "#000",
+  background: "#ffffff",
+  width: 1.15,
+  height: 18,
+  margin: 0,
+  displayValue: true,
+  fontSize: 7,
+  textMargin: 1,
+  textAlign: "center" as const,
+}
+
+const ETIQUETA_50X25_CONTENT_CSS = `
+    .wrap {
+      width: 50mm;
+      height: 25mm;
+      margin: 0;
+      padding: 0.4mm 1mm 0.3mm;
+      text-align: center;
+      overflow: hidden;
+    }
+    .inner {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      vertical-align: top;
+      max-width: 48mm;
+      gap: 0.35mm;
+      text-align: center;
+    }
+    .product-name {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      max-width: 48mm;
+      text-align: center;
+      font: 600 8.5pt/1.15 system-ui, sans-serif;
+      color: #000;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
+      word-break: break-word;
+      hyphens: auto;
+    }
+    .barcode-slot {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      width: 100%;
+      margin-top: 0.2mm;
+    }
+    .barcode-slot svg {
+      display: block;
+      margin-inline: auto;
+      max-width: 47mm;
+      max-height: 5mm;
+      width: auto;
+      height: auto;
+    }
+`
+
 const ETIQUETA_HTML_SHELL = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -31,53 +96,7 @@ const ETIQUETA_HTML_SHELL = `<!DOCTYPE html>
     body {
       display: block;
     }
-    .wrap {
-      width: 50mm;
-      height: 25mm;
-      margin: 0;
-      padding: 0.4mm 1mm 0.3mm;
-      text-align: center;
-      overflow: hidden;
-    }
-    .inner {
-      display: inline-flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      vertical-align: top;
-      max-width: 48mm;
-      gap: 0.35mm;
-      text-align: center;
-    }
-    .product-name {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      max-width: 48mm;
-      text-align: center;
-      font: 600 5.5pt/1.15 system-ui, sans-serif;
-      color: #000;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      overflow: hidden;
-      word-break: break-word;
-      hyphens: auto;
-    }
-    .barcode-slot {
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      width: 100%;
-    }
-    .barcode-slot svg {
-      display: block;
-      margin-inline: auto;
-      max-width: 47mm;
-      max-height: 17mm;
-      width: auto;
-      height: auto;
-    }
+    ${ETIQUETA_50X25_CONTENT_CSS}
   </style>
 </head>
 <body>
@@ -85,18 +104,7 @@ const ETIQUETA_HTML_SHELL = `<!DOCTYPE html>
 </body>
 </html>`
 
-const JSBARCODE_OPTS = {
-  format: "CODE128" as const,
-  lineColor: "#000",
-  background: "#ffffff",
-  width: 1.15,
-  height: 30,
-  margin: 0,
-  displayValue: true,
-  fontSize: 7,
-  textMargin: 1,
-  textAlign: "center" as const,
-}
+const JSBARCODE_OPTS = JSBARCODE_OPTS_50X25
 
 function crearIframeImpresion(): {
   iframe: HTMLIFrameElement
@@ -254,53 +262,7 @@ const ETIQUETA_LOTE_STYLES = `<style>
     page-break-after: auto;
     break-after: auto;
   }
-  .wrap {
-    width: 50mm;
-    height: 25mm;
-    margin: 0;
-    padding: 0.4mm 1mm 0.3mm;
-    text-align: center;
-    overflow: hidden;
-  }
-  .inner {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    vertical-align: top;
-    max-width: 48mm;
-    gap: 0.35mm;
-    text-align: center;
-  }
-  .product-name {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    max-width: 48mm;
-    text-align: center;
-    font: 600 5.5pt/1.15 system-ui, sans-serif;
-    color: #000;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-    word-break: break-word;
-    hyphens: auto;
-  }
-  .barcode-slot {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    width: 100%;
-  }
-  .barcode-slot svg {
-    display: block;
-    margin-inline: auto;
-    max-width: 47mm;
-    max-height: 17mm;
-    width: auto;
-    height: auto;
-  }
+  ${ETIQUETA_50X25_CONTENT_CSS}
 </style>`
 
 /**
