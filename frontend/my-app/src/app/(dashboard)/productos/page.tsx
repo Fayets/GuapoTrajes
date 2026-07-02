@@ -10,12 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import JsBarcode from "jsbarcode";
-import {
-  ETIQUETA_50X25_PREVIEW_CSS,
-  imprimirEtiqueta50x25DesdeSvg,
-  descripcionParaEtiqueta50x25,
-  JSBARCODE_OPTS_50X25,
-} from "@/lib/imprimir-etiqueta-50x25";
+import { imprimirEtiqueta50x25DesdeSvg } from "@/lib/imprimir-etiqueta-50x25";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/RoleGate";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -492,7 +487,17 @@ export default function ProductosPage() {
           JsBarcode(
             barcodeRef.current,
             productoEtiqueta.codigo_barra || "000000000000",
-            JSBARCODE_OPTS_50X25
+            {
+              format: "CODE128",
+              lineColor: "#000",
+              background: "#ffffff",
+              width: 1.15,
+              height: 30,
+              margin: 0,
+              displayValue: true,
+              fontSize: 7,
+              textMargin: 1,
+            }
           );
         }
       }, 200);
@@ -1261,21 +1266,18 @@ export default function ProductosPage() {
           {productoEtiqueta && (
             <div className="space-y-4">
               <div className="overflow-hidden rounded border bg-white p-2 text-center">
-                <style>{ETIQUETA_50X25_PREVIEW_CSS}</style>
-                <div className="etiqueta-50x25-preview">
-                  <div className="label">
-                    <p className="product-name">
-                      {descripcionParaEtiqueta50x25(
-                        formatDescripcionProducto(
-                          productoEtiqueta.descripcion,
-                          productoEtiqueta.descripcion_extra
-                        )
-                      )}
-                    </p>
-                    <div className="barcode-slot">
-                      <svg ref={barcodeRef} id="etiqueta-impresion" />
-                    </div>
-                  </div>
+                <p className="mb-1.5 px-0.5 text-xs font-semibold leading-tight">
+                  {formatDescripcionProducto(
+                    productoEtiqueta.descripcion,
+                    productoEtiqueta.descripcion_extra
+                  )}
+                </p>
+                <div className="flex justify-center">
+                  <svg
+                    ref={barcodeRef}
+                    id="etiqueta-impresion"
+                    className="max-h-[100px] w-full max-w-[280px]"
+                  />
                 </div>
               </div>
               <Button
