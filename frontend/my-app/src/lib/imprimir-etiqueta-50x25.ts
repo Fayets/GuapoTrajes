@@ -13,8 +13,8 @@ export const JSBARCODE_OPTS_50X25 = {
   height: 18,
   margin: 0,
   displayValue: true,
-  fontSize: 7,
-  textMargin: 1,
+  fontSize: 9,
+  textMargin: 2,
   textAlign: "center" as const,
 }
 
@@ -58,14 +58,16 @@ const ETIQUETA_50X25_CONTENT_CSS = `
       align-items: flex-start;
       width: 100%;
       margin-top: 0.2mm;
+      overflow: visible;
     }
     .barcode-slot svg {
       display: block;
       margin-inline: auto;
       max-width: 47mm;
-      max-height: 5mm;
+      max-height: 12mm;
       width: auto;
       height: auto;
+      overflow: visible;
     }
 `
 

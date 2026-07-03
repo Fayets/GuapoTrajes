@@ -1266,7 +1266,7 @@ export default function ProductosPage() {
                   <svg
                     ref={barcodeRef}
                     id="etiqueta-impresion"
-                    className="mt-0.5 max-h-[19px] w-full max-w-[280px]"
+                    className="mt-0.5 max-h-[45px] w-full max-w-[280px]"
                   />
                 </div>
               </div>
