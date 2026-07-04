@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+import ReactPaginate from "react-paginate";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
@@ -144,6 +145,13 @@ type PresupuestoResponse = {
 export default function PresupuestosPage() {
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [busqueda, setBusqueda] = useState("");
+  const [currentPage, setCurrentPage] = useState(0);
+  const presupuestosPorPagina = 20;
+  const offset = currentPage * presupuestosPorPagina;
+
+  const handlePageChange = (selectedItem: { selected: number }) => {
+    setCurrentPage(selectedItem.selected);
+  };
   const [presupuestoActual, setPresupuestoActual] =
     useState<Presupuesto | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -1210,6 +1218,10 @@ export default function PresupuestosPage() {
       .replace(/\p{Diacritic}/gu, "")
       .trim();
 
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [busqueda]);
+
   // Filtrar presupuestos por DNI, apellido solo, nombre solo o apellido + nombre
   const presupuestosFiltrados = (() => {
     const termino = normalizarParaBusqueda(busqueda);
@@ -1231,6 +1243,13 @@ export default function PresupuestosPage() {
       );
     });
   })();
+  const presupuestosPaginados = presupuestosFiltrados.slice(
+    offset,
+    offset + presupuestosPorPagina
+  );
+  const pageCount = Math.ceil(
+    presupuestosFiltrados.length / presupuestosPorPagina
+  );
 
   const getEstadoClass = (estado: string) => {
     switch (estado) {
@@ -1982,7 +2001,7 @@ export default function PresupuestosPage() {
                     </td>
                   </tr>
                 ) : (
-                  presupuestosFiltrados.map((p) => (
+                  presupuestosPaginados.map((p) => (
                     <tr key={p.id}>
                       <td>{p.numero}</td>
                       <td>{p.cliente_nombre}</td>
@@ -2095,6 +2114,33 @@ export default function PresupuestosPage() {
               </tbody>
             </table>
           </div>
+          {pageCount > 1 && (
+            <div className="d-flex justify-content-between align-items-center px-3 py-3 border-top">
+              <span className="text-muted small">
+                Mostrando {offset + 1}–
+                {Math.min(offset + presupuestosPorPagina, presupuestosFiltrados.length)} de{" "}
+                {presupuestosFiltrados.length} presupuestos
+              </span>
+              <ReactPaginate
+                previousLabel={"←"}
+                nextLabel={"→"}
+                breakLabel={"..."}
+                pageCount={pageCount}
+                onPageChange={handlePageChange}
+                containerClassName={"pagination mb-0"}
+                pageClassName={"page-item"}
+                pageLinkClassName={"page-link"}
+                previousClassName={"page-item"}
+                previousLinkClassName={"page-link"}
+                nextClassName={"page-item"}
+                nextLinkClassName={"page-link"}
+                breakClassName={"page-item"}
+                breakLinkClassName={"page-link"}
+                activeClassName={"active"}
+                forcePage={currentPage}
+              />
+            </div>
+          )}
         </div>
       )}
       <PresupuestoModal
