@@ -25,14 +25,24 @@ def _presupuesto_cliente_info(p):
             "cliente_celular": p.precliente.celular,
         }
     c = p.cliente
+    if c:
+        return {
+            "cliente_id": c.id,
+            "precliente_id": None,
+            "cliente_nombre": f"{c.apellido} {c.nombre}".strip(),
+            "es_precliente": False,
+            "cliente_dni": c.dni,
+            "cliente_direccion": c.direccion,
+            "cliente_celular": c.celular,
+        }
     return {
-        "cliente_id": c.id,
+        "cliente_id": None,
         "precliente_id": None,
-        "cliente_nombre": f"{c.apellido} {c.nombre}".strip(),
+        "cliente_nombre": "Cliente eliminado",
         "es_precliente": False,
-        "cliente_dni": c.dni,
-        "cliente_direccion": c.direccion,
-        "cliente_celular": c.celular,
+        "cliente_dni": None,
+        "cliente_direccion": None,
+        "cliente_celular": None,
     }
 
 
