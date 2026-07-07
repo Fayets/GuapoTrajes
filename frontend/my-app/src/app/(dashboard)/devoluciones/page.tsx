@@ -153,7 +153,7 @@ export default function DevolucionesPage() {
     Record<number, AsignacionDevolucionCompleta>
   >({});
 
-  const { token } = useAuth();
+  const { token, me } = useAuth();
 
   useEffect(() => {
     fetchOrdenes();
@@ -305,13 +305,18 @@ export default function DevolucionesPage() {
   }, [ordenesAbiertas, filtroBusqueda]);
 
   const generarContrato = async (orden: OrdenTrabajo) => {
-    if (!orden || orden.saldo_pendiente !== 0) {
+    const esAdmin = me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
+    if (!orden || (orden.saldo_pendiente !== 0 && !esAdmin)) {
       toast.error("Solo se pueden generar contratos de órdenes con saldo pendiente cero");
       return;
     }
+    const avisoAdmin =
+      orden.saldo_pendiente > 0 && esAdmin
+        ? `\n\nATENCIÓN: esta orden tiene saldo pendiente de $${orden.saldo_pendiente.toLocaleString("es-AR")}. Solo podés generar el contrato porque sos administrador.`
+        : "";
     if (
       !window.confirm(
-        `¿Abrir el contrato de la orden #${orden.id} (${orden.cliente_nombre}) para imprimir?`
+        `¿Abrir el contrato de la orden #${orden.id} (${orden.cliente_nombre}) para imprimir?${avisoAdmin}`
       )
     ) {
       return;

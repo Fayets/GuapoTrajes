@@ -310,7 +310,7 @@ export default function ReportesPage() {
       {
         key: "saldos_clientes",
         title: "Saldos a cobrar",
-        desc: "Saldos de clientes por fecha",
+        desc: "Saldos pendientes por fecha del evento",
         icon: Users,
       },
       {
@@ -943,10 +943,11 @@ export default function ReportesPage() {
   };
 
   const generarPDFContrato = async (contrato: Contrato) => {
-    // Solo se puede generar contrato si es una orden de trabajo con saldo pendiente cero
+    const esAdmin = me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
+    const saldoPendiente = contrato.saldo_pendiente ?? 0;
     if (
       contrato.tipo !== "orden_trabajo" ||
-      (contrato.saldo_pendiente !== null && contrato.saldo_pendiente !== 0)
+      (saldoPendiente !== 0 && !esAdmin)
     ) {
       toast.error(
         "Solo se pueden generar contratos de órdenes con saldo pendiente cero"
@@ -954,9 +955,13 @@ export default function ReportesPage() {
       return;
     }
     const ordenId = contrato.orden_trabajo_id || contrato.id;
+    const avisoAdmin =
+      saldoPendiente > 0 && esAdmin
+        ? `\n\nATENCIÓN: esta orden tiene saldo pendiente de $${saldoPendiente.toLocaleString("es-AR")}. Solo podés generar el contrato porque sos administrador.`
+        : "";
     if (
       !window.confirm(
-        `¿Abrir el contrato #${ordenId} (${contrato.cliente_nombre || "cliente"}) para imprimir?`
+        `¿Abrir el contrato #${ordenId} (${contrato.cliente_nombre || "cliente"}) para imprimir?${avisoAdmin}`
       )
     ) {
       return;
@@ -4738,7 +4743,7 @@ export default function ReportesPage() {
               Saldos a Cobrar
             </h5>
             <p className="text-muted small mb-0">
-              Clientes con saldos pendientes a cobrar en un rango de fechas
+              Clientes con saldos pendientes cuyo evento cae en el rango de fechas
             </p>
           </div>
           <div className="card-body">
@@ -4854,7 +4859,12 @@ export default function ReportesPage() {
                     </thead>
                     <tbody>
                       {saldosACobrar.map((item: any) => (
-                        <tr key={item.cliente_id}>
+                        <tr
+                          key={
+                            item.cliente_id ??
+                            `precliente-${item.precliente_id}`
+                          }
+                        >
                           <td className="fw-medium">{item.cliente_nombre}</td>
                           <td className="small text-muted">
                             {item.cliente_dni}

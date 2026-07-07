@@ -256,7 +256,7 @@ def actualizar_modista_producto_reservado(
 def registrar_contrato_generado(orden_id: int, current_user=Depends(get_current_user)):
     """Registrar que se generó el contrato para esta orden (cliente, saldo 0, DNI y dirección)."""
     try:
-        return servicio.registrar_contrato_generado(orden_id)
+        return servicio.registrar_contrato_generado(orden_id, current_user)
     except HTTPException as e:
         raise e
     except Exception as e:

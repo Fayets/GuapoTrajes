@@ -149,7 +149,8 @@ function OrdenesTrabajoContent() {
 
   const { me } = useAuth();
   const searchParams = useSearchParams();
-  const esAdmin = me?.role === "ADMIN";
+  const esAdmin =
+    me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
 
   // Métodos de pago (etiquetas en historial de señas)
   const metodosPago = [
@@ -1149,7 +1150,7 @@ function OrdenesTrabajoContent() {
   };
 
   const generarContratoDesdeFila = (orden: OrdenTrabajo) => {
-    if (orden.saldo_pendiente !== 0) {
+    if (orden.saldo_pendiente !== 0 && !esAdmin) {
       toast.error("El saldo pendiente debe ser cero para generar el contrato.");
       return;
     }
@@ -1165,7 +1166,13 @@ function OrdenesTrabajoContent() {
 
   const generarContrato = () => {
     if (!ordenSeleccionada) return;
-    if (ordenSeleccionada.saldo_pendiente !== 0 || ordenSeleccionada.es_precliente || !ordenSeleccionada.cliente_dni || !ordenSeleccionada.cliente_direccion) return;
+    if (
+      (ordenSeleccionada.saldo_pendiente !== 0 && !esAdmin) ||
+      ordenSeleccionada.es_precliente ||
+      !ordenSeleccionada.cliente_dni ||
+      !ordenSeleccionada.cliente_direccion
+    )
+      return;
     abrirVentanaContrato(ordenSeleccionada);
   };
 
@@ -1669,7 +1676,13 @@ function OrdenesTrabajoContent() {
                           <button
                             className={`btn btn-sm ${orden.contrato_generado_at ? "btn-success" : "btn-outline-secondary"}`}
                             onClick={() => generarContratoDesdeFila(orden)}
-                            title={orden.contrato_generado_at ? "Contrato generado - Ver en Contratos" : "Generar contrato (solo cliente con saldo cero)"}
+                            title={
+                              orden.contrato_generado_at
+                                ? "Contrato generado - Ver en Contratos"
+                                : orden.saldo_pendiente !== 0 && esAdmin
+                                  ? "Generar contrato (saldo pendiente — solo administrador)"
+                                  : "Generar contrato (solo cliente con saldo cero)"
+                            }
                           >
                             <i className="bi bi-file-earmark-text"></i>
                           </button>
@@ -2075,6 +2088,8 @@ function OrdenesTrabajoContent() {
         ordenId={ordenConfirmarContrato?.id}
         clienteNombre={ordenConfirmarContrato?.cliente_nombre}
         esReimpresion={reimpresionContrato}
+        saldoPendiente={ordenConfirmarContrato?.saldo_pendiente ?? 0}
+        esAdmin={esAdmin}
         onConfirm={ejecutarGeneracionContrato}
         loading={generandoContrato}
       />

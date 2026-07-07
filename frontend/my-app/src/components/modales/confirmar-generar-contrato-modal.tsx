@@ -15,6 +15,8 @@ type ConfirmarGenerarContratoModalProps = {
   ordenId?: number | null;
   clienteNombre?: string | null;
   esReimpresion?: boolean;
+  saldoPendiente?: number;
+  esAdmin?: boolean;
   onConfirm: () => void | Promise<void>;
   loading?: boolean;
 };
@@ -25,6 +27,8 @@ export function ConfirmarGenerarContratoModal({
   ordenId,
   clienteNombre,
   esReimpresion = false,
+  saldoPendiente = 0,
+  esAdmin = false,
   onConfirm,
   loading = false,
 }: ConfirmarGenerarContratoModalProps) {
@@ -50,6 +54,25 @@ export function ConfirmarGenerarContratoModal({
               ? "Este contrato ya fue generado. Al confirmar solo se abrirá nuevamente para imprimir."
               : "Al confirmar dejará de aparecer en Prendas a armar y quedará registrado en Contratos."}
           </DialogDescription>
+          {saldoPendiente > 0 && esAdmin && (
+            <div
+              className="alert alert-warning border-warning py-2 px-3 mx-4 mb-0 mt-2 small d-flex align-items-start gap-2"
+              role="alert"
+              style={{ backgroundColor: "#fff8e1", color: "#7a5c00" }}
+            >
+              <i
+                className="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"
+                aria-hidden
+              />
+              <span>
+                Esta orden tiene un saldo pendiente de{" "}
+                <strong>
+                  ${saldoPendiente.toLocaleString("es-AR")}
+                </strong>
+                . Solo podés generar el contrato porque sos administrador.
+              </span>
+            </div>
+          )}
         </DialogHeader>
         <DialogFooter className="px-4 py-4 border-top bg-light gap-3 d-flex justify-content-end">
           <button

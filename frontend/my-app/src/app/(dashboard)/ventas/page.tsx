@@ -93,6 +93,8 @@ const metodosPago = [
 
 export default function VentasPage() {
   const { me, isAdmin } = useAuth();
+  const esAdminPrivilegiado =
+    isAdmin || me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [ventaActual, setVentaActual] = useState<Partial<
     Venta & {
@@ -476,7 +478,7 @@ export default function VentasPage() {
     const totalOriginal = calcularTotal();
     const tieneDescuento =
       totalConDescuento !== null && porcentajeDescuento !== null;
-    const descuentoMaximoEstandar = isAdmin ? 50 : 15;
+    const descuentoMaximoEstandar = esAdminPrivilegiado ? 50 : 15;
     const tieneDescuentoExtra =
       tieneDescuento && (porcentajeDescuento as number) > descuentoMaximoEstandar;
 
@@ -694,11 +696,15 @@ export default function VentasPage() {
   };
 
   const aplicarDescuento = () => {
-    const porcentaje = Number(nuevoItem.porcentaje);
     const total = calcularTotal();
+    if (total <= 0) {
+      toast.error("Agregá productos antes de aplicar un descuento.");
+      return;
+    }
 
+    const porcentaje = Number(nuevoItem.porcentaje);
     if (!porcentaje || Number.isNaN(porcentaje) || porcentaje <= 0) {
-      toast.error("Seleccioná un porcentaje de descuento válido.");
+      toast.error("Ingresá un porcentaje de descuento válido.");
       return;
     }
     if (porcentaje > 100) {
@@ -706,7 +712,7 @@ export default function VentasPage() {
       return;
     }
 
-    const descuentoMaximoEstandar = isAdmin ? 50 : 15;
+    const descuentoMaximoEstandar = esAdminPrivilegiado ? 50 : 15;
 
     if (porcentaje > descuentoMaximoEstandar) {
       setDescuentoPendiente({ porcentaje, total });
@@ -753,6 +759,10 @@ export default function VentasPage() {
     typeof totalConDescuento === "number" ? totalConDescuento : calcularTotal();
   const hayDescuentoVenta = typeof totalConDescuento === "number";
   const totalOriginalVenta = calcularTotal();
+  const etiquetaDescuentoVenta =
+    hayDescuentoVenta && porcentajeDescuento != null
+      ? `(-${porcentajeDescuento}%)`
+      : null;
 
   // Normaliza fechas tipo 'YYYY-MM-DD' para evitar 'Invalid Date'
   function parseFecha(fecha: string | Date | undefined): Date {
@@ -941,9 +951,9 @@ export default function VentasPage() {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
-                  {hayDescuentoVenta && porcentajeDescuento != null && (
+                  {etiquetaDescuentoVenta && (
                     <small className="text-success ms-2">
-                      (-{porcentajeDescuento}%)
+                      {etiquetaDescuentoVenta}
                     </small>
                   )}
                 </span>
@@ -1318,43 +1328,38 @@ export default function VentasPage() {
                     <h6 className="fw-semibold text-secondary mb-3 d-flex align-items-center">
                       <i className="bi bi-percent me-2 text-warning"></i>
                       Descuento sobre el total
+                      {hayDescuentoVenta && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-danger btn-sm ms-auto"
+                          onClick={resetDescuentoVenta}
+                        >
+                          <i className="bi bi-x-circle me-1"></i>
+                          Quitar descuento
+                        </button>
+                      )}
                     </h6>
                     <div className="row g-3 align-items-end mb-4">
                       <div className="col-12 col-md-5">
                         <label className="form-label fw-bold">
                           Porcentaje de descuento
                         </label>
-                        {isAdmin ? (
-                          <select
-                            className="form-select"
-                            value={nuevoItem.porcentaje}
-                            onChange={(e) =>
-                              handleItemChange("porcentaje", e.target.value)
-                            }
-                          >
-                            <option value="">Seleccionar descuento</option>
-                            {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map(
-                              (p) => (
-                                <option key={p} value={p}>
-                                  {p}%
-                                </option>
-                              )
-                            )}
-                          </select>
-                        ) : (
-                          <input
-                            type="number"
-                            className="form-control"
-                            placeholder="Ej: 5, 10, 15..."
-                            value={nuevoItem.porcentaje}
-                            min={0}
-                            max={100}
-                            step={0.1}
-                            onChange={(e) =>
-                              handleItemChange("porcentaje", e.target.value)
-                            }
-                          />
-                        )}
+                        <input
+                          type="number"
+                          className="form-control"
+                          placeholder={
+                            esAdminPrivilegiado
+                              ? "Ej: 7, 12, 23..."
+                              : "Ej: 5, 10, 15..."
+                          }
+                          value={nuevoItem.porcentaje}
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          onChange={(e) =>
+                            handleItemChange("porcentaje", e.target.value)
+                          }
+                        />
                       </div>
                       <div className="col-12 col-md-4">
                         <button
@@ -1366,14 +1371,14 @@ export default function VentasPage() {
                           Aplicar descuento
                         </button>
                       </div>
-                      {!isAdmin && (
-                        <div className="col-12">
-                          <small className="text-muted">
-                            <i className="bi bi-info-circle me-1"></i>
-                            Descuentos mayores a 15% requieren motivo obligatorio
-                          </small>
-                        </div>
-                      )}
+                      <div className="col-12">
+                        <small className="text-muted">
+                          <i className="bi bi-info-circle me-1"></i>
+                          {esAdminPrivilegiado
+                            ? "Como administrador podés ingresar cualquier porcentaje. Si supera el 50%, se pedirá motivo."
+                            : "Descuentos mayores a 15% requieren motivo obligatorio."}
+                        </small>
+                      </div>
                     </div>
 
                     <h6 className="fw-semibold text-secondary mb-3 d-flex align-items-center">
@@ -1431,9 +1436,9 @@ export default function VentasPage() {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}
-                            {hayDescuentoVenta && porcentajeDescuento != null && (
+                            {etiquetaDescuentoVenta && (
                               <span className="text-success ms-2 fs-6">
-                                (-{porcentajeDescuento}%)
+                                {etiquetaDescuentoVenta}
                               </span>
                             )}
                           </span>
@@ -1470,31 +1475,59 @@ export default function VentasPage() {
       {/* Modal motivo descuento extra */}
       <Dialog
         open={mostrarModalMotivoDescuento}
-        onOpenChange={setMostrarModalMotivoDescuento}
+        onOpenChange={(open) => {
+          setMostrarModalMotivoDescuento(open);
+          if (!open) {
+            setDescuentoPendiente(null);
+            setMotivoDescuentoExtra("");
+          }
+        }}
       >
         <DialogContent
           className="w-full border-0"
           dialogClassName="modal-dialog-centered"
-          dialogStyle={{ maxWidth: "440px", width: "95%" }}
+          dialogStyle={{ maxWidth: "480px", width: "95%" }}
         >
-          <DialogHeader className="border-bottom pb-3">
-            <DialogTitle>Motivo del descuento extra</DialogTitle>
-            <DialogDescription className="mb-0">
-              El descuento de {descuentoPendiente?.porcentaje}% supera el máximo
-              estándar. Ingresá el motivo para continuar.
-            </DialogDescription>
+          <DialogHeader className="border-bottom pb-3 px-3 px-md-4 pt-3">
+            <DialogTitle className="fw-semibold d-flex align-items-center gap-2 mb-0">
+              <i className="bi bi-percent text-warning" aria-hidden="true"></i>
+              Motivo del descuento extra
+            </DialogTitle>
           </DialogHeader>
-          <div className="modal-body py-3">
-            <label className="form-label fw-bold">Motivo (obligatorio)</label>
-            <textarea
-              className="form-control"
-              rows={4}
-              value={motivoDescuentoExtra}
-              onChange={(e) => setMotivoDescuentoExtra(e.target.value)}
-              placeholder="Ej: Cliente habitual, promoción especial..."
-            />
+          <div className="modal-body px-3 px-md-4 py-4">
+            <div className="alert alert-warning d-flex align-items-start gap-2 py-2 small mb-3">
+              <i
+                className="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"
+                aria-hidden="true"
+              ></i>
+              <div>
+                <div className="fw-semibold">
+                  Descuento solicitado: {descuentoPendiente?.porcentaje ?? "—"}%
+                </div>
+                <div className="text-muted">
+                  Máximo sin motivo: {esAdminPrivilegiado ? 50 : 15}%
+                </div>
+              </div>
+            </div>
+            <div className="mt-3">
+              <label htmlFor="motivo-descuento-extra-venta" className="form-label fw-bold mb-2">
+                Motivo <span className="text-danger">*</span>
+              </label>
+              <textarea
+                id="motivo-descuento-extra-venta"
+                className="form-control"
+                rows={4}
+                value={motivoDescuentoExtra}
+                onChange={(e) => setMotivoDescuentoExtra(e.target.value)}
+                placeholder="Ej: Cliente habitual, promoción especial, acuerdo comercial..."
+                autoFocus
+              />
+              <div className="form-text mt-2">
+                Quedará registrado en la venta junto con el descuento aplicado.
+              </div>
+            </div>
           </div>
-          <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2">
+          <DialogFooter className="border-top pt-3 pb-3 px-3 px-md-4 d-flex justify-content-end gap-2">
             <button
               type="button"
               className="btn btn-light border"
@@ -1510,7 +1543,9 @@ export default function VentasPage() {
               type="button"
               className="btn btn-primary"
               onClick={confirmarDescuentoExtra}
+              disabled={!motivoDescuentoExtra.trim()}
             >
+              <i className="bi bi-check-circle me-1"></i>
               Aplicar descuento
             </button>
           </DialogFooter>

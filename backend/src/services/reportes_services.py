@@ -1170,51 +1170,61 @@ class ReportesServices:
         """
         Obtener reporte de saldos pendientes a cobrar de clientes en un rango de fechas.
         Muestra las órdenes de trabajo con saldo_pendiente > 0.
-        
+
         Args:
-            fecha_desde: Fecha inicial del rango (filtra por fecha_creacion de la orden)
+            fecha_desde: Fecha inicial del rango (filtra por fecha_evento de la orden)
             fecha_hasta: Fecha final del rango
             sucursal_id: ID de la sucursal (opcional, si es None busca en todas)
-        
+
         Returns:
             Lista de diccionarios con información de cada cliente y su saldo pendiente
         """
         try:
             print(f"🔍 DEBUG: Obteniendo saldos a cobrar para sucursal_id={sucursal_id}, fecha_desde={fecha_desde}, fecha_hasta={fecha_hasta}")
 
-            # Obtener todas las órdenes de trabajo y filtrar en Python
             todas_ordenes = list(OrdenTrabajo.select())
             print(f"🔍 DEBUG: Total órdenes en BD: {len(todas_ordenes)}")
 
-            # Filtrar órdenes con saldo pendiente > 0 en el rango de fechas
             ordenes_con_saldo = []
             for orden in todas_ordenes:
                 try:
-                    # Solo órdenes con saldo pendiente > 0
                     if orden.saldo_pendiente <= 0:
                         continue
 
-                    # Verificar que tenga presupuesto y cliente
-                    if not orden.presupuesto or not orden.presupuesto.cliente:
+                    presupuesto = orden.presupuesto
+                    titular = self._titular_presupuesto(presupuesto)
+                    if not presupuesto or not titular:
                         continue
 
-                    # Filtrar por fecha_creacion de la orden (comparar solo la parte de fecha)
-                    if not orden.fecha_creacion:
+                    if orden.estado and orden.estado.lower() == "cancelada":
                         continue
 
-                    fecha_creacion_orden = orden.fecha_creacion.date()
-                    
-                    if fecha_creacion_orden < fecha_desde or fecha_creacion_orden > fecha_hasta:
+                    if not orden.fecha_evento:
                         continue
 
-                    # Filtrar por sucursal (basado en productos del presupuesto)
+                    if orden.fecha_evento < fecha_desde or orden.fecha_evento > fecha_hasta:
+                        continue
+
                     if sucursal_id:
                         tiene_producto_sucursal = False
                         try:
-                            for item in orden.presupuesto.items:
-                                if item.producto and item.producto.sucursal and item.producto.sucursal.id == sucursal_id:
+                            for pr in list(orden.productos_reservados):
+                                if (
+                                    pr.producto
+                                    and pr.producto.sucursal
+                                    and pr.producto.sucursal.id == sucursal_id
+                                ):
                                     tiene_producto_sucursal = True
                                     break
+                            if not tiene_producto_sucursal:
+                                for item in presupuesto.items:
+                                    if (
+                                        item.producto
+                                        and item.producto.sucursal
+                                        and item.producto.sucursal.id == sucursal_id
+                                    ):
+                                        tiene_producto_sucursal = True
+                                        break
                         except Exception as e:
                             print(f"⚠️ Error al verificar sucursal en orden {orden.id}: {e}")
                             continue
@@ -1229,46 +1239,53 @@ class ReportesServices:
 
             print(f"🔍 DEBUG: Órdenes con saldo pendiente encontradas: {len(ordenes_con_saldo)}")
 
-            # Agrupar por cliente y sumar saldos
             saldos_por_cliente = {}
             for orden in ordenes_con_saldo:
                 try:
-                    cliente = orden.presupuesto.cliente
-                    cliente_id = cliente.id
+                    presupuesto = orden.presupuesto
+                    titular = self._titular_presupuesto(presupuesto)
+                    if not titular:
+                        continue
 
-                    if cliente_id not in saldos_por_cliente:
-                        saldos_por_cliente[cliente_id] = {
-                            "cliente_id": cliente_id,
-                            "cliente_nombre": f"{cliente.nombre} {cliente.apellido}",
-                            "cliente_dni": cliente.dni or "",
-                            "cliente_celular": cliente.celular or "",
-                            "cliente_telefono": "",  # El modelo Cliente no tiene campo telefono
+                    group_key = (
+                        f"c-{titular['cliente_id']}"
+                        if titular["cliente_id"] is not None
+                        else f"p-{titular['precliente_id']}"
+                    )
+
+                    if group_key not in saldos_por_cliente:
+                        saldos_por_cliente[group_key] = {
+                            "cliente_id": titular["cliente_id"],
+                            "precliente_id": titular["precliente_id"],
+                            "es_precliente": titular["es_precliente"],
+                            "cliente_nombre": titular["cliente_nombre"],
+                            "cliente_dni": titular["cliente_dni"],
+                            "cliente_celular": titular["cliente_celular"],
+                            "cliente_telefono": "",
                             "total_saldo_pendiente": 0.0,
                             "cantidad_ordenes": 0,
-                            "ordenes": []
+                            "ordenes": [],
                         }
 
-                    # Agregar información de la orden
                     orden_info = {
                         "orden_id": orden.id,
-                        "presupuesto_numero": orden.presupuesto.numero,
+                        "presupuesto_numero": presupuesto.numero,
                         "fecha_evento": orden.fecha_evento.isoformat() if orden.fecha_evento else "",
                         "fecha_creacion": orden.fecha_creacion.isoformat() if orden.fecha_creacion else "",
                         "saldo_pendiente": float(orden.saldo_pendiente),
                         "seña_pagada": float(orden.seña_pagada),
                         "total_orden": float(orden.seña_pagada + orden.saldo_pendiente),
                         "estado": orden.estado,
-                        "metodo_pago": orden.metodo_pago or ""
+                        "metodo_pago": orden.metodo_pago or "",
                     }
 
-                    saldos_por_cliente[cliente_id]["ordenes"].append(orden_info)
-                    saldos_por_cliente[cliente_id]["total_saldo_pendiente"] += float(orden.saldo_pendiente)
-                    saldos_por_cliente[cliente_id]["cantidad_ordenes"] += 1
+                    saldos_por_cliente[group_key]["ordenes"].append(orden_info)
+                    saldos_por_cliente[group_key]["total_saldo_pendiente"] += float(orden.saldo_pendiente)
+                    saldos_por_cliente[group_key]["cantidad_ordenes"] += 1
                 except Exception as e:
                     print(f"⚠️ Error al procesar orden {orden.id if hasattr(orden, 'id') else 'N/A'}: {e}")
                     continue
 
-            # Convertir a lista y ordenar por total_saldo_pendiente descendente
             saldos_lista = list(saldos_por_cliente.values())
             saldos_lista.sort(key=lambda x: x["total_saldo_pendiente"], reverse=True)
 

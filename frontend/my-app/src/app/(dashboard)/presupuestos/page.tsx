@@ -35,7 +35,6 @@ import {
   clearScanQueue,
   type ScanQueueRow,
 } from "@/lib/scan-queue";
-import { imprimirEtiquetas100x50Lote } from "@/lib/imprimir-etiqueta-100x50";
 import {
   construirEtiquetaResumenConjunto,
   imprimirEtiquetaResumenConjunto,
@@ -174,10 +173,14 @@ export default function PresupuestosPage() {
   );
   const [motivoDescuentoExtra, setMotivoDescuentoExtra] = useState<string>("");
   const [mostrarModalMotivoDescuento, setMostrarModalMotivoDescuento] = useState(false);
-  const [descuentoPendiente, setDescuentoPendiente] = useState<{ porcentaje: number; total: number } | null>(null);
+  const [descuentoPendiente, setDescuentoPendiente] = useState<{
+    porcentaje: number;
+    total: number;
+  } | null>(null);
 
   const { me, loading } = useAuth();
-  const esAdmin = me?.role === "ADMIN";
+  const esAdmin =
+    me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
   if (loading) return null;
 
   // Métodos de pago consistentes con ventas
@@ -226,6 +229,8 @@ export default function PresupuestosPage() {
   >(null);
 
   const [items, setItems] = useState<ItemPresupuesto[]>([]);
+  const [tipoPrecioPresupuesto, setTipoPrecioPresupuesto] =
+    useState<TipoPrecioProducto>("precio_alquiler_lista");
   const [avisoAgregarProducto, setAvisoAgregarProducto] = useState<string | null>(
     null
   );
@@ -255,19 +260,6 @@ export default function PresupuestosPage() {
   const [saldoClienteSenia, setSaldoClienteSenia] = useState(0);
   const [metodoPagoComplementoSenia, setMetodoPagoComplementoSenia] =
     useState<MetodoPagoComplemento | null>(null);
-  const [modalEtiquetasOrdenAbierto, setModalEtiquetasOrdenAbierto] =
-    useState(false);
-  const [ordenEtiquetasPendiente, setOrdenEtiquetasPendiente] = useState<{
-    ordenId: number;
-    clienteNombre: string;
-    productos: Array<{
-      producto_id: number;
-      codigo_barra?: string;
-      producto_descripcion?: string;
-    }>;
-  } | null>(null);
-  const [imprimiendoEtiquetasOrden, setImprimiendoEtiquetasOrden] =
-    useState(false);
   const [modalEtiquetaResumenOrdenAbierto, setModalEtiquetaResumenOrdenAbierto] =
     useState(false);
   const [ordenResumenPendiente, setOrdenResumenPendiente] = useState<{
@@ -707,7 +699,7 @@ export default function PresupuestosPage() {
     if (items.some((i) => i.productoId === producto.id)) {
       return;
     }
-    const tipoPrecio: TipoPrecioProducto = "precio_alquiler_lista";
+    const tipoPrecio = tipoPrecioPresupuesto;
     const precioUnitario = precioProductoPorTipo(producto, tipoPrecio);
     const newItem: ItemPresupuesto = {
       id: Date.now(),
@@ -864,7 +856,7 @@ export default function PresupuestosPage() {
           continue;
         }
 
-        const tipoPrecio: TipoPrecioProducto = "precio_alquiler_lista";
+        const tipoPrecio = tipoPrecioPresupuesto;
         const precioUnitario = precioProductoPorTipo(producto, tipoPrecio);
         itemsLocales.push({
           id: Date.now() + itemsLocales.length,
@@ -893,7 +885,7 @@ export default function PresupuestosPage() {
         );
       }
     },
-    [items, productos, validarProductoParaAgregar]
+    [items, productos, tipoPrecioPresupuesto, validarProductoParaAgregar]
   );
 
   useEffect(() => {
@@ -919,20 +911,18 @@ export default function PresupuestosPage() {
     setItems(items.filter((item) => item.id !== Number(id)));
   };
 
-  const cambiarTipoPrecioItem = (
-    itemId: number,
-    tipo: TipoPrecioProducto
-  ) => {
+  const cambiarTipoPrecioPresupuesto = (tipo: TipoPrecioProducto) => {
+    const tipoNorm = normalizarTipoPrecioProducto(tipo);
+    setTipoPrecioPresupuesto(tipoNorm);
     setItems((prev) =>
       prev.map((item) => {
-        if (item.id !== itemId) return item;
         const producto = productos.find((p) => p.id === item.productoId);
         const precioUnitario = producto
-          ? precioProductoPorTipo(producto, tipo)
+          ? precioProductoPorTipo(producto, tipoNorm)
           : item.precioUnitario;
         return {
           ...item,
-          tipoPrecio: normalizarTipoPrecioProducto(tipo),
+          tipoPrecio: tipoNorm,
           precioUnitario,
           subtotal: precioUnitario * item.cantidad,
         };
@@ -967,6 +957,7 @@ export default function PresupuestosPage() {
     setModoClientePrecliente("cliente");
     setPreclienteForm({ nombre: "", apellido: "", telefono: "" });
     setItems([]);
+    setTipoPrecioPresupuesto("precio_alquiler_lista");
     setAvisoAgregarProducto(null);
     setProductoFiltro("");
     setNuevoItem({ productoId: "", porcentaje: "" });
@@ -1354,6 +1345,11 @@ export default function PresupuestosPage() {
     });
 
     setItems(pr.items);
+    setTipoPrecioPresupuesto(
+      pr.items.length > 0
+        ? normalizarTipoPrecioProducto(pr.items[0].tipoPrecio)
+        : "precio_alquiler_lista"
+    );
     setTotalConDescuento(null);
     setPorcentajeDescuento(null);
     setVerModoLectura(verLectura);
@@ -1400,27 +1396,6 @@ export default function PresupuestosPage() {
       cancelled = true;
     };
   }, [searchParams.get("editar"), API_BASE, adaptPresupuestoDesdeApi, pathname, router]);
-  type ProductoEtiquetaOrden = {
-    producto_id: number;
-    codigo_barra?: string;
-    producto_descripcion?: string;
-  };
-
-  const productosParaEtiquetasDesdePresupuesto = (
-    items: ItemPresupuesto[]
-  ): ProductoEtiquetaOrden[] =>
-    items.map((item) => {
-      const prod = productos.find((p) => p.id === item.productoId);
-      return {
-        producto_id: item.productoId,
-        codigo_barra: prod?.codigo_barra ?? "",
-        producto_descripcion:
-          item.productoNombre ||
-          formatDescripcionProducto(prod?.descripcion, prod?.descripcion_extra) ||
-          "",
-      };
-    });
-
   const productosResumenDesdeItemsPresupuesto = (items: ItemPresupuesto[]) =>
     items.map((item) => {
       const prod = productos.find((p) => p.id === item.productoId);
@@ -1493,60 +1468,6 @@ export default function PresupuestosPage() {
     setModalEtiquetaResumenOrdenAbierto(true);
   };
 
-  const abrirModalEtiquetasTrasCrearOrden = async (
-    orderId: number,
-    snapshot: {
-      cliente_nombre: string;
-      items: ItemPresupuesto[];
-    }
-  ) => {
-    let lista: ProductoEtiquetaOrden[] = [];
-    try {
-      const resOrden = await fetch(`${API_BASE}/ordenes/${orderId}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-      if (resOrden.ok) {
-        const orden = await resOrden.json();
-        const reservados = orden.productos_reservados || [];
-        if (reservados.length > 0) {
-          lista = reservados.map(
-            (pr: {
-              producto_id: number;
-              codigo_barra?: string;
-              producto_descripcion?: string;
-            }) => ({
-              producto_id: pr.producto_id,
-              codigo_barra: pr.codigo_barra ?? "",
-              producto_descripcion: pr.producto_descripcion ?? "",
-            })
-          );
-        }
-      }
-    } catch (e) {
-      console.warn("No se pudo cargar la orden para etiquetas:", e);
-    }
-
-    if (lista.length === 0 && snapshot.items.length > 0) {
-      lista = productosParaEtiquetasDesdePresupuesto(snapshot.items);
-    }
-
-    if (lista.length === 0) {
-      toast.info(
-        "Orden creada. No hay prendas en el presupuesto para imprimir etiquetas."
-      );
-      return;
-    }
-
-    setOrdenEtiquetasPendiente({
-      ordenId: orderId,
-      clienteNombre: snapshot.cliente_nombre,
-      productos: lista,
-    });
-    setModalEtiquetasOrdenAbierto(true);
-  };
-
   const confirmarSenia = async () => {
     if (!presupuestoAConvertir) return;
 
@@ -1590,8 +1511,6 @@ export default function PresupuestosPage() {
       return;
     }
 
-    const eraConjuntoSeparado = conjuntoSeparadoSenia;
-
     try {
       const cajaMetodoId = esCC ? metodoPagoComplementoSenia?.metodoId ?? null : metodoPagoId;
       const cajaSubId = esCC
@@ -1627,10 +1546,6 @@ export default function PresupuestosPage() {
           return;
         }
 
-        const snapshotEtiquetas = {
-          cliente_nombre: presupuestoAConvertir.cliente_nombre,
-          items: [...presupuestoAConvertir.items],
-        };
         const snapshotResumen = {
           cliente_nombre: presupuestoAConvertir.cliente_nombre,
           fecha_evento: presupuestoAConvertir.fecha_evento,
@@ -1652,11 +1567,7 @@ export default function PresupuestosPage() {
         setPresupuestoAConvertir(null);
         fetchPresupuestos();
 
-        if (eraConjuntoSeparado) {
-          await abrirModalResumenTrasCrearOrden(orderId, snapshotResumen);
-        } else {
-          await abrirModalEtiquetasTrasCrearOrden(orderId, snapshotEtiquetas);
-        }
+        await abrirModalResumenTrasCrearOrden(orderId, snapshotResumen);
       } else {
         const error = await res.json();
         toast.error(`Error al generar orden: ${error.detail}`);
@@ -1664,27 +1575,6 @@ export default function PresupuestosPage() {
     } catch (err) {
       console.error("Error al generar orden:", err);
       toast.error("Error inesperado.");
-    }
-  };
-
-  const registrarEtiquetasArmadoEnOrden = async (ordenId: number) => {
-    const res = await fetch(
-      `${API_BASE}/ordenes/${ordenId}/registrar-etiquetas-armado`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      }
-    );
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(
-        typeof body.detail === "string"
-          ? body.detail
-          : body.message || "No se pudo registrar la impresión"
-      );
     }
   };
 
@@ -1720,37 +1610,6 @@ export default function PresupuestosPage() {
       toast.error(msg);
     } finally {
       setImprimiendoEtiquetaResumenOrden(false);
-    }
-  };
-
-  const imprimirEtiquetasOrdenRecienCreada = async () => {
-    if (!ordenEtiquetasPendiente) return;
-    setImprimiendoEtiquetasOrden(true);
-    try {
-      const payload = ordenEtiquetasPendiente.productos.map((p) => ({
-        codigoBarra: p.codigo_barra || "0",
-        clienteNombre: ordenEtiquetasPendiente.clienteNombre || "Cliente",
-        prendaDescripcion: p.producto_descripcion || "Prenda para armar",
-      }));
-      const { porIndice } = await imprimirEtiquetas100x50Lote(payload);
-      const ok = porIndice.filter((s) => s === "ok").length;
-      if (ok === 0) {
-        toast.error(
-          "No se pudo generar ninguna etiqueta. Revisá los códigos de barras."
-        );
-        return;
-      }
-      await registrarEtiquetasArmadoEnOrden(ordenEtiquetasPendiente.ordenId);
-      toast.success(
-        `${ok} etiqueta(s) enviadas a impresión. La reimpresión desde Reportes quedó deshabilitada para esta orden.`
-      );
-      setModalEtiquetasOrdenAbierto(false);
-      setOrdenEtiquetasPendiente(null);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Error al imprimir etiquetas";
-      toast.error(msg);
-    } finally {
-      setImprimiendoEtiquetasOrden(false);
     }
   };
 
@@ -1870,13 +1729,9 @@ export default function PresupuestosPage() {
                 item.productoNombre ||
                 (item as any).producto_descripcion ||
                 "Producto";
-              const subtotal = (
-                item.subtotal ?? item.cantidad * (item.precioUnitario ?? 0)
-              ).toLocaleString("es-AR", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              });
-              return `${index + 1}) ${nombreProducto} - $${subtotal}`;
+              const cantidad =
+                item.cantidad > 1 ? ` (x${item.cantidad})` : "";
+              return `${index + 1}) ${nombreProducto}${cantidad}`;
             })
             .join("\n")
         : "Sin productos asociados.";
@@ -1898,31 +1753,44 @@ export default function PresupuestosPage() {
     window.open(url, "_blank");
   };
 
-  const aplicarDescuento = () => {
-    const porcentaje = Number(nuevoItem.porcentaje);
-    const total = calcularTotal();
+  const quitarDescuento = () => {
+    setTotalConDescuento(null);
+    setPorcentajeDescuento(null);
+    setMotivoDescuentoExtra("");
+    setDescuentoPendiente(null);
+    setMostrarModalMotivoDescuento(false);
+    setNuevoItem((prev) => ({ ...prev, porcentaje: "" }));
+  };
 
-    if (!porcentaje || isNaN(porcentaje)) {
-      alert("Seleccioná un porcentaje de descuento válido.");
+  const aplicarDescuento = () => {
+    const total = calcularTotal();
+    if (total <= 0) {
+      alert("Agregá productos antes de aplicar un descuento.");
       return;
     }
 
-    const descuentoMaximoEstandar = esAdmin ? 50 : 15; // 50% para admin, 15% para empleados
+    const porcentaje = Number(nuevoItem.porcentaje);
+    if (!porcentaje || Number.isNaN(porcentaje) || porcentaje <= 0) {
+      alert("Ingresá un porcentaje de descuento válido.");
+      return;
+    }
+    if (porcentaje > 100) {
+      alert("El descuento no puede superar el 100%.");
+      return;
+    }
 
-    // Si el descuento es mayor al estándar, pedir motivo
+    const descuentoMaximoEstandar = esAdmin ? 50 : 15;
+
     if (porcentaje > descuentoMaximoEstandar) {
       setDescuentoPendiente({ porcentaje, total });
       setMostrarModalMotivoDescuento(true);
       return;
     }
 
-    // Si es descuento estándar, aplicar directamente
     const descuento = (total * porcentaje) / 100;
-    const totalFinal = total - descuento;
-
-    setTotalConDescuento(totalFinal);
+    setTotalConDescuento(total - descuento);
     setPorcentajeDescuento(porcentaje);
-    setMotivoDescuentoExtra(""); // Limpiar motivo para descuentos estándar
+    setMotivoDescuentoExtra("");
   };
 
   const confirmarDescuentoExtra = () => {
@@ -1932,10 +1800,9 @@ export default function PresupuestosPage() {
     }
 
     if (descuentoPendiente) {
-      const descuento = (descuentoPendiente.total * descuentoPendiente.porcentaje) / 100;
-      const totalFinal = descuentoPendiente.total - descuento;
-
-      setTotalConDescuento(totalFinal);
+      const descuento =
+        (descuentoPendiente.total * descuentoPendiente.porcentaje) / 100;
+      setTotalConDescuento(descuentoPendiente.total - descuento);
       setPorcentajeDescuento(descuentoPendiente.porcentaje);
       setMostrarModalMotivoDescuento(false);
       setDescuentoPendiente(null);
@@ -2188,13 +2055,15 @@ export default function PresupuestosPage() {
         agregarPorCodigoBarra={agregarPorCodigoBarra}
         agregarProductoPorId={agregarProductoPorId}
         eliminarItem={eliminarItem}
-        cambiarTipoPrecioItem={cambiarTipoPrecioItem}
+        tipoPrecioPresupuesto={tipoPrecioPresupuesto}
+        cambiarTipoPrecioPresupuesto={cambiarTipoPrecioPresupuesto}
         items={items}
         calcularTotal={calcularTotal}
         guardarPresupuesto={guardarPresupuesto}
         totalConDescuento={totalConDescuento}
         porcentajeDescuento={porcentajeDescuento}
         aplicarDescuento={aplicarDescuento}
+        quitarDescuento={quitarDescuento}
         onClose={() => {
           setShowModal(false);
           setVerModoLectura(false);
@@ -2343,9 +2212,8 @@ export default function PresupuestosPage() {
                   </div>
                   <p className="small text-muted mb-0 mt-2 ps-4">
                     Marcá esta opción si las prendas del presupuesto ya quedaron
-                    separadas y colgadas. Al crear la orden se abrirá la
-                    impresión de la <strong>etiqueta resumen</strong> (XP-470B)
-                    en lugar de las etiquetas individuales por prenda.
+                    separadas y colgadas en el perchero. Quedará registrado en
+                    la orden y en Reportes → Prendas a armar.
                   </p>
                 </div>
               </div>
@@ -2397,7 +2265,7 @@ export default function PresupuestosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: etiqueta resumen del conjunto (conjunto ya separado) */}
+      {/* Modal: etiqueta resumen del conjunto al crear la orden */}
       <Dialog
         open={modalEtiquetaResumenOrdenAbierto}
         onOpenChange={(open) => {
@@ -2419,9 +2287,9 @@ export default function PresupuestosPage() {
               {ordenResumenPendiente?.clienteNombre}
               <br />
               <span className="small">
-                El conjunto quedó marcado como ya separado. Imprimí la etiqueta
-                resumen (XP-470B) para el perchero; no se ofrecen etiquetas
-                individuales por prenda en este caso.
+                Imprimí la etiqueta resumen (XP-470B) para el perchero con
+                cliente, fechas, evento y listado de prendas. Podés omitir y
+                reimprimir después desde Reportes → Prendas a armar.
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -2465,13 +2333,14 @@ export default function PresupuestosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: etiquetas de armado al crear la orden */}
+      {/* Modal de motivo para descuento extra */}
       <Dialog
-        open={modalEtiquetasOrdenAbierto}
+        open={mostrarModalMotivoDescuento}
         onOpenChange={(open) => {
-          if (!open && !imprimiendoEtiquetasOrden) {
-            setModalEtiquetasOrdenAbierto(false);
-            setOrdenEtiquetasPendiente(null);
+          setMostrarModalMotivoDescuento(open);
+          if (!open) {
+            setDescuentoPendiente(null);
+            setMotivoDescuentoExtra("");
           }
         }}
       >
@@ -2480,80 +2349,48 @@ export default function PresupuestosPage() {
           dialogClassName="modal-dialog-centered"
           dialogStyle={{ maxWidth: "480px", width: "95%" }}
         >
-          <DialogHeader className="border-bottom pb-3">
-            <DialogTitle>Etiquetas para armar (100×50)</DialogTitle>
-            <DialogDescription className="mb-0">
-              Orden #{ordenEtiquetasPendiente?.ordenId} ·{" "}
-              {ordenEtiquetasPendiente?.clienteNombre}
-              <br />
-              <span className="small">
-                Si imprimís ahora desde la orden, no podrás volver a imprimir
-                estas etiquetas desde Reportes → Prendas a armar.
-              </span>
-            </DialogDescription>
+          <DialogHeader className="border-bottom pb-3 px-3 px-md-4 pt-3">
+            <DialogTitle className="fw-semibold d-flex align-items-center gap-2 mb-0">
+              <i className="bi bi-percent text-warning" aria-hidden="true"></i>
+              Motivo del descuento extra
+            </DialogTitle>
           </DialogHeader>
-          <div className="modal-body py-3">
-            <p className="mb-0 small text-muted">
-              {ordenEtiquetasPendiente?.productos.length ?? 0} prenda(s) en la
-              orden.
-            </p>
+          <div className="modal-body px-3 px-md-4 py-4">
+            <div className="alert alert-warning d-flex align-items-start gap-2 py-2 small mb-3">
+              <i
+                className="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"
+                aria-hidden="true"
+              ></i>
+              <div>
+                <div className="fw-semibold">
+                  Descuento solicitado: {descuentoPendiente?.porcentaje ?? "—"}%
+                </div>
+                <div className="text-muted">
+                  Máximo sin motivo: {esAdmin ? 50 : 15}%
+                </div>
+              </div>
+            </div>
+            <div className="mt-3">
+              <label htmlFor="motivo-descuento-extra-presupuesto" className="form-label fw-bold mb-2">
+                Motivo <span className="text-danger">*</span>
+              </label>
+              <textarea
+                id="motivo-descuento-extra-presupuesto"
+                className="form-control"
+                rows={4}
+                value={motivoDescuentoExtra}
+                onChange={(e) => setMotivoDescuentoExtra(e.target.value)}
+                placeholder="Ej: Cliente habitual, promoción especial, acuerdo comercial..."
+                autoFocus
+              />
+              <div className="form-text mt-2">
+                Quedará registrado en el presupuesto junto con el descuento aplicado.
+              </div>
+            </div>
           </div>
-          <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2">
+          <DialogFooter className="border-top pt-3 pb-3 px-3 px-md-4 d-flex justify-content-end gap-2">
             <button
               type="button"
-              className="btn btn-light border"
-              onClick={() => {
-                setModalEtiquetasOrdenAbierto(false);
-                setOrdenEtiquetasPendiente(null);
-              }}
-              disabled={imprimiendoEtiquetasOrden}
-            >
-              Omitir
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void imprimirEtiquetasOrdenRecienCreada()}
-              disabled={imprimiendoEtiquetasOrden}
-            >
-              {imprimiendoEtiquetasOrden ? (
-                <>
-                  <i className="bi bi-arrow-clockwise spin me-2"></i>
-                  Imprimiendo...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-printer me-2"></i>
-                  Imprimir etiquetas
-                </>
-              )}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal de motivo para descuento extra */}
-      <Dialog open={mostrarModalMotivoDescuento} onOpenChange={setMostrarModalMotivoDescuento}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Motivo del Descuento Extra</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted mb-3">
-              El descuento de {descuentoPendiente?.porcentaje}% supera el máximo estándar. 
-              Por favor, ingresá el motivo de este descuento extra.
-            </p>
-            <label className="form-label fw-bold">Motivo (obligatorio)</label>
-            <textarea
-              className="form-control"
-              rows={4}
-              value={motivoDescuentoExtra}
-              onChange={(e) => setMotivoDescuentoExtra(e.target.value)}
-              placeholder="Ej: Cliente habitual con compra grande, promoción especial, etc."
-            />
-          </div>
-          <DialogFooter>
-            <button
               className="btn btn-light border"
               onClick={() => {
                 setMostrarModalMotivoDescuento(false);
@@ -2564,10 +2401,13 @@ export default function PresupuestosPage() {
               Cancelar
             </button>
             <button
+              type="button"
               className="btn btn-primary"
               onClick={confirmarDescuentoExtra}
+              disabled={!motivoDescuentoExtra.trim()}
             >
-              Aplicar Descuento
+              <i className="bi bi-check-circle me-1"></i>
+              Aplicar descuento
             </button>
           </DialogFooter>
         </DialogContent>

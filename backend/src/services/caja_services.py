@@ -663,8 +663,11 @@ class CajaServices:
             nombre = (cm.metodo_pago_configurable.nombre or "").lower()
             if cm.submetodo_pago and cm.submetodo_pago.nombre:
                 nombre = f"{nombre} - {(cm.submetodo_pago.nombre or '').lower()}"
-        elif cm.payment_method and hasattr(cm.payment_method, "value"):
-            nombre = (cm.payment_method.value or "").lower()
+        elif cm.payment_method:
+            if hasattr(cm.payment_method, "value"):
+                nombre = (cm.payment_method.value or "").lower()
+            else:
+                nombre = (str(cm.payment_method) or "").lower()
         else:
             nombre = ""
         return "efectivo" in nombre

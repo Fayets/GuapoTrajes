@@ -74,7 +74,7 @@ type Item = {
 
 const ITEMS_PRECIO_GRID_STYLE: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 11.5rem 6.25rem 2.25rem",
+  gridTemplateColumns: "minmax(0, 1fr) 6.25rem 2.25rem",
   columnGap: "0.75rem",
   rowGap: "0.35rem",
   alignItems: "center",
@@ -113,16 +113,15 @@ type Props = {
   agregarPorCodigoBarra?: (codigo: string) => Promise<void>;
   agregarProductoPorId?: (productoId: string) => Promise<void>;
   eliminarItem: (id: number) => void;
-  cambiarTipoPrecioItem?: (
-    itemId: number,
-    tipo: TipoPrecioProducto
-  ) => void;
+  tipoPrecioPresupuesto: TipoPrecioProducto;
+  cambiarTipoPrecioPresupuesto: (tipo: TipoPrecioProducto) => void;
   items: Item[];
   calcularTotal: () => number;
   guardarPresupuesto: () => void;
   totalConDescuento?: number | null;
   porcentajeDescuento?: number | null;
   aplicarDescuento: () => void;
+  quitarDescuento?: () => void;
   solicitarDescuento?: () => void;
   onClose: () => void;
 };
@@ -160,13 +159,15 @@ export default function PresupuestoModal({
   agregarPorCodigoBarra,
   agregarProductoPorId,
   eliminarItem,
-  cambiarTipoPrecioItem,
+  tipoPrecioPresupuesto,
+  cambiarTipoPrecioPresupuesto,
   items,
   calcularTotal,
   guardarPresupuesto,
   totalConDescuento,
   porcentajeDescuento,
   aplicarDescuento,
+  quitarDescuento,
   onClose,
 }: Props) {
   const buscarProductoRef = useRef<HTMLInputElement>(null);
@@ -396,6 +397,10 @@ export default function PresupuestoModal({
 
   const totalOriginal = calcularTotal();
   const hayDescuento = typeof totalConDescuento === "number";
+  const etiquetaDescuento =
+    hayDescuento && porcentajeDescuento
+      ? `(-${porcentajeDescuento}%)`
+      : null;
   const totalMostrar = hayDescuento
     ? (totalConDescuento as number)
     : totalOriginal;
@@ -854,13 +859,17 @@ export default function PresupuestoModal({
             <div className="card-body p-4">
               {verModoLectura ? (
                 <div className="border rounded p-3 bg-light">
-                  <h6 className="mb-3">Productos seleccionados:</h6>
+                  <h6 className="mb-3">
+                    Productos seleccionados
+                    <span className="badge bg-secondary bg-opacity-25 text-secondary ms-2 fw-normal">
+                      {labelTipoPrecioProducto(tipoPrecioPresupuesto)}
+                    </span>
+                  </h6>
                   <div
                     className="text-muted small fw-semibold mb-2 d-none d-md-grid"
                     style={ITEMS_PRECIO_GRID_STYLE}
                   >
                     <span>Producto</span>
-                    <span>Tipo de precio</span>
                     <span className="text-end">Precio</span>
                     <span />
                   </div>
@@ -886,9 +895,6 @@ export default function PresupuestoModal({
                               className={`fw-medium text-break ${descripcionProductoTextClass(nombreProducto)}`}
                             >
                               {nombreProducto}
-                            </span>
-                            <span className="badge bg-secondary bg-opacity-25 text-secondary text-start">
-                              {labelTipoPrecioProducto(item.tipoPrecio)}
                             </span>
                             <span className="badge bg-primary rounded-pill text-end justify-self-end">
                               ${Number(subtotal).toLocaleString("es-AR")}
@@ -927,7 +933,7 @@ export default function PresupuestoModal({
                           autoFocus
                         />
                       </div>
-                      <div className="col-12">
+                      <div className="col-12 col-md-6">
                         <label className="form-label fw-bold">Producto</label>
                         <select
                           className="form-select"
@@ -990,18 +996,48 @@ export default function PresupuestoModal({
                           </div>
                         ) : null}
                       </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label fw-bold">
+                          Tipo de precio
+                        </label>
+                        <select
+                          className="form-select"
+                          value={normalizarTipoPrecioProducto(
+                            tipoPrecioPresupuesto
+                          )}
+                          onChange={(e) =>
+                            cambiarTipoPrecioPresupuesto(
+                              e.target.value as TipoPrecioProducto
+                            )
+                          }
+                          aria-label="Tipo de precio del presupuesto"
+                        >
+                          {TIPOS_PRECIO_PRODUCTO.map((tipo) => (
+                            <option key={tipo.value} value={tipo.value}>
+                              {tipo.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="text-muted small mt-1">
+                          Aplica a todos los productos del presupuesto
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   {items.length > 0 && (
                     <div className="border rounded p-3 mb-3 bg-light">
-                      <h6 className="mb-3">Productos Seleccionados</h6>
+                      <h6 className="mb-3">
+                        Productos Seleccionados
+                        <span className="badge bg-secondary bg-opacity-25 text-secondary ms-2 fw-normal">
+                          {labelTipoPrecioProducto(tipoPrecioPresupuesto)}
+                        </span>
+                      </h6>
                       <div
                         className="text-muted small fw-semibold mb-2 d-none d-md-grid"
                         style={ITEMS_PRECIO_GRID_STYLE}
                       >
                         <span>Producto</span>
-                        <span>Tipo de precio</span>
                         <span className="text-end">Precio</span>
                         <span />
                       </div>
@@ -1017,27 +1053,6 @@ export default function PresupuestoModal({
                               >
                                 {item.productoNombre}
                               </span>
-                              <select
-                                className="form-select form-select-sm"
-                                value={normalizarTipoPrecioProducto(
-                                  item.tipoPrecio
-                                )}
-                                onChange={(e) => {
-                                  if (item.id && cambiarTipoPrecioItem) {
-                                    cambiarTipoPrecioItem(
-                                      item.id,
-                                      e.target.value as TipoPrecioProducto
-                                    );
-                                  }
-                                }}
-                                aria-label={`Tipo de precio para ${item.productoNombre}`}
-                              >
-                                {TIPOS_PRECIO_PRODUCTO.map((tipo) => (
-                                  <option key={tipo.value} value={tipo.value}>
-                                    {tipo.label}
-                                  </option>
-                                ))}
-                              </select>
                               <span className="badge bg-primary rounded-pill text-nowrap justify-self-end">
                                 ${item.subtotal.toLocaleString("es-AR")}
                               </span>
@@ -1074,9 +1089,9 @@ export default function PresupuestoModal({
                               )}
                               <span className="text-primary fw-bold d-block">
                                 ${totalMostrar.toLocaleString()}
-                                {hayDescuento && porcentajeDescuento && (
+                                {etiquetaDescuento && (
                                   <span className="text-success ms-1">
-                                    (-{porcentajeDescuento}%)
+                                    {etiquetaDescuento}
                                   </span>
                                 )}
                               </span>
@@ -1198,47 +1213,40 @@ export default function PresupuestoModal({
 
                   {/* Sección: Descuento */}
                   <div className="border rounded p-3 mb-3 bg-light">
-                    <h6 className="mb-3">Agregar Descuento</h6>
+                    <div className="d-flex justify-content-between align-items-center mb-3 gap-2">
+                      <h6 className="mb-0">Agregar Descuento</h6>
+                      {hayDescuento && quitarDescuento && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-danger btn-sm"
+                          onClick={quitarDescuento}
+                        >
+                          <i className="bi bi-x-circle me-1"></i>
+                          Quitar descuento
+                        </button>
+                      )}
+                    </div>
                     <div className="row g-3 align-items-end">
                       <div className="col-12 col-md-8">
                         <label className="form-label fw-bold">
                           Porcentaje de descuento
                         </label>
-                        {/* ADMIN — Selector 5–50 */}
-                        {esAdmin && (
-                          <select
-                            className="form-select"
-                            value={nuevoItem.porcentaje || ""}
-                            onChange={(e) =>
-                              handleItemChange("porcentaje", e.target.value)
-                            }
-                          >
-                            <option value="">Seleccionar descuento</option>
-                            {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map(
-                              (p) => (
-                                <option key={p} value={p}>
-                                  {p}%
-                                </option>
-                              )
-                            )}
-                          </select>
-                        )}
-
-                        {/* EMPLEADO — input libre para cualquier descuento */}
-                        {!esAdmin && (
-                          <input
-                            type="number"
-                            className="form-control"
-                            placeholder="Ej: 5, 10, 15, 20, 25..."
-                            value={nuevoItem.porcentaje || ""}
-                            min={0}
-                            max={100}
-                            step={0.1}
-                            onChange={(e) =>
-                              handleItemChange("porcentaje", e.target.value)
-                            }
-                          />
-                        )}
+                        <input
+                          type="number"
+                          className="form-control"
+                          placeholder={
+                            esAdmin
+                              ? "Ej: 7, 12, 23..."
+                              : "Ej: 5, 10, 15..."
+                          }
+                          value={nuevoItem.porcentaje || ""}
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          onChange={(e) =>
+                            handleItemChange("porcentaje", e.target.value)
+                          }
+                        />
                       </div>
 
                       <div className="col-12 col-md-4 d-flex align-items-end">
@@ -1254,15 +1262,14 @@ export default function PresupuestoModal({
                           Aplicar
                         </button>
                       </div>
-                      {!esAdmin && (
-                        <div className="col-12">
-                          <small className="text-muted">
-                            <i className="bi bi-info-circle me-1"></i>
-                            Descuentos mayores a 15% requieren motivo
-                            obligatorio
-                          </small>
-                        </div>
-                      )}
+                      <div className="col-12">
+                        <small className="text-muted">
+                          <i className="bi bi-info-circle me-1"></i>
+                          {esAdmin
+                            ? "Como administrador podés ingresar cualquier porcentaje. Si supera el 50%, se pedirá motivo."
+                            : "Descuentos mayores a 15% requieren motivo obligatorio."}
+                        </small>
+                      </div>
                     </div>
                   </div>
                 </>
@@ -1307,9 +1314,9 @@ export default function PresupuestoModal({
                     )}
                     <div className="fw-bold">
                       ${totalMostrar.toLocaleString()}
-                      {hayDescuento && porcentajeDescuento && (
+                      {etiquetaDescuento && (
                         <span className="text-success ms-1">
-                          (-{porcentajeDescuento}%)
+                          {etiquetaDescuento}
                         </span>
                       )}
                     </div>

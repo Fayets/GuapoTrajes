@@ -14,6 +14,7 @@ from src.models import (
     ProductoModista,
     Lavanderia,
     Modista,
+    Roles,
 )
 from datetime import datetime, timedelta, date
 from src.fechas_ar import ahora_ar
@@ -1166,8 +1167,8 @@ class OrdenTrabajoServices:
                     detail=f"Error al actualizar modista del producto: {str(e)}",
                 )
 
-    def registrar_contrato_generado(self, orden_id: int) -> dict:
-        """Registrar que se generó el contrato para esta orden (solo si es cliente y saldo 0)."""
+    def registrar_contrato_generado(self, orden_id: int, usuario=None) -> dict:
+        """Registrar que se generó el contrato para esta orden (cliente, saldo 0, DNI y dirección)."""
         with db_session:
             try:
                 orden = OrdenTrabajo.get(id=orden_id)
@@ -1176,7 +1177,10 @@ class OrdenTrabajoServices:
                 if orden.presupuesto.precliente is not None:
                     raise HTTPException(status_code=400, detail="Solo se puede generar contrato para órdenes de cliente (no precliente).")
                 if orden.saldo_pendiente != 0:
-                    raise HTTPException(status_code=400, detail="El saldo pendiente debe ser cero para generar el contrato.")
+                    rol = getattr(usuario, "rol", None) if usuario else None
+                    rol_str = rol.value if hasattr(rol, "value") else str(rol) if rol else ""
+                    if rol_str not in (Roles.ADMIN.value, Roles.SUPER_ADMIN.value):
+                        raise HTTPException(status_code=400, detail="El saldo pendiente debe ser cero para generar el contrato.")
                 if not orden.presupuesto.cliente.dni or not orden.presupuesto.cliente.direccion:
                     raise HTTPException(status_code=400, detail="El cliente debe tener DNI y Dirección para generar el contrato.")
                 orden.contrato_generado_at = datetime.now()

@@ -4,7 +4,7 @@ from typing import List, Optional
 from decouple import config
 from fastapi import HTTPException
 from src.fechas_ar import fecha_presupuesto_api_ymd, instante_a_fecha_ar
-from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, db
+from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, Roles, Usuario, db
 from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse, ConjuntoMismaFechaCategoriaOut
 from src.descripcion_producto import format_descripcion_producto
 from src.services.disponibilidad_services import (
@@ -44,6 +44,12 @@ def _presupuesto_cliente_info(p):
         "cliente_direccion": None,
         "cliente_celular": None,
     }
+
+
+def _descuento_maximo_estandar(usuario: Optional[Usuario]) -> float:
+    if usuario and usuario.rol in (Roles.ADMIN, Roles.SUPER_ADMIN):
+        return 50.0
+    return 15.0
 
 
 def _extra_discount_reason_para_db(value: Optional[str]) -> str:
@@ -101,8 +107,13 @@ class PresupuestosServices:
                 
                 # Validar descuento extra si existe
                 total = total_base
-                descuento_maximo_estandar = 15.0  # 15% es el máximo estándar para empleados
-                
+                usuario_aplico_descuento = (
+                    Usuario.get(id=current_user.id) if current_user else None
+                )
+                descuento_maximo_estandar = _descuento_maximo_estandar(
+                    usuario_aplico_descuento
+                )
+
                 if data.extra_discount_percentage is not None and data.extra_discount_percentage > 0:
                     # Si el descuento es mayor al estándar, validar motivo
                     if data.extra_discount_percentage > descuento_maximo_estandar:
@@ -111,7 +122,7 @@ class PresupuestosServices:
                                 status_code=400,
                                 detail=f"El motivo es obligatorio para descuentos mayores al {descuento_maximo_estandar}%"
                             )
-                    
+
                     # El frontend ya aplicó el descuento redistribuyendo los precios de los items,
                     # por lo que total_base ya incluye el descuento aplicado.
                     # El frontend envía extra_discount_amount que es el monto descontado.
@@ -125,19 +136,13 @@ class PresupuestosServices:
                             data.extra_discount_amount = total_original_estimado - total_base
                         else:
                             data.extra_discount_amount = total_base
-                    
+
                     # El total ya está con el descuento aplicado (viene en los items)
                     total = total_base
 
                 # Generar número
                 cantidad_presupuestos = Presupuesto.select().count()
                 numero = f"PRES-{cantidad_presupuestos + 1:03d}"
-
-                # Obtener usuario si está disponible
-                usuario_aplico_descuento = None
-                if current_user:
-                    from src.models import Usuario
-                    usuario_aplico_descuento = Usuario.get(id=current_user.id)
 
                 # Asegurar que fecha_evento sea un objeto date puro
                 fecha_evento_presupuesto = data.fecha_evento
@@ -458,8 +463,13 @@ class PresupuestosServices:
                 # NOTA: El frontend ya aplicó el descuento redistribuyendo los precios de los items,
                 # por lo que total_base ya es el total FINAL con el descuento aplicado
                 total = total_base
-                descuento_maximo_estandar = 15.0  # 15% es el máximo estándar para empleados
-                
+                usuario_aplico_descuento = (
+                    Usuario.get(id=current_user.id) if current_user else None
+                )
+                descuento_maximo_estandar = _descuento_maximo_estandar(
+                    usuario_aplico_descuento
+                )
+
                 if data.extra_discount_percentage is not None and data.extra_discount_percentage > 0:
                     # Si el descuento es mayor al estándar, validar motivo
                     if data.extra_discount_percentage > descuento_maximo_estandar:
@@ -468,7 +478,7 @@ class PresupuestosServices:
                                 status_code=400,
                                 detail=f"El motivo es obligatorio para descuentos mayores al {descuento_maximo_estandar}%"
                             )
-                    
+
                     # El frontend ya aplicó el descuento redistribuyendo los precios de los items,
                     # por lo que total_base ya incluye el descuento aplicado.
                     # El frontend envía extra_discount_amount que es el monto descontado.
@@ -480,16 +490,10 @@ class PresupuestosServices:
                             data.extra_discount_amount = total_original_estimado - total_base
                         else:
                             data.extra_discount_amount = total_base
-                    
+
                     # El total ya está con el descuento aplicado (viene en los items)
                     total = total_base
-                    
-                    # Obtener usuario si está disponible
-                    usuario_aplico_descuento = None
-                    if current_user:
-                        from src.models import Usuario
-                        usuario_aplico_descuento = Usuario.get(id=current_user.id)
-                    
+
                     presupuesto.extra_discount_percentage = data.extra_discount_percentage
                     presupuesto.extra_discount_amount = data.extra_discount_amount
                     presupuesto.extra_discount_reason = _extra_discount_reason_para_db(

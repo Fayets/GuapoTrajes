@@ -476,7 +476,7 @@ def obtener_saldos_a_cobrar(
 ):
     """
     Obtener reporte de saldos pendientes a cobrar de clientes en un rango de fechas.
-    Muestra las órdenes de trabajo con saldo_pendiente > 0.
+    Muestra las órdenes de trabajo con saldo_pendiente > 0, filtradas por fecha del evento.
     Filtra automáticamente por la sucursal del usuario logueado.
     """
     try:
