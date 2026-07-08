@@ -98,3 +98,17 @@ def fecha_presupuesto_api_ymd(val) -> Optional[str]:
         return parse_fecha_presupuesto_entrada(text).isoformat()
     except ValueError:
         return text[:10] if len(text) >= 10 else text
+
+
+def isoformat_ar(val: Optional[datetime]) -> Optional[str]:
+    """
+    Serializa datetime para APIs con offset Argentina (-03:00).
+    Los valores naive se interpretan como hora de negocio en Buenos Aires.
+    """
+    if val is None:
+        return None
+    if val.tzinfo is not None:
+        dt = val.astimezone(ZONA_ARGENTINA)
+    else:
+        dt = val.replace(tzinfo=ZONA_ARGENTINA)
+    return dt.isoformat()

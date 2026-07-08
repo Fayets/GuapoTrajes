@@ -91,3 +91,68 @@ export function formatDdMmYyyyDesdeIso(iso: string): string {
   const [y, m, d] = base.split("-");
   return `${d}/${m}/${y}`;
 }
+
+const AR_OFFSET = "-03:00";
+
+/**
+ * Parsea datetime del API como hora Argentina.
+ * - Con offset/Z: respeta la zona indicada.
+ * - Sin offset (naive del servidor): se asume Buenos Aires.
+ */
+export function parseDateTimeArgentina(
+  val: string | null | undefined
+): Date | null {
+  if (!val?.trim()) return null;
+  const t = val.trim();
+  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(t)) {
+    const d = new Date(t);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const normalized = t.includes(" ") ? t.replace(" ", "T") : t;
+  const sec = normalized.length === 16 ? `${normalized}:00` : normalized;
+  const d = new Date(`${sec}${AR_OFFSET}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Formatea datetime del API en calendario/hora Argentina. */
+export function formatDateTimeArgentina(
+  val: string | Date | null | undefined,
+  options: Intl.DateTimeFormatOptions = {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }
+): string {
+  let d: Date | null;
+  if (val instanceof Date) {
+    d = val;
+  } else {
+    d = parseDateTimeArgentina(val ?? "");
+  }
+  if (!d || Number.isNaN(d.getTime())) return "-";
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone: ZONA_HORA_ARGENTINA,
+    ...options,
+  }).format(d);
+}
+
+/** Partes de fecha actual en Argentina (para contratos impresos). */
+export function ahoraArgentinaPartes(): {
+  dia: number;
+  mes: string;
+  año: number;
+} {
+  const parts = new Intl.DateTimeFormat("es-AR", {
+    timeZone: ZONA_HORA_ARGENTINA,
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const dia = Number(parts.find((p) => p.type === "day")?.value ?? "1");
+  const mes = parts.find((p) => p.type === "month")?.value ?? "";
+  const año = Number(parts.find((p) => p.type === "year")?.value ?? "2000");
+  return { dia, mes, año };
+}

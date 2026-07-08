@@ -4,6 +4,7 @@ from datetime import date, datetime
 from typing import List, Dict, Optional
 import re
 from src.descripcion_producto import format_descripcion_producto
+from src.fechas_ar import isoformat_ar
 from src.models import Presupuesto, OrdenTrabajo, ItemPresupuesto, Producto, Cliente, CajaMovimiento, Venta, TipoMovimiento, EstadoProducto, ProductoReservado, ProductoLavanderia, ProductoModista, DetalleVenta, DetalleVenta
 
 
@@ -2145,7 +2146,7 @@ class ReportesServices:
                     "presupuesto_numero": presupuesto.numero if presupuesto else "N/A",
                     "estado_reserva": pr_actual.estado if pr_actual else None,
                     "fecha_evento": orden.fecha_evento.isoformat(),
-                    "fecha_contrato": orden.contrato_generado_at.isoformat(),
+                    "fecha_contrato": isoformat_ar(orden.contrato_generado_at),
                 })
             
             # 3. Lavandería

@@ -17,7 +17,8 @@ from src.models import (
     Roles,
 )
 from datetime import datetime, timedelta, date
-from src.fechas_ar import ahora_ar
+from src.fechas_ar import ahora_ar, isoformat_ar
+from src.money import round_pesos
 from typing import List, Optional, Any
 import logging
 
@@ -194,9 +195,9 @@ class OrdenTrabajoServices:
                 if presupuesto.orden_trabajo:
                     raise HTTPException(status_code=400, detail="El presupuesto ya tiene una orden de trabajo")
 
-                credito_aplicado = float(credito_aplicado or 0)
-                seña_total = float(seña_pagada)
-                monto_efectivo = seña_total - credito_aplicado
+                credito_aplicado = round_pesos(credito_aplicado or 0)
+                seña_total = round_pesos(seña_pagada)
+                monto_efectivo = round_pesos(max(seña_total - credito_aplicado, 0))
 
                 if credito_aplicado > seña_total + 1e-9:
                     raise HTTPException(
@@ -267,8 +268,8 @@ class OrdenTrabajoServices:
                 elif credito_aplicado > 1e-9:
                     payment_method_str = "Saldo a favor (cuenta corriente)"
 
-                total = presupuesto.total
-                saldo_pendiente = max(0.0, float(total) - seña_total)
+                total = round_pesos(presupuesto.total)
+                saldo_pendiente = max(0, round_pesos(total - seña_total))
                 estado_inicial = (
                     "Pagada" if saldo_pendiente <= 0 else "En proceso"
                 )
@@ -390,7 +391,7 @@ class OrdenTrabajoServices:
                         descuento_created_at = presupuesto.extra_discount_created_at
                     
                     # Calcular total de la orden
-                    total_orden = o.seña_pagada + o.saldo_pendiente
+                    total_orden = round_pesos(o.seña_pagada + o.saldo_pendiente)
                     titular = _campos_titular_presupuesto(presupuesto)
                     
                     resultado.append({
@@ -399,13 +400,13 @@ class OrdenTrabajoServices:
                         "presupuesto_numero": o.presupuesto.numero,
                         **titular,
                         "fecha_evento": o.fecha_evento.isoformat(),
-                        "fecha_creacion": o.fecha_creacion.isoformat() if o.fecha_creacion else "",
+                        "fecha_creacion": isoformat_ar(o.fecha_creacion) if o.fecha_creacion else "",
                         "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
                         "fecha_devolucion": presupuesto.fecha_devolucion.isoformat() if presupuesto.fecha_devolucion else None,
-                        "seña_pagada": o.seña_pagada,
-                        "saldo_pendiente": o.saldo_pendiente,
+                        "seña_pagada": round_pesos(o.seña_pagada),
+                        "saldo_pendiente": round_pesos(o.saldo_pendiente),
                         "total": total_orden,  # Total de la orden (con descuento si aplica)
-                        "total_presupuesto": o.presupuesto.total,  # Total del presupuesto (con descuento si aplica)
+                        "total_presupuesto": round_pesos(o.presupuesto.total),  # Total del presupuesto (con descuento si aplica)
                         "estado": o.estado,
                         "metodo_pago": (f"{o.metodo_pago_configurable.nombre} - {o.submetodo_pago.nombre}" 
                                        if o.metodo_pago_configurable and o.submetodo_pago 
@@ -417,10 +418,10 @@ class OrdenTrabajoServices:
                         "extra_discount_reason": descuento_reason,
                         "extra_discount_applied_by_id": descuento_applied_by.id if descuento_applied_by else None,
                         "extra_discount_applied_by_nombre": f"{descuento_applied_by.nombre} {descuento_applied_by.apellido}" if descuento_applied_by else None,
-                        "extra_discount_created_at": descuento_created_at.isoformat() if descuento_created_at else None,
-                        "contrato_generado_at": o.contrato_generado_at.isoformat() if o.contrato_generado_at else None,
+                        "extra_discount_created_at": isoformat_ar(descuento_created_at),
+                        "contrato_generado_at": isoformat_ar(o.contrato_generado_at),
                         "etiquetas_armado_impresas_at": (
-                            o.etiquetas_armado_impresas_at.isoformat()
+                        isoformat_ar(o.etiquetas_armado_impresas_at)
                             if getattr(o, "etiquetas_armado_impresas_at", None)
                             else None
                         ),
@@ -467,7 +468,7 @@ class OrdenTrabajoServices:
                     "presupuesto_numero": orden.presupuesto.numero,
                     **titular,
                     "fecha_evento": orden.fecha_evento.isoformat(),
-                    "fecha_creacion": orden.fecha_creacion.isoformat() if orden.fecha_creacion else "",
+                    "fecha_creacion": isoformat_ar(orden.fecha_creacion) if orden.fecha_creacion else "",
                     "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
                     "fecha_devolucion": presupuesto.fecha_devolucion.isoformat() if presupuesto.fecha_devolucion else None,
                     "seña_pagada": orden.seña_pagada,
@@ -487,10 +488,10 @@ class OrdenTrabajoServices:
                     "extra_discount_reason": descuento_reason,
                     "extra_discount_applied_by_id": descuento_applied_by.id if descuento_applied_by else None,
                     "extra_discount_applied_by_nombre": f"{descuento_applied_by.nombre} {descuento_applied_by.apellido}" if descuento_applied_by else None,
-                    "extra_discount_created_at": descuento_created_at.isoformat() if descuento_created_at else None,
-                    "contrato_generado_at": orden.contrato_generado_at.isoformat() if orden.contrato_generado_at else None,
+                    "extra_discount_created_at": isoformat_ar(descuento_created_at),
+                    "contrato_generado_at": isoformat_ar(orden.contrato_generado_at),
                     "etiquetas_armado_impresas_at": (
-                        orden.etiquetas_armado_impresas_at.isoformat()
+                        isoformat_ar(orden.etiquetas_armado_impresas_at)
                         if getattr(orden, "etiquetas_armado_impresas_at", None)
                         else None
                     ),
@@ -597,11 +598,11 @@ class OrdenTrabajoServices:
                 if orden.saldo_pendiente <= 0:
                     raise HTTPException(status_code=400, detail="La orden no tiene saldo pendiente")
 
-                monto_total = float(monto_pagado)
-                credito_aplicado = float(credito_aplicado or 0)
-                monto_efectivo = monto_total - credito_aplicado
+                monto_total = round_pesos(monto_pagado)
+                credito_aplicado = round_pesos(credito_aplicado or 0)
+                monto_efectivo = round_pesos(max(monto_total - credito_aplicado, 0))
 
-                if monto_total > orden.saldo_pendiente + 1e-9:
+                if monto_total > round_pesos(orden.saldo_pendiente) + 1e-9:
                     raise HTTPException(status_code=400, detail="El monto pagado excede el saldo pendiente")
 
                 if credito_aplicado > monto_total + 1e-9:
@@ -684,8 +685,8 @@ class OrdenTrabajoServices:
                         None,
                     )
 
-                saldo_pendiente_anterior = orden.saldo_pendiente
-                nuevo_saldo_pendiente = orden.saldo_pendiente - monto_total
+                saldo_pendiente_anterior = round_pesos(orden.saldo_pendiente)
+                nuevo_saldo_pendiente = max(0, round_pesos(saldo_pendiente_anterior - monto_total))
                 orden.saldo_pendiente = nuevo_saldo_pendiente
 
                 movimiento_caja = None
@@ -713,7 +714,7 @@ class OrdenTrabajoServices:
                     motivo = f"{motivo} — {cc_txt} con cuenta corriente"
                 recibo = ReciboOrden(
                     orden_trabajo=orden,
-                    fecha_hora=datetime.now(),
+                    fecha_hora=ahora_ar(),
                     monto=monto_total,
                     motivo=motivo,
                     cliente_nombre=cliente_nombre_recibo,
@@ -740,7 +741,7 @@ class OrdenTrabajoServices:
                         "recibo": {
                             "id": recibo.id,
                             "orden_id": orden.id,
-                            "fecha_hora": recibo.fecha_hora.isoformat(),
+                            "fecha_hora": isoformat_ar(recibo.fecha_hora),
                             "monto": recibo.monto,
                             "motivo": recibo.motivo,
                             "cliente_nombre": recibo.cliente_nombre,
@@ -859,8 +860,8 @@ class OrdenTrabajoServices:
 
                     historial["pagos"].append({
                         "tipo": "Seña inicial",
-                        "fecha": orden.fecha_creacion.isoformat(),
-                        "fecha_hora": orden.fecha_creacion.isoformat(),
+                        "fecha": isoformat_ar(orden.fecha_creacion),
+                        "fecha_hora": isoformat_ar(orden.fecha_creacion),
                         "monto": orden.seña_pagada,
                         "metodo_pago": metodo_pago_display,
                         "origen": "Creación de orden",
@@ -931,8 +932,8 @@ class OrdenTrabajoServices:
                             
                             historial["pagos"].append({
                                 "tipo": "Pago adicional",
-                                "fecha": movimiento.fecha_hora.isoformat() if movimiento.fecha_hora else None,
-                                "fecha_hora": movimiento.fecha_hora.isoformat() if movimiento.fecha_hora else None,
+                                "fecha": isoformat_ar(movimiento.fecha_hora),
+                                "fecha_hora": isoformat_ar(movimiento.fecha_hora),
                                 "monto": movimiento.monto,
                                 "metodo_pago": metodo_pago,
                                 "origen": origen_str,
@@ -964,8 +965,8 @@ class OrdenTrabajoServices:
                             monto_txt = f"${int(round(monto_cc)):,}".replace(",", ".")
                             historial["pagos"].append({
                                 "tipo": "Pago adicional",
-                                "fecha": movimiento_cc.fecha.isoformat() if movimiento_cc.fecha else None,
-                                "fecha_hora": movimiento_cc.fecha.isoformat() if movimiento_cc.fecha else None,
+                                "fecha": isoformat_ar(movimiento_cc.fecha),
+                                "fecha_hora": isoformat_ar(movimiento_cc.fecha),
                                 "monto": monto_cc,
                                 "metodo_pago": f"{monto_txt} con cuenta corriente",
                                 "origen": movimiento_cc.concepto or "Uso saldo a favor",
@@ -1028,7 +1029,7 @@ class OrdenTrabajoServices:
                         "id": None,
                         "orden_id": orden.id,
                         "tipo": "Seña inicial",
-                        "fecha_hora": orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
+                        "fecha_hora": isoformat_ar(orden.fecha_creacion),
                         "monto": orden.seña_pagada,
                         "motivo": motivo_sena,
                         "cliente_nombre": cliente_nombre,
@@ -1039,7 +1040,7 @@ class OrdenTrabajoServices:
                         "id": r.id,
                         "orden_id": orden.id,
                         "tipo": "Pago adicional",
-                        "fecha_hora": r.fecha_hora.isoformat() if r.fecha_hora else None,
+                        "fecha_hora": isoformat_ar(r.fecha_hora),
                         "monto": r.monto,
                         "motivo": r.motivo,
                         "cliente_nombre": r.cliente_nombre,
@@ -1070,14 +1071,14 @@ class OrdenTrabajoServices:
                         status_code=400,
                         detail="No se pueden registrar etiquetas en una orden cancelada",
                     )
-                orden.etiquetas_armado_impresas_at = datetime.now()
+                orden.etiquetas_armado_impresas_at = ahora_ar()
                 flush()
                 return {
                     "message": "Etiquetas de armado registradas correctamente",
                     "success": True,
                     "data": {
                         "orden_id": orden.id,
-                        "etiquetas_armado_impresas_at": orden.etiquetas_armado_impresas_at.isoformat(),
+                        "etiquetas_armado_impresas_at": isoformat_ar(orden.etiquetas_armado_impresas_at),
                     },
                 }
             except HTTPException:
@@ -1161,7 +1162,7 @@ class OrdenTrabajoServices:
                         raise HTTPException(status_code=400, detail="El saldo pendiente debe ser cero para generar el contrato.")
                 if not orden.presupuesto.cliente.dni or not orden.presupuesto.cliente.direccion:
                     raise HTTPException(status_code=400, detail="El cliente debe tener DNI y Dirección para generar el contrato.")
-                orden.contrato_generado_at = datetime.now()
+                orden.contrato_generado_at = ahora_ar()
                 for pr in list(orden.productos_reservados):
                     prod = getattr(pr, "producto", None)
                     if prod:
@@ -1172,7 +1173,7 @@ class OrdenTrabajoServices:
                     "success": True,
                     "data": {
                         "orden_id": orden.id,
-                        "contrato_generado_at": orden.contrato_generado_at.isoformat(),
+                        "contrato_generado_at": isoformat_ar(orden.contrato_generado_at),
                     },
                 }
             except HTTPException:
@@ -1214,8 +1215,8 @@ class OrdenTrabajoServices:
                             "cliente_dni": cliente_dni,
                             "cliente_direccion": cliente_direccion,
                             "fecha_evento": o.fecha_evento.isoformat() if o.fecha_evento else None,
-                            "fecha_creacion": o.fecha_creacion.isoformat() if o.fecha_creacion else None,
-                            "contrato_generado_at": o.contrato_generado_at.isoformat() if o.contrato_generado_at else None,
+                            "fecha_creacion": isoformat_ar(o.fecha_creacion),
+                            "contrato_generado_at": isoformat_ar(o.contrato_generado_at),
                             "total": float(o.seña_pagada or 0) + float(o.saldo_pendiente or 0),
                             "productos_reservados": productos_reservados,
                         })
@@ -1355,7 +1356,7 @@ class OrdenTrabajoServices:
 
                 cliente_nombre, cliente_celular = self._obtener_cliente_orden(orden)
                 remitos_out: List[dict] = []
-                stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                stamp = ahora_ar().strftime("%Y%m%d%H%M%S")
 
                 batches: List[tuple] = []
                 if envios:
@@ -1463,7 +1464,7 @@ class OrdenTrabajoServices:
 
                     for pr in a_procesar:
                         observaciones_previas = pr.observaciones or ""
-                        nueva_obs = f"[Devolución {num_remito} - {datetime.now().strftime('%d/%m/%Y %H:%M')}]"
+                        nueva_obs = f"[Devolución {num_remito} - {ahora_ar().strftime('%d/%m/%Y %H:%M')}]"
                         pr.observaciones = (
                             f"{observaciones_previas}\n{nueva_obs}".strip()
                             if observaciones_previas
@@ -1545,7 +1546,7 @@ class OrdenTrabajoServices:
                 # Agregar observaciones en cada ProductoReservado antes de borrar (opcional, para historial)
                 for pr in a_devolver:
                     observaciones_previas = pr.observaciones or ""
-                    nueva_observacion = f"[Devolución parcial - {datetime.now().strftime('%d/%m/%Y %H:%M')}] {descripcion}"
+                    nueva_observacion = f"[Devolución parcial - {ahora_ar().strftime('%d/%m/%Y %H:%M')}] {descripcion}"
                     pr.observaciones = f"{observaciones_previas}\n{nueva_observacion}".strip() if observaciones_previas else nueva_observacion
                     pr.delete()
 

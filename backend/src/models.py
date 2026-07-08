@@ -205,7 +205,7 @@ class Presupuesto(db.Entity):
     fecha_evento = Required(date)
     fecha_retiro = Optional(date)
     fecha_devolucion = Optional(date)
-    fecha_creacion = Required(datetime, default=lambda: datetime.now())
+    fecha_creacion = Required(datetime, default=ahora_ar)
     categoria_evento = Optional(str)
     nombre_agasajado = Optional(str)
     lugar_evento = Optional(str)
@@ -235,7 +235,7 @@ class ItemPresupuesto(db.Entity):
 class OrdenTrabajo(db.Entity):
     id = PrimaryKey(int, auto=True)
     presupuesto = Required(Presupuesto, reverse="orden_trabajo")  # FK
-    fecha_creacion = Required(datetime, default=lambda: datetime.now())
+    fecha_creacion = Required(datetime, default=ahora_ar)
     fecha_evento = Required(date)
     estado = Required(str, default='pendiente')  # pendiente, lista, cancelada, completada
     seña_pagada = Required(float)
@@ -286,7 +286,7 @@ class CuentaCorriente(db.Entity):
     id = PrimaryKey(int, auto=True)
     # Mismo nombre que la columna física ("cliente"); sin esto, filtros tipo m.cliente.id == X generan SQL erróneo en PostgreSQL.
     cliente = Required(Cliente, column="cliente")
-    fecha = Required(datetime, default=lambda: datetime.now())
+    fecha = Required(datetime, default=ahora_ar)
     concepto = Required(str)
     tipo = Required(str)  # "credito" (entra dinero) o "debito" (sale dinero)
     monto = Required(float)
@@ -405,7 +405,7 @@ class CajaChica(db.Entity):
     id = PrimaryKey(int, auto=True)
     sucursal = Required(Sucursal)
     usuario = Required(Usuario)
-    fecha = Required(datetime, default=lambda: datetime.now())
+    fecha = Required(datetime, default=ahora_ar)
     tipo = Required(TipoMovimientoCajaChica, column="tipo")
     metodo_pago = Required(MetodoPagoCajaChica, column="metodo_pago", default=MetodoPagoCajaChica.EFECTIVO)
     tipo_egreso = Optional(TipoEgresoCajaChica, column="tipo_egreso")
@@ -446,7 +446,7 @@ class CajaConcentradora(db.Entity):
     usuario = Optional(Usuario, column="usuario_id")  # Usuario que realiza el movimiento
     monto = Required(Decimal, 10, 2)
     descripcion = Optional(str, 255)
-    fecha = Required(datetime, default=lambda: datetime.now(), column="fecha_envio")  # Campo principal (fecha_envio en BD para compatibilidad)
+    fecha = Required(datetime, default=ahora_ar, column="fecha_envio")  # Campo principal (fecha_envio en BD para compatibilidad)
     tipo_movimiento = Optional(TipoMovimientoConcentradora, default=TipoMovimientoConcentradora.INGRESO, column="tipo_movimiento")
     origen = Optional(OrigenConcentradora, default=OrigenConcentradora.CAJA_DIARIA, column="origen")
     destino = Optional(DestinoConcentradora, column="destino")
@@ -482,7 +482,7 @@ class MetodoPagoConfigurable(db.Entity):
     ordenes_trabajo = Set("OrdenTrabajo")  # Relación con órdenes de trabajo
     movimientos_caja = Set("CajaMovimiento")  # Relación con movimientos de caja
     pagos_adicionales = Set("CuentaCorriente")  # Para pagos adicionales que usen este método
-    fecha_creacion = Required(datetime, default=lambda: datetime.now())
+    fecha_creacion = Required(datetime, default=ahora_ar)
     _table_ = "MetodosPagoConfigurables"
 
 class SubmetodoPago(db.Entity):
@@ -495,5 +495,5 @@ class SubmetodoPago(db.Entity):
     ordenes_trabajo = Set("OrdenTrabajo")  # Relación con órdenes de trabajo
     movimientos_caja = Set("CajaMovimiento")  # Relación con movimientos de caja
     pagos_adicionales = Set("CuentaCorriente")  # Para pagos adicionales que usen este submétodo
-    fecha_creacion = Required(datetime, default=lambda: datetime.now())
+    fecha_creacion = Required(datetime, default=ahora_ar)
     _table_ = "SubmetodosPago"

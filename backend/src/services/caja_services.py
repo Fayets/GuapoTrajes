@@ -2,6 +2,7 @@ from decimal import Decimal, InvalidOperation
 from pony.orm import db_session, select, sum, count, flush
 from datetime import date, datetime
 from src.fechas_ar import ahora_ar, formatear_fecha_ar, formatear_hora_ar, instante_a_fecha_ar
+from src.money import round_pesos
 from src.models import CajaMovimiento, Venta, Usuario, Sucursal, TipoMovimiento, MetodoPago, CuentaDestino, Presupuesto, CierreCaja, Cliente
 from fastapi import HTTPException
 from typing import List, Dict, Optional
@@ -95,7 +96,7 @@ class CajaServices:
         movimiento_kwargs = {
             "fecha_hora": ahora_ar(),
             "tipo": movimiento_data["tipo"],
-            "monto": float(movimiento_data["monto"]),
+            "monto": round_pesos(movimiento_data["monto"]),
             "payment_method": payment_method_enum,  # Para compatibilidad (opcional)
             "metodo_pago_configurable": metodo_pago_configurable,  # Nueva relación
             "submetodo_pago": submetodo_pago,  # Nueva relación

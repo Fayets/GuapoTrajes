@@ -255,6 +255,60 @@ def ensure_caja_movimientos_fecha_hora_ar() -> None:
         logger.warning("Error aplicando patch %s: %s", patch_name, e)
 
 
+def ensure_timestamps_negocio_hora_ar() -> None:
+    """
+    Corrige timestamps de negocio guardados en UTC (backend en Render) a hora Argentina.
+    Incluye contratos, órdenes, recibos, ventas y cuenta corriente.
+    """
+    if not _is_postgres():
+        return
+    env = config("ENV", default="production").lower()
+    if env != "production":
+        logger.debug("Patch timestamps_negocio_hora_ar omitido (ENV=%s)", env)
+        return
+
+    patch_name = "timestamps_negocio_hora_ar"
+    column_updates = [
+        ('"OrdenesTrabajo"', "contrato_generado_at"),
+        ('"OrdenesTrabajo"', "fecha_creacion"),
+        ('"OrdenesTrabajo"', "etiquetas_armado_impresas_at"),
+        ('"OrdenesTrabajo"', "extra_discount_created_at"),
+        ('"Presupuesto"', "fecha_creacion"),
+        ('"Presupuesto"', "extra_discount_created_at"),
+        ('"RecibosOrden"', "fecha_hora"),
+        ('"Ventas"', "fecha_hora"),
+        ('"Ventas"', "extra_discount_created_at"),
+        ('"CuentaCorriente"', "fecha"),
+    ]
+    try:
+        with db_session:
+            db.execute(
+                'CREATE TABLE IF NOT EXISTS "_schema_patches" ('
+                '"name" VARCHAR(255) PRIMARY KEY, '
+                '"applied_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)'
+            )
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute('SELECT 1 FROM "_schema_patches" WHERE "name" = %s', (patch_name,))
+            if cur.fetchone():
+                logger.debug("Patch %s ya aplicado", patch_name)
+                return
+            for table, column in column_updates:
+                cur.execute(
+                    f'UPDATE {table} SET "{column}" = '
+                    f'("{column}" AT TIME ZONE \'UTC\') AT TIME ZONE \'America/Argentina/Buenos_Aires\' '
+                    f'WHERE "{column}" IS NOT NULL'
+                )
+            cur.execute('INSERT INTO "_schema_patches" ("name") VALUES (%s)', (patch_name,))
+            conn.commit()
+            logger.info(
+                "Patch %s aplicado: timestamps de negocio normalizados a hora Argentina",
+                patch_name,
+            )
+    except Exception as e:
+        logger.warning("Error aplicando patch %s: %s", patch_name, e)
+
+
 def apply_schema_migrations() -> None:
     """Aplica migraciones mínimas necesarias para el nuevo flujo financiero."""
     if not _is_postgres():

@@ -20,6 +20,8 @@ import {
   observacionesParaCliente,
   observacionesParaGuardar,
 } from "@/lib/presupuesto-observaciones";
+import { formatPesosAr, parseMontoInput, roundPesos } from "@/lib/money";
+import { abrirWhatsAppEnvio, normalizarTelefonoWhatsapp } from "@/lib/whatsapp";
 import {
   Dialog,
   DialogContent,
@@ -1475,12 +1477,12 @@ export default function PresupuestosPage() {
   const confirmarSenia = async () => {
     if (!presupuestoAConvertir) return;
 
-    const monto = parseFloat(senia);
+    const monto = parseMontoInput(senia);
     if (isNaN(monto) || monto <= 0) {
       alert("Monto inválido.");
       return;
     }
-    if (monto > presupuestoAConvertir.total) {
+    if (monto > roundPesos(presupuestoAConvertir.total)) {
       alert("La seña no puede ser mayor al total del presupuesto.");
       return;
     }
@@ -1644,25 +1646,8 @@ export default function PresupuestosPage() {
     }
   };
 
-  const normalizarTelefono = (telefono?: string): string | null => {
-    if (!telefono) return null;
-    let limpio = telefono.replace(/\D/g, "");
-    if (!limpio) return null;
-    limpio = limpio.replace(/^0+/, "");
-
-    if (limpio.startsWith("54")) {
-      if (!limpio.startsWith("549")) {
-        limpio = `549${limpio.slice(2)}`;
-      }
-    } else {
-      if (limpio.startsWith("9")) {
-        limpio = limpio.slice(1);
-      }
-      limpio = `549${limpio}`;
-    }
-
-    return limpio;
-  };
+  const normalizarTelefono = (telefono?: string): string | null =>
+    normalizarTelefonoWhatsapp(telefono);
 
   const handleEnviarWhatsapp = (presupuesto: Presupuesto) => {
     const cliente = presupuesto.cliente_id != null ? clientes.find((c) => c.id === presupuesto.cliente_id) : null;
@@ -1751,11 +1736,9 @@ export default function PresupuestosPage() {
 
     mensaje += `\n\nProductos incluidos:\n${detalleProductos}`;
 
-    const url = `https://api.whatsapp.com/send?phone=${telefonoNormalizado}&text=${encodeURIComponent(
-      mensaje
-    )}`;
-
-    window.open(url, "_blank");
+    if (!abrirWhatsAppEnvio(telefonoNormalizado, mensaje)) {
+      alert("El número de teléfono del cliente es inválido.");
+    }
   };
 
   const quitarDescuento = () => {
@@ -2099,11 +2082,12 @@ export default function PresupuestosPage() {
 
           <div className="modal-body px-3 px-md-4">
             {(() => {
-              const montoSenia = parseFloat(senia);
+              const montoSenia = parseMontoInput(senia);
+              const totalPresupuesto = roundPesos(presupuestoAConvertir?.total ?? 0);
               const seniaExcedeTotal =
                 !!presupuestoAConvertir &&
                 !Number.isNaN(montoSenia) &&
-                montoSenia > presupuestoAConvertir.total;
+                montoSenia > totalPresupuesto;
               return (
             <div className="card shadow-sm mb-4">
               <div className="card-body p-4">
@@ -2115,12 +2099,13 @@ export default function PresupuestosPage() {
                     placeholder="Ingresá el monto recibido"
                     value={senia}
                     onChange={(e) => setSenia(e.target.value)}
-                    min={0}
-                    max={presupuestoAConvertir?.total}
+                    min={1}
+                    step={1}
+                    max={roundPesos(presupuestoAConvertir?.total ?? 0)}
                   />
                   {!!presupuestoAConvertir && (
                     <div className="small text-muted mt-2">
-                      Máximo permitido: ${presupuestoAConvertir.total.toLocaleString("es-AR")}
+                      Máximo permitido: ${formatPesosAr(presupuestoAConvertir.total)}
                     </div>
                   )}
                   {seniaExcedeTotal && (
@@ -2139,7 +2124,7 @@ export default function PresupuestosPage() {
                       ? saldoClienteSenia
                       : null
                   }
-                  montoReferencia={senia ? parseFloat(senia) || null : null}
+                  montoReferencia={senia ? parseMontoInput(senia) || null : null}
                   onMetodoChange={(metodoId, submetodoId, metodoDisplay, complemento) => {
                     setMetodoPagoId(metodoId);
                     setSubmetodoPagoId(submetodoId);
@@ -2157,7 +2142,7 @@ export default function PresupuestosPage() {
                 />
 
                 {(() => {
-                  const mt = parseFloat(senia || "0") || 0;
+                  const mt = parseMontoInput(senia || "0") || 0;
                   const esCC =
                     metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                     !!presupuestoAConvertir?.cliente_id &&
@@ -2241,7 +2226,8 @@ export default function PresupuestosPage() {
               className="btn btn-primary"
               onClick={confirmarSenia}
               disabled={(() => {
-                const mt = parseFloat(senia || "0") || 0;
+                const mt = parseMontoInput(senia || "0") || 0;
+                const totalMax = roundPesos(presupuestoAConvertir?.total ?? 0);
                 const esCC =
                   metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                   !!presupuestoAConvertir?.cliente_id &&
@@ -2258,9 +2244,7 @@ export default function PresupuestosPage() {
                   (montoCajaUi > 1e-6 && !cuentaDestinoId) ||
                   !senia ||
                   mt <= 0 ||
-                  (!!presupuestoAConvertir &&
-                    !Number.isNaN(parseFloat(senia)) &&
-                    parseFloat(senia) > presupuestoAConvertir.total)
+                  (!!presupuestoAConvertir && mt > totalMax)
                 );
               })()}
             >

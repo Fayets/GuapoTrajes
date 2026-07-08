@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Optional
 
 from src.models import Presupuesto, CuentaCorriente, Cliente, CuentaDestino
+from src.money import round_pesos
+from src.fechas_ar import ahora_ar
 from src.schemas import PagoAdicionalRequest, CreditoManualRequest
 
 
@@ -58,7 +60,7 @@ class PagosServices:
             monto=monto,
             saldo_post=saldo_post,
             referencia_orden=referencia_orden,
-            fecha=datetime.now(),
+            fecha=ahora_ar(),
             metodo_pago_configurable=metodo_pago_configurable,
             submetodo_pago=submetodo_pago,
         )
@@ -189,9 +191,9 @@ class PagosServices:
 
                 orden = presupuesto.orden_trabajo
                 cliente = presupuesto.cliente
-                credito_aplicado = float(data.credito_aplicado or 0)
-                monto_total = float(data.monto)
-                monto_efectivo = monto_total - credito_aplicado
+                credito_aplicado = round_pesos(data.credito_aplicado or 0)
+                monto_total = round_pesos(data.monto)
+                monto_efectivo = round_pesos(max(monto_total - credito_aplicado, 0))
 
                 if credito_aplicado > 1e-9 and not cliente:
                     raise HTTPException(
@@ -228,8 +230,10 @@ class PagosServices:
                 else:
                     cuenta_destino_id = None
 
-                orden.seña_pagada += monto_total
-                orden.saldo_pendiente = max(presupuesto.total - orden.seña_pagada, 0)
+                orden.seña_pagada = round_pesos(orden.seña_pagada + monto_total)
+                orden.saldo_pendiente = max(
+                    0, round_pesos(round_pesos(presupuesto.total) - orden.seña_pagada)
+                )
                 if orden.saldo_pendiente == 0:
                     orden.estado = "Pagada"
 

@@ -4,6 +4,8 @@ from typing import List, Optional
 from decouple import config
 from fastapi import HTTPException
 from src.fechas_ar import fecha_presupuesto_api_ymd, instante_a_fecha_ar
+from src.money import round_pesos
+from src.fechas_ar import ahora_ar
 from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, Roles, Usuario, db
 from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse, ConjuntoMismaFechaCategoriaOut
 from src.descripcion_producto import format_descripcion_producto
@@ -64,7 +66,7 @@ def _extra_discount_reason_para_db(value: Optional[str]) -> str:
 
 def _total_pagado_orden(orden, total_presupuesto_anterior: float) -> float:
     """Importe ya abonado (seña + pagos adicionales), según total y saldo vigentes."""
-    return max(0.0, float(total_presupuesto_anterior) - float(orden.saldo_pendiente))
+    return max(0.0, round_pesos(float(total_presupuesto_anterior) - round_pesos(orden.saldo_pendiente)))
 
 
 class PresupuestosServices:
@@ -108,7 +110,7 @@ class PresupuestosServices:
                 # Calcular total base sumando los subtotales de los items
                 # NOTA: El frontend ya aplicó el descuento redistribuyendo los precios de los items,
                 # por lo que total_base ya es el total FINAL con el descuento aplicado
-                total_base = sum(item.subtotal for item in data.items)
+                total_base = round_pesos(sum(item.subtotal for item in data.items))
                 
                 # Validar descuento extra si existe
                 total = total_base
@@ -172,7 +174,7 @@ class PresupuestosServices:
                     "observaciones": data.observaciones,
                     "estado": "pendiente",
                     "total": total,
-                    "fecha_creacion": datetime.now(),
+                    "fecha_creacion": ahora_ar(),
                 }
                 
                 # Solo agregar campos de descuento extra si tienen valores
@@ -184,7 +186,7 @@ class PresupuestosServices:
                     )
                     if usuario_aplico_descuento:
                         presupuesto_args["extra_discount_applied_by"] = usuario_aplico_descuento
-                    presupuesto_args["extra_discount_created_at"] = datetime.now()
+                    presupuesto_args["extra_discount_created_at"] = ahora_ar()
                 
                 presupuesto = Presupuesto(**presupuesto_args)
                 
@@ -467,7 +469,7 @@ class PresupuestosServices:
                 # Validar descuento extra si existe
                 # NOTA: El frontend ya aplicó el descuento redistribuyendo los precios de los items,
                 # por lo que total_base ya es el total FINAL con el descuento aplicado
-                total = total_base
+                total = round_pesos(total_base)
                 usuario_aplico_descuento = (
                     Usuario.get(id=current_user.id) if current_user else None
                 )
@@ -497,7 +499,7 @@ class PresupuestosServices:
                             data.extra_discount_amount = total_base
 
                     # El total ya está con el descuento aplicado (viene en los items)
-                    total = total_base
+                    total = round_pesos(total_base)
 
                     presupuesto.extra_discount_percentage = data.extra_discount_percentage
                     presupuesto.extra_discount_amount = data.extra_discount_amount
@@ -505,7 +507,7 @@ class PresupuestosServices:
                         data.extra_discount_reason
                     )
                     presupuesto.extra_discount_applied_by = usuario_aplico_descuento
-                    presupuesto.extra_discount_created_at = datetime.now()
+                    presupuesto.extra_discount_created_at = ahora_ar()
                 else:
                     # Si no hay descuento extra, limpiar campos
                     presupuesto.extra_discount_percentage = None
@@ -514,17 +516,17 @@ class PresupuestosServices:
                     presupuesto.extra_discount_applied_by = None
                     presupuesto.extra_discount_created_at = None
 
-                total_presupuesto_anterior = float(presupuesto.total or 0.0)
-                presupuesto.total = total
+                total_presupuesto_anterior = round_pesos(presupuesto.total or 0.0)
+                presupuesto.total = round_pesos(total)
 
                 if orden:
                     total_pagado = _total_pagado_orden(orden, total_presupuesto_anterior)
-                    if total_pagado > float(total) + 1e-9:
+                    if total_pagado > round_pesos(total) + 1e-9:
                         raise HTTPException(
                             status_code=400,
                             detail="El total del presupuesto no puede ser menor que lo ya pagado.",
                         )
-                    orden.saldo_pendiente = max(0.0, float(total) - total_pagado)
+                    orden.saldo_pendiente = max(0.0, round_pesos(round_pesos(total) - total_pagado))
                     # Misma regla que al pagar saldo desde la orden: si no queda saldo, marcar pagada.
                     oest = (orden.estado or "").strip().lower()
                     if orden.saldo_pendiente <= 0:

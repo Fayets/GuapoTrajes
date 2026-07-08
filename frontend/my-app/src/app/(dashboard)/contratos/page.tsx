@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { getApiBaseUrl } from "@/lib/api-config";
+import { formatDateTimeArgentina } from "@/lib/fecha-calendario";
 
 type Contrato = {
   orden_id: number;
@@ -142,11 +141,7 @@ export default function ContratosPage() {
                       <td>{c.cliente_nombre}</td>
                       <td>
                         {c.contrato_generado_at
-                          ? format(
-                              new Date(c.contrato_generado_at),
-                              "dd/MM/yyyy HH:mm",
-                              { locale: es }
-                            )
+                          ? formatDateTimeArgentina(c.contrato_generado_at)
                           : "-"}
                       </td>
                       <td className="text-center">

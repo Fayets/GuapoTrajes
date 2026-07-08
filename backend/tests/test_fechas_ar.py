@@ -6,6 +6,7 @@ from src.fechas_ar import (
     ahora_ar,
     formatear_hora_ar,
     instante_a_fecha_ar,
+    isoformat_ar,
     normalizar_fecha_hora_ar,
 )
 
@@ -32,3 +33,8 @@ def test_instante_a_fecha_ar_trata_naive_como_argentina():
 def test_normalizar_fecha_hora_ar_desde_utc():
     aware = datetime(2026, 6, 24, 14, 0, 0, tzinfo=ZoneInfo("UTC"))
     assert normalizar_fecha_hora_ar(aware) == datetime(2026, 6, 24, 11, 0, 0)
+
+
+def test_isoformat_ar_incluye_offset_argentina():
+    naive = datetime(2026, 7, 2, 22, 30, 0)
+    assert isoformat_ar(naive) == "2026-07-02T22:30:00-03:00"

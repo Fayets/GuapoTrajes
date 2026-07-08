@@ -4,6 +4,7 @@ from src import models, schemas
 from src.descripcion_producto import format_descripcion_producto
 from src.models import EstadoProducto, CuentaDestino
 from datetime import datetime, date
+from src.fechas_ar import ahora_ar
 from pony.orm import flush
 
 class VentasServices:
@@ -80,7 +81,7 @@ class VentasServices:
                 venta = models.Venta(
                     cliente=cliente,
                     sucursal=sucursal,
-                    fecha_hora=datetime.now(),
+                    fecha_hora=ahora_ar(),
                     total=0.0,
                     tipo_precio=venta_data.tipo_precio,
                     payment_method=payment_method_str,  # Para compatibilidad
@@ -170,7 +171,7 @@ class VentasServices:
                         )
                         venta.extra_discount_reason = motivo
                         venta.extra_discount_applied_by = usuario
-                        venta.extra_discount_created_at = datetime.now()
+                        venta.extra_discount_created_at = ahora_ar()
 
                     total_final = round(
                         total_venta * (1 - descuento_pct / 100), 2

@@ -26,6 +26,13 @@ import {
 } from "@/components/metodo-pago-selector";
 import { ConfirmarGenerarContratoModal } from "@/components/modales/confirmar-generar-contrato-modal";
 import { imprimirEtiquetas100x50Lote } from "@/lib/imprimir-etiqueta-100x50";
+import { formatPesosAr, parseMontoInput, roundPesos } from "@/lib/money";
+import {
+  ahoraArgentinaPartes,
+  formatDateTimeArgentina,
+  parseDateTimeArgentina,
+} from "@/lib/fecha-calendario";
+import { abrirWhatsAppEnvio, normalizarTelefonoWhatsapp } from "@/lib/whatsapp";
 
 // Tipos
 
@@ -306,7 +313,7 @@ function OrdenesTrabajoContent() {
       setShowPagoModal(false);
       return;
     }
-    const montoTotal = parseFloat(montoPago);
+    const montoTotal = parseMontoInput(montoPago);
     if (!montoPago || Number.isNaN(montoTotal) || montoTotal <= 0) {
       toast.error("Ingresá un monto válido.");
       return;
@@ -507,27 +514,20 @@ function OrdenesTrabajoContent() {
     }
   };
 
-  const normalizarTelefonoRecibo = (telefono?: string | null): string | null => {
-    if (!telefono) return null;
-    let limpio = String(telefono).replace(/\D/g, "");
-    if (!limpio) return null;
-    limpio = limpio.replace(/^0+/, "");
-    if (limpio.startsWith("54")) {
-      if (!limpio.startsWith("549")) limpio = `549${limpio.slice(2)}`;
-    } else {
-      if (limpio.startsWith("9")) limpio = limpio.slice(1);
-      limpio = `549${limpio}`;
-    }
-    return limpio;
-  };
+  const normalizarTelefonoRecibo = (telefono?: string | null): string | null =>
+    normalizarTelefonoWhatsapp(telefono);
 
   const textoReciboParaWhatsApp = (recibo: { orden_id: number; presupuesto_numero: string; cliente_nombre: string; fecha_hora: string; monto: number; motivo: string }) => {
-    const fecha = recibo.fecha_hora ? format(new Date(recibo.fecha_hora), "dd/MM/yyyy HH:mm", { locale: es }) : format(new Date(), "dd/MM/yyyy", { locale: es });
+    const fecha = recibo.fecha_hora
+      ? formatDateTimeArgentina(recibo.fecha_hora)
+      : formatDateTimeArgentina(new Date(), { day: "2-digit", month: "2-digit", year: "numeric" });
     return `*GUAPO TRAJES - Recibo*\n\nOrden N°: ${recibo.orden_id}\nPresupuesto: ${recibo.presupuesto_numero}\nCliente: ${recibo.cliente_nombre}\nFecha: ${fecha}\nMonto: $${Number(recibo.monto).toLocaleString("es-AR")}\nConcepto: ${recibo.motivo}`;
   };
 
   const imprimirReciboPago = (recibo: { orden_id: number; fecha_hora: string; monto: number; motivo: string; cliente_nombre: string; presupuesto_numero: string }) => {
-    const fechaRecibo = recibo.fecha_hora ? format(new Date(recibo.fecha_hora), "dd/MM/yyyy HH:mm", { locale: es }) : format(new Date(), "dd/MM/yyyy HH:mm", { locale: es });
+    const fechaRecibo = recibo.fecha_hora
+      ? formatDateTimeArgentina(recibo.fecha_hora)
+      : formatDateTimeArgentina(new Date());
     const html = `
 <!DOCTYPE html>
 <html lang="es">
@@ -564,7 +564,7 @@ function OrdenesTrabajoContent() {
       return;
     }
     const texto = textoReciboParaWhatsApp(recibo);
-    window.open(`https://api.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}`, "_blank");
+    abrirWhatsAppEnvio(tel, texto);
   };
 
   const abrirVentanaContrato = (orden: OrdenTrabajo) => {
@@ -583,33 +583,43 @@ function OrdenesTrabajoContent() {
           )
         : "";
       const fechaCreacion = orden.fecha_creacion
-        ? format(new Date(orden.fecha_creacion), "dd/MM/yyyy", {
-            locale: es,
+        ? formatDateTimeArgentina(orden.fecha_creacion, {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
           })
-        : format(new Date(), "dd/MM/yyyy", { locale: es });
+        : formatDateTimeArgentina(new Date(), {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          });
 
-      // Fecha del contrato: al momento de generar el contrato de forma manual (no la de la orden)
-      const fechaContrato = new Date();
-      const dia = fechaContrato.getDate();
-      const meses = [
-        "enero",
-        "febrero",
-        "marzo",
-        "abril",
-        "mayo",
-        "junio",
-        "julio",
-        "agosto",
-        "septiembre",
-        "octubre",
-        "noviembre",
-        "diciembre",
-      ];
-      const mes = meses[fechaContrato.getMonth()];
-      const año = fechaContrato.getFullYear();
+      const fechaContratoFuente = orden.contrato_generado_at
+        ? parseDateTimeArgentina(orden.contrato_generado_at)
+        : new Date();
+      const partesContrato = orden.contrato_generado_at
+        ? (() => {
+            const p = new Intl.DateTimeFormat("es-AR", {
+              timeZone: "America/Argentina/Buenos_Aires",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            }).formatToParts(fechaContratoFuente ?? new Date());
+            return {
+              dia: Number(p.find((x) => x.type === "day")?.value ?? "1"),
+              mes: p.find((x) => x.type === "month")?.value ?? "",
+              año: Number(p.find((x) => x.type === "year")?.value ?? "2000"),
+            };
+          })()
+        : ahoraArgentinaPartes();
+      const dia = partesContrato.dia;
+      const mes = partesContrato.mes;
+      const año = partesContrato.año;
 
       // Calcular días de vigencia (diferencia entre fecha evento y fecha de creación de la orden)
-      const fechaCreacionOrden = orden.fecha_creacion ? new Date(orden.fecha_creacion) : new Date();
+      const fechaCreacionOrden = orden.fecha_creacion
+        ? parseDateTimeArgentina(orden.fecha_creacion) ?? new Date()
+        : new Date();
       const fechaEventoDate = orden.fecha_evento
         ? new Date(orden.fecha_evento + "T00:00:00")
         : new Date();
@@ -1588,7 +1598,7 @@ function OrdenesTrabajoContent() {
                         )}
                       </td>
                       <td className="text-end fw-semibold">
-                        ${orden.saldo_pendiente.toLocaleString()}
+                        ${formatPesosAr(orden.saldo_pendiente)}
                       </td>
                       <td>
                         <span
@@ -1772,7 +1782,7 @@ function OrdenesTrabajoContent() {
                     <div className="d-flex justify-content-between flex-wrap gap-2">
                       <span className="text-muted">Saldo pendiente actual</span>
                       <strong>
-                        ${ordenSeleccionada.saldo_pendiente.toLocaleString()}
+                        ${formatPesosAr(ordenSeleccionada.saldo_pendiente)}
                       </strong>
                     </div>
                   </div>
@@ -1789,24 +1799,24 @@ function OrdenesTrabajoContent() {
                       type="number"
                       value={montoPago}
                       onChange={(e) => setMontoPago(e.target.value)}
-                      min="0.01"
-                      max={ordenSeleccionada.saldo_pendiente}
-                      step="0.01"
-                      placeholder={`Máximo: $${ordenSeleccionada.saldo_pendiente.toLocaleString()}`}
+                      min="1"
+                      max={roundPesos(ordenSeleccionada.saldo_pendiente)}
+                      step="1"
+                      placeholder={`Máximo: $${formatPesosAr(ordenSeleccionada.saldo_pendiente)}`}
                     />
                     {montoPago &&
-                      parseFloat(montoPago) >
-                        ordenSeleccionada.saldo_pendiente && (
+                      parseMontoInput(montoPago) >
+                        roundPesos(ordenSeleccionada.saldo_pendiente) && (
                         <div className="text-danger small mt-2">
                           El monto no puede exceder el saldo pendiente
                         </div>
                       )}
                   </div>
 
-                  {montoPago && parseFloat(montoPago) > 0 && (
+                  {montoPago && parseMontoInput(montoPago) > 0 && (
                     <div className="small text-muted mb-3">
                       {(() => {
-                        const mt = parseFloat(montoPago);
+                        const mt = parseMontoInput(montoPago);
                         const esCC =
                           metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                           !!ordenSeleccionada.cliente_id &&
@@ -1843,7 +1853,7 @@ function OrdenesTrabajoContent() {
                         : null
                     }
                     montoReferencia={
-                      montoPago ? parseFloat(montoPago) || null : null
+                      montoPago ? parseMontoInput(montoPago) || null : null
                     }
                     onMetodoChange={(metodoId, submetodoId, metodoDisplay, complemento) => {
                       setMetodoPagoId(metodoId);
@@ -1862,7 +1872,7 @@ function OrdenesTrabajoContent() {
                   />
 
                   {(() => {
-                    const mt = parseFloat(montoPago || "0") || 0;
+                    const mt = parseMontoInput(montoPago || "0") || 0;
                     const esCC =
                       metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                       !!ordenSeleccionada.cliente_id &&
@@ -1931,7 +1941,8 @@ function OrdenesTrabajoContent() {
               <button
                 className="btn btn-primary"
                 disabled={(() => {
-                  const mt = parseFloat(montoPago || "0") || 0;
+                  const mt = parseMontoInput(montoPago || "0") || 0;
+                  const saldoMax = roundPesos(ordenSeleccionada.saldo_pendiente);
                   const esCC =
                     metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                     !!ordenSeleccionada.cliente_id &&
@@ -1948,7 +1959,7 @@ function OrdenesTrabajoContent() {
                     !montoPago ||
                     metodoPagoId == null ||
                     mt <= 0 ||
-                    mt > ordenSeleccionada.saldo_pendiente ||
+                    mt > saldoMax ||
                     faltaComplemento ||
                     (requiereCaja && !cuentaDestinoId)
                   );
@@ -2235,11 +2246,12 @@ function OrdenesTrabajoContent() {
                       </span>
                       <span className="fw-semibold">
                         {ordenSeleccionada.fecha_creacion
-                          ? format(
-                              new Date(ordenSeleccionada.fecha_creacion),
-                              "dd/MM/yyyy",
+                          ? formatDateTimeArgentina(
+                              ordenSeleccionada.fecha_creacion,
                               {
-                                locale: es,
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
                               }
                             )
                           : "-"}
@@ -2262,7 +2274,7 @@ function OrdenesTrabajoContent() {
                         Saldo pendiente
                       </span>
                       <span className="fw-semibold text-danger">
-                        ${ordenSeleccionada.saldo_pendiente.toLocaleString()}
+                        ${formatPesosAr(ordenSeleccionada.saldo_pendiente)}
                       </span>
                     </div>
                     <div className="col-12 col-md-6">
@@ -2513,17 +2525,9 @@ function OrdenesTrabajoContent() {
                               <tr key={index}>
                                 <td className="px-2 py-1 text-nowrap">
                                   {seña.fecha_hora
-                                    ? format(
-                                        new Date(seña.fecha_hora),
-                                        "dd/MM/yyyy HH:mm",
-                                        { locale: es }
-                                      )
+                                    ? formatDateTimeArgentina(seña.fecha_hora)
                                     : seña.fecha
-                                    ? format(
-                                        new Date(seña.fecha),
-                                        "dd/MM/yyyy HH:mm",
-                                        { locale: es }
-                                      )
+                                    ? formatDateTimeArgentina(seña.fecha)
                                     : "N/A"}
                                 </td>
                                 <td className="px-2 py-1">
@@ -2623,7 +2627,9 @@ function OrdenesTrabajoContent() {
                           <li key={recibo.id ?? `recibo-${index}`} className="list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 px-0 border-0 border-bottom">
                             <div className="small">
                               <span className="text-muted">
-                                {recibo.fecha_hora ? format(new Date(recibo.fecha_hora), "dd/MM/yyyy HH:mm", { locale: es }) : "N/A"}
+                                {recibo.fecha_hora
+                                  ? formatDateTimeArgentina(recibo.fecha_hora)
+                                  : "N/A"}
                               </span>
                               {" · "}
                               <strong>${Number(recibo.monto).toLocaleString("es-AR")}</strong>
