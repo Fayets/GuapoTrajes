@@ -224,24 +224,6 @@ export default function PresupuestoModal({
   /** Clave de la última petición válida; el cleanup la vacía para descartar respuestas obsoletas. */
   const conjuntosClaveRef = React.useRef("");
 
-  const textoAvisoConjuntos = React.useMemo(() => {
-    if (!conjuntosMismaFechaRows.length) return "";
-    const lines = [
-      "Conjuntos ya armados para esta fecha:",
-      "",
-      ...conjuntosMismaFechaRows.map((row) => {
-        const prod =
-          row.productos?.length > 0
-            ? row.productos.join(", ")
-            : "(sin ítems)";
-        const lugar = (row.lugar_evento ?? "").trim();
-        const lugarTxt = lugar ? ` | Lugar: ${lugar}` : "";
-        return `- ${row.nombre_agasajado}: ${prod}${lugarTxt}`;
-      }),
-    ];
-    return lines.join("\n");
-  }, [conjuntosMismaFechaRows]);
-
   React.useEffect(() => {
     if (!show) {
       conjuntosClaveRef.current = "";
@@ -306,14 +288,6 @@ export default function PresupuestoModal({
       window.clearTimeout(timer);
     };
   }, [show, formData.fechaEvento, formData.categoria, presupuestoSeleccionado?.id]);
-
-  React.useEffect(() => {
-    if (!show) return;
-    setFormData((prev: any) => {
-      if (prev.observaciones === textoAvisoConjuntos) return prev;
-      return { ...prev, observaciones: textoAvisoConjuntos };
-    });
-  }, [show, textoAvisoConjuntos, setFormData]);
 
   const minIsoDevolucion = React.useMemo(() => {
     if (!formData.fechaEvento || !formData.fechaRetiro) return undefined;
@@ -779,7 +753,9 @@ export default function PresupuestoModal({
                   )}
                 </div>
                 <div className="col-12">
-                  <label className="form-label fw-bold" htmlFor="presupuesto-observaciones">Observaciones</label>
+                  <label className="form-label fw-bold" htmlFor="presupuesto-observaciones">
+                    Conjuntos ya armados (solo uso interno)
+                  </label>
                   {conjuntosMismaFechaRows.length > 0 ? (
                     <div
                       id="presupuesto-observaciones"

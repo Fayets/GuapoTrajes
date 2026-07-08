@@ -149,7 +149,7 @@ export default function PreclientesPage() {
   const eliminarCliente = async () => {
     if (!clienteActual) return;
     try {
-      await fetch(
+      const res = await fetch(
         `${API_BASE}/preclientes/delete/${clienteActual.id}`,
         {
           method: "DELETE",
@@ -158,11 +158,21 @@ export default function PreclientesPage() {
           },
         }
       );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(
+          typeof data.detail === "string"
+            ? data.detail
+            : data.message || "No se pudo eliminar el precliente."
+        );
+        return;
+      }
       setPreclientes(preclientes.filter((c) => c.id !== clienteActual.id));
       setShowDeleteModal(false);
       setClienteActual(null);
     } catch (err) {
       console.error("Error al eliminar cliente", err);
+      alert("Error inesperado al eliminar el precliente.");
     }
   };
   const iniciarConversionPrecliente = (precliente: Precliente) => {

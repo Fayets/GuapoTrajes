@@ -292,6 +292,8 @@ function OrdenesTrabajoContent() {
       setOrdenes(normalizado);
     } catch (error) {
       console.error("Error al cargar órdenes:", error);
+      toast.error("No se pudieron cargar las órdenes de trabajo.");
+      setOrdenes([]);
     } finally {
       setCargando(false);
     }

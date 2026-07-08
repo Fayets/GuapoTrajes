@@ -17,6 +17,10 @@ import {
 } from "@/lib/tipos-precio-producto";
 import { fechaNegocioYmd, formatDdMmYyyyDesdeIso } from "@/lib/fecha-calendario";
 import {
+  observacionesParaCliente,
+  observacionesParaGuardar,
+} from "@/lib/presupuesto-observaciones";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -1082,7 +1086,7 @@ export default function PresupuestosPage() {
       categoria_evento: formData.categoria,
       nombre_agasajado: formData.agasajado,
       lugar_evento: formData.lugar,
-      observaciones: formData.observaciones,
+      observaciones: observacionesParaGuardar(formData.observaciones),
       items: itemsParaEnviar.map((item) => ({
         producto_id: item.productoId,
         cantidad: item.cantidad,
@@ -1341,7 +1345,7 @@ export default function PresupuestosPage() {
       categoria: pr.categoria_evento || "",
       agasajado: pr.nombre_agasajado || "",
       lugar: pr.lugar_evento || "",
-      observaciones: pr.observaciones || "",
+      observaciones: observacionesParaGuardar(pr.observaciones),
     });
 
     setItems(pr.items);
@@ -1717,8 +1721,9 @@ export default function PresupuestosPage() {
       detalles.push(`Lugar: ${presupuesto.lugar_evento}`);
     }
 
-    if (presupuesto.observaciones) {
-      detalles.push(`Observaciones: ${presupuesto.observaciones}`);
+    const obsCliente = observacionesParaCliente(presupuesto.observaciones);
+    if (obsCliente) {
+      detalles.push(`Observaciones: ${obsCliente}`);
     }
 
     const detalleProductos =

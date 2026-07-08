@@ -451,3 +451,18 @@ def apply_schema_migrations() -> None:
         # Si hay un error crítico, lo registramos pero no detenemos la aplicación
         logger.warning(f"Error en migraciones (continuando): {e}")
 
+
+def reparar_presupuestos_huerfanos_al_inicio() -> None:
+    """Vincula presupuestos sin titular a un cliente existente (p. ej. tras borrar precliente)."""
+    try:
+        from src.presupuesto_titular import reparar_presupuestos_huerfanos
+
+        reparados = reparar_presupuestos_huerfanos()
+        if reparados:
+            logger.info(
+                "Reparados %s presupuesto(s) huérfano(s) vinculados a cliente existente",
+                reparados,
+            )
+    except Exception as e:
+        logger.warning("No se pudieron reparar presupuestos huérfanos: %s", e)
+

@@ -94,12 +94,31 @@ class PreclientServices:
     def eliminar_cliente(self, id: int) -> dict:
         with db_session:
             try:
-                cliente = models.Precliente.get(id=id)
-                if not cliente:
+                precliente = models.Precliente.get(id=id)
+                if not precliente:
                     raise HTTPException(status_code=404, detail="Cliente no encontrado")
-                cliente.delete()
+
+                presupuestos = list(precliente.presupuestos)
+                if presupuestos:
+                    numeros = ", ".join(
+                        p.numero for p in presupuestos[:5]
+                    )
+                    extra = f" (+{len(presupuestos) - 5} más)" if len(presupuestos) > 5 else ""
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"No se puede eliminar: tiene {len(presupuestos)} presupuesto(s) "
+                            f"asociado(s) ({numeros}{extra}). "
+                            "Convertí el precliente a cliente o vinculalo al cliente existente "
+                            "antes de borrarlo."
+                        ),
+                    )
+
+                precliente.delete()
                 return {"message": "Cliente eliminado correctamente"}
             
+            except HTTPException:
+                raise
             except Exception as e:
                 print(f"Error al eliminar el cliente: {e}")
                 raise HTTPException(status_code=500, detail="Error inesperado al eliminar el cliente")
@@ -125,24 +144,52 @@ class PreclientServices:
                 if not precliente:
                     raise HTTPException(status_code=404, detail="Precliente no encontrado")
 
-                # Comprobar DNI y celular en Python para evitar TO_BOOL de Pony (str/strip en lambda)
                 clientes_todos = list(models.Cliente.select())
-                if any(str(c.dni or "").strip() == dni for c in clientes_todos):
-                    raise HTTPException(status_code=400, detail="Ya existe un cliente con ese DNI")
-                celular_precliente = str(precliente.celular or "").strip()
-                if celular_precliente and any(str(c.celular or "").strip() == celular_precliente for c in clientes_todos):
-                    raise HTTPException(status_code=400, detail="Ya existe un cliente con ese celular")
+                cliente_existente = None
+                if dni:
+                    for c in clientes_todos:
+                        if str(c.dni or "").strip() == dni:
+                            cliente_existente = c
+                            break
+                if cliente_existente is None:
+                    celular_precliente = str(precliente.celular or "").strip()
+                    if celular_precliente:
+                        for c in clientes_todos:
+                            if str(c.celular or "").strip() == celular_precliente:
+                                cliente_existente = c
+                                break
 
-                # Crear cliente completo
-                cliente = models.Cliente(
-                    nombre=precliente.nombre,
-                    apellido=precliente.apellido,
-                    celular=precliente.celular,
-                    direccion=direccion,
-                    dni=dni,
-                    notas="",
-                    fecha_nacimiento=fecha_nacimiento,
-                )
+                if cliente_existente:
+                    if dni and str(cliente_existente.dni or "").strip() and str(cliente_existente.dni or "").strip() != dni:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Ya existe un cliente con ese celular pero con otro DNI. Revisá los datos.",
+                        )
+                    if dni and not str(cliente_existente.dni or "").strip():
+                        cliente_existente.dni = dni
+                    if direccion and not str(cliente_existente.direccion or "").strip():
+                        cliente_existente.direccion = direccion
+                    if fecha_nacimiento and not cliente_existente.fecha_nacimiento:
+                        cliente_existente.fecha_nacimiento = fecha_nacimiento
+                    cliente = cliente_existente
+                else:
+                    if any(str(c.dni or "").strip() == dni for c in clientes_todos):
+                        raise HTTPException(status_code=400, detail="Ya existe un cliente con ese DNI")
+                    celular_precliente = str(precliente.celular or "").strip()
+                    if celular_precliente and any(
+                        str(c.celular or "").strip() == celular_precliente for c in clientes_todos
+                    ):
+                        raise HTTPException(status_code=400, detail="Ya existe un cliente con ese celular")
+
+                    cliente = models.Cliente(
+                        nombre=precliente.nombre,
+                        apellido=precliente.apellido,
+                        celular=precliente.celular,
+                        direccion=direccion,
+                        dni=dni,
+                        notas="",
+                        fecha_nacimiento=fecha_nacimiento,
+                    )
                 flush()
 
                 for presupuesto in list(precliente.presupuestos):

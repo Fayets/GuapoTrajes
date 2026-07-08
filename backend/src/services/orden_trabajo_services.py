@@ -22,6 +22,7 @@ from typing import List, Optional, Any
 import logging
 
 from src.descripcion_producto import format_descripcion_producto
+from src.presupuesto_titular import titular_presupuesto
 from src.services.disponibilidad_services import reconstruir_productos_reservados_para_orden
 
 logger = logging.getLogger(__name__)
@@ -141,14 +142,23 @@ def _productos_de_orden_para_api(
 
 
 def _nombre_cliente_para_recibo(orden: OrdenTrabajo) -> str:
-    p = orden.presupuesto
-    if getattr(p, "precliente", None):
-        pc = p.precliente
-        return f"{pc.apellido} {pc.nombre}".strip()
-    c = getattr(p, "cliente", None)
-    if c:
-        return f"{c.apellido} {c.nombre}".strip()
-    return "Cliente"
+    tit = titular_presupuesto(orden.presupuesto)
+    nombre = (tit.get("cliente_nombre") or "").strip()
+    return nombre if nombre and nombre != "Sin titular asignado" else "Cliente"
+
+
+def _campos_titular_presupuesto(presupuesto) -> dict:
+    tit = titular_presupuesto(presupuesto)
+    return {
+        "cliente_nombre": tit["cliente_nombre"],
+        "es_precliente": tit["es_precliente"],
+        "precliente_id": tit["precliente_id"],
+        "cliente_id": tit["cliente_id"],
+        "cliente_dni": tit["cliente_dni"],
+        "cliente_direccion": tit["cliente_direccion"],
+        "cliente_celular": tit["cliente_celular"],
+        "titular_huerfano": tit["titular_huerfano"],
+    }
 
 
 class OrdenTrabajoServices:
@@ -381,26 +391,13 @@ class OrdenTrabajoServices:
                     
                     # Calcular total de la orden
                     total_orden = o.seña_pagada + o.saldo_pendiente
+                    titular = _campos_titular_presupuesto(presupuesto)
                     
                     resultado.append({
                         "id": o.id,
                         "presupuesto_id": o.presupuesto.id,
                         "presupuesto_numero": o.presupuesto.numero,
-                        "cliente_nombre": (
-                            f"{o.presupuesto.precliente.apellido} {o.presupuesto.precliente.nombre}".strip()
-                            if o.presupuesto.precliente
-                            else f"{o.presupuesto.cliente.apellido} {o.presupuesto.cliente.nombre}".strip()
-                        ),
-                        "es_precliente": o.presupuesto.precliente is not None,
-                        "precliente_id": o.presupuesto.precliente.id if o.presupuesto.precliente else None,
-                        "cliente_id": o.presupuesto.cliente.id if o.presupuesto.cliente else None,
-                        "cliente_dni": o.presupuesto.cliente.dni if o.presupuesto.cliente else None,
-                        "cliente_direccion": o.presupuesto.cliente.direccion if o.presupuesto.cliente else None,
-                        "cliente_celular": (
-                            o.presupuesto.precliente.celular
-                            if o.presupuesto.precliente
-                            else (o.presupuesto.cliente.celular if o.presupuesto.cliente else None)
-                        ),
+                        **titular,
                         "fecha_evento": o.fecha_evento.isoformat(),
                         "fecha_creacion": o.fecha_creacion.isoformat() if o.fecha_creacion else "",
                         "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
@@ -462,24 +459,13 @@ class OrdenTrabajoServices:
 
                 # Calcular total de la orden (seña + saldo pendiente)
                 total_orden = orden.seña_pagada + orden.saldo_pendiente
+                titular = _campos_titular_presupuesto(presupuesto)
                 
                 return {
                     "id": orden.id,
                     "presupuesto_id": orden.presupuesto.id,
                     "presupuesto_numero": orden.presupuesto.numero,
-                    "cliente_nombre": (
-                    f"{orden.presupuesto.precliente.apellido} {orden.presupuesto.precliente.nombre}".strip()
-                    if orden.presupuesto.precliente
-                    else f"{orden.presupuesto.cliente.apellido} {orden.presupuesto.cliente.nombre}".strip()
-                ),
-                    "es_precliente": orden.presupuesto.precliente is not None,
-                    "precliente_id": orden.presupuesto.precliente.id if orden.presupuesto.precliente else None,
-                    "cliente_id": orden.presupuesto.cliente.id if orden.presupuesto.cliente else None,
-                    "cliente_dni": orden.presupuesto.cliente.dni if orden.presupuesto.cliente else None,
-                    "cliente_direccion": orden.presupuesto.cliente.direccion if orden.presupuesto.cliente else None,
-                    "cliente_celular": (
-                    orden.presupuesto.precliente.celular if orden.presupuesto.precliente else orden.presupuesto.cliente.celular
-                ),
+                    **titular,
                     "fecha_evento": orden.fecha_evento.isoformat(),
                     "fecha_creacion": orden.fecha_creacion.isoformat() if orden.fecha_creacion else "",
                     "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
@@ -533,11 +519,7 @@ class OrdenTrabajoServices:
                         "id": o.id,
                         "presupuesto_id": o.presupuesto.id,
                         "presupuesto_numero": o.presupuesto.numero,
-                        "cliente_nombre": (
-                            f"{o.presupuesto.precliente.apellido} {o.presupuesto.precliente.nombre}".strip()
-                            if o.presupuesto.precliente
-                            else f"{o.presupuesto.cliente.apellido} {o.presupuesto.cliente.nombre}".strip()
-                        ),
+                        **_campos_titular_presupuesto(o.presupuesto),
                         "fecha_evento": o.fecha_evento.isoformat(),
                         "estado": o.estado,
                         "seña_pagada": o.seña_pagada,
@@ -724,11 +706,7 @@ class OrdenTrabajoServices:
                     )
                     flush()
 
-                cliente_nombre_recibo = (
-                    f"{orden.presupuesto.precliente.apellido} {orden.presupuesto.precliente.nombre}".strip()
-                    if orden.presupuesto.precliente
-                    else f"{orden.presupuesto.cliente.apellido} {orden.presupuesto.cliente.nombre}".strip()
-                )
+                cliente_nombre_recibo = _nombre_cliente_para_recibo(orden)
                 motivo = (motivo_recibo or "Pago").strip() or "Pago"
                 if credito_aplicado > 1e-9:
                     cc_txt = f"${int(round(credito_aplicado)):,}".replace(",", ".")
@@ -1216,15 +1194,10 @@ class OrdenTrabajoServices:
                         presupuesto = o.presupuesto
                         if not presupuesto:
                             continue
-                        if presupuesto.precliente:
-                            cliente_nombre = f"{presupuesto.precliente.apellido} {presupuesto.precliente.nombre}".strip()
-                        elif presupuesto.cliente:
-                            cliente_nombre = f"{presupuesto.cliente.apellido} {presupuesto.cliente.nombre}".strip()
-                        else:
-                            cliente_nombre = "—"
-                        cliente = getattr(presupuesto, "cliente", None)
-                        cliente_dni = getattr(cliente, "dni", None) if cliente else None
-                        cliente_direccion = getattr(cliente, "direccion", None) if cliente else None
+                        titular = titular_presupuesto(presupuesto)
+                        cliente_nombre = titular["cliente_nombre"]
+                        cliente_dni = titular["cliente_dni"]
+                        cliente_direccion = titular["cliente_direccion"]
                         productos_reservados = [
                             {
                                 "producto_id": p["producto_id"],
@@ -1299,14 +1272,11 @@ class OrdenTrabajoServices:
 
     def _obtener_cliente_orden(self, orden: "OrdenTrabajo") -> tuple:
         """Obtiene nombre y celular del cliente/precliente de la orden."""
-        presupuesto = getattr(orden, "presupuesto", None)
-        if not presupuesto:
+        tit = titular_presupuesto(getattr(orden, "presupuesto", None))
+        nombre = tit.get("cliente_nombre")
+        if nombre in (None, "", "Sin titular asignado"):
             return None, None
-        if presupuesto.cliente:
-            return f"{presupuesto.cliente.nombre} {presupuesto.cliente.apellido}".strip(), presupuesto.cliente.celular or None
-        if presupuesto.precliente:
-            return f"{presupuesto.precliente.nombre} {presupuesto.precliente.apellido}".strip(), presupuesto.precliente.celular or None
-        return None, None
+        return nombre, tit.get("cliente_celular")
 
     def _aplicar_destino_productos(
         self,
