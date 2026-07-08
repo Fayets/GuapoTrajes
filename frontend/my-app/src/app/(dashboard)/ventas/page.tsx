@@ -144,7 +144,8 @@ export default function VentasPage() {
     Array<{
       productoId: number;
       productoNombre: string;
-      productoCodigo?: string;
+      productoCodigo: string;
+      productoEstado?: string;
       cantidad: number;
       precio_unitario: number;
       subtotal: number;
@@ -152,7 +153,6 @@ export default function VentasPage() {
     }>
   >([]);
 
-  const loadToastShownRef = useRef(false);
   const pendingVentaImportRef = useRef<ScanQueueRow[] | null>(null);
   /** Si la venta se armó desde la cola del Dashboard; al guardar OK se vacía localStorage. */
   const importedFromQueueRef = useRef(false);
@@ -196,10 +196,6 @@ export default function VentasPage() {
           cuenta_destino_nombre: v.cuenta_destino_nombre ?? null
         }));
         setVentas(ventasNormalizadas);
-        if (!loadToastShownRef.current) {
-          loadToastShownRef.current = true;
-          toast.success("Ventas cargadas correctamente");
-        }
       } else {
         throw new Error("Formato inesperado de respuesta");
       }
@@ -408,7 +404,8 @@ export default function VentasPage() {
           (p
             ? formatDescripcionProducto(p.descripcion, p.descripcion_extra)
             : row.descripcion) ?? row.descripcion,
-        productoCodigo: cod,
+        productoCodigo: cod ?? "Sin código",
+        productoEstado: p?.estado,
         cantidad: 1,
         precio_unitario,
         subtotal: precio_unitario,
@@ -620,70 +617,65 @@ export default function VentasPage() {
     return tipo?.label || tipoPrecio;
   };
 
+  const codigoProducto = (producto: Producto) =>
+    producto.codigo?.trim() || producto.codigo_barra?.trim() || "Sin código";
+
   const handleItemChange = (campo: string, valor: any) => {
     setNuevoItem((prev) => ({ ...prev, [campo]: valor }));
   };
 
   const agregarItem = () => {
-    if (!nuevoItem.productoId || !nuevoItem.tipo_precio) {
+    const tipoPrecio =
+      items.length > 0 ? items[0].tipo_precio : nuevoItem.tipo_precio;
+
+    if (!nuevoItem.productoId || !tipoPrecio) {
       toast.error("Seleccioná producto y tipo de precio");
       return;
     }
 
     const productoId = Number(nuevoItem.productoId);
     if (items.some((i) => i.productoId === productoId)) {
-      toast.error("Este producto ya está en la venta (cada prenda es única)");
+      toast.error("Este producto ya está en la venta");
       return;
     }
 
-    // Verificar que el tipo de precio sea el mismo que los productos ya agregados
-    if (items.length > 0) {
-      const primerTipoPrecio = items[0].tipo_precio;
-      if (nuevoItem.tipo_precio !== primerTipoPrecio) {
-        toast.error(
-          `Todos los productos deben tener el mismo tipo de precio. Ya tienes productos con tipo: ${getTipoPrecioLabel(
-            primerTipoPrecio
-          )}`
-        );
-        return;
-      }
+    if (items.length > 0 && tipoPrecio !== items[0].tipo_precio) {
+      toast.error(
+        `Todos los productos deben usar el mismo tipo de precio (${getTipoPrecioLabel(
+          items[0].tipo_precio
+        )})`
+      );
+      return;
     }
 
-    const producto = productos.find(
-      (p) => p.id === Number(nuevoItem.productoId)
-    );
+    const producto = productos.find((p) => p.id === productoId);
     if (!producto) {
       toast.error("Producto no encontrado");
       return;
     }
 
-    const precio_unitario = getPrecioUnitario(
-      Number(nuevoItem.productoId),
-      nuevoItem.tipo_precio
-    );
+    const precio_unitario = getPrecioUnitario(productoId, tipoPrecio);
     const nuevoItemCompleto = {
-      productoId: productoId,
+      productoId,
       productoNombre: formatDescripcionProducto(
         producto.descripcion,
         producto.descripcion_extra
       ),
-      productoCodigo: producto.codigo,
+      productoCodigo: codigoProducto(producto),
+      productoEstado: producto.estado,
       cantidad: 1,
       precio_unitario,
       subtotal: precio_unitario,
-      tipo_precio: nuevoItem.tipo_precio,
+      tipo_precio: tipoPrecio,
     };
 
     setItems((prev) => [...prev, nuevoItemCompleto]);
-
-    // Limpiar el formulario
     setNuevoItem({
       productoId: "",
-      tipo_precio: "",
-      porcentaje: "",
+      tipo_precio: tipoPrecio,
+      porcentaje: nuevoItem.porcentaje,
     });
     setProductoFiltro("");
-    resetDescuentoVenta();
   };
 
   const eliminarItem = (productoId: number) => {
@@ -764,6 +756,29 @@ export default function VentasPage() {
       ? `(-${porcentajeDescuento}%)`
       : null;
 
+  const tipoPrecioActivo =
+    items.length > 0 ? items[0].tipo_precio : nuevoItem.tipo_precio;
+
+  const productosIdsEnVenta = new Set(items.map((i) => i.productoId));
+
+  const productosFiltrados = productos.filter(
+    (p) =>
+      !productosIdsEnVenta.has(p.id) &&
+      `${formatDescripcionProducto(p.descripcion, p.descripcion_extra)}${p.codigo || ""}${p.codigo_barra || ""}`
+        .toLowerCase()
+        .includes(productoFiltro.toLowerCase())
+  );
+
+  const productoSeleccionado = productos.find(
+    (p) => p.id === Number(nuevoItem.productoId)
+  );
+
+  const puedeAgregarProducto =
+    !!nuevoItem.productoId &&
+    !!tipoPrecioActivo &&
+    !!productoSeleccionado &&
+    (!productoSeleccionado.estado || productoSeleccionado.estado === "SALON");
+
   // Normaliza fechas tipo 'YYYY-MM-DD' para evitar 'Invalid Date'
   function parseFecha(fecha: string | Date | undefined): Date {
     if (!fecha) return new Date("");
@@ -779,7 +794,6 @@ export default function VentasPage() {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="fw-bold">Ventas</h1>
-          <p className="text-muted">Gestión de ventas de Guapo Trajes</p>
         </div>
         <Button
           onClick={() => {
@@ -934,11 +948,7 @@ export default function VentasPage() {
           dialogStyle={{ maxWidth: "640px", width: "95%" }}
         >
           <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
-            <DialogTitle className="fw-semibold">Método de Pago y Cuenta Destino</DialogTitle>
-            <DialogDescription className="mb-0">
-              Confirmá cómo se cobra la venta. Podés volver al paso anterior para
-              modificar productos o descuentos.
-            </DialogDescription>
+            <DialogTitle className="fw-semibold">Método de pago</DialogTitle>
           </DialogHeader>
 
           <div className="modal-body px-3 px-md-4">
@@ -1068,36 +1078,27 @@ export default function VentasPage() {
             dialogStyle={{ maxWidth: "820px", width: "95%" }}
           >
             <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
-              <DialogTitle className="fw-semibold">
-                Nueva Venta — Productos y cliente
-              </DialogTitle>
-              <DialogDescription className="mb-0">
-                Seleccioná el cliente, agregá productos y aplicá descuento si
-                corresponde. Después elegí el método de pago.
-              </DialogDescription>
+              <DialogTitle className="fw-semibold">Nueva venta</DialogTitle>
             </DialogHeader>
 
             <div className="modal-body px-3 px-md-4">
               <div className="card shadow-sm mb-4">
                 <div className="card-body p-4">
-                  <h6 className="fw-semibold text-secondary mb-3 d-flex align-items-center">
-                    <i className="bi bi-person-circle me-2 text-primary"></i>
-                    Información del Cliente
-                  </h6>
+                  <h6 className="fw-semibold mb-3">Cliente</h6>
 
                   <div className="row g-3">
                     <div className="col-12 col-md-6">
-                      <label className="form-label fw-bold">Buscar Cliente</label>
+                      <label className="form-label">Buscar</label>
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="Buscar por apellido, nombre o DNI..."
+                        placeholder="Apellido, nombre o DNI"
                         value={clienteFiltro}
                         onChange={(e) => setClienteFiltro(e.target.value)}
                       />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label fw-bold">Seleccionar Cliente</label>
+                      <label className="form-label">Cliente</label>
                       <select
                         className={`form-select ${
                           touched["cliente_id"] && !ventaActual.cliente_id
@@ -1133,8 +1134,8 @@ export default function VentasPage() {
                         </div>
                       )}
                     </div>
-                    <div className="col-12">
-                      <label className="form-label fw-bold">Fecha de Venta</label>
+                    <div className="col-12 col-md-4">
+                      <label className="form-label">Fecha</label>
                       <Input
                         type="date"
                         value={ventaActual.fecha_hora || ""}
@@ -1163,23 +1164,46 @@ export default function VentasPage() {
 
               <div className="card shadow-sm mb-4">
                 <div className="card-body p-4">
-                  <h6 className="fw-semibold text-secondary mb-3 d-flex align-items-center">
-                    <i className="bi bi-box-seam me-2 text-success"></i>
-                    Agregar Producto
-                  </h6>
+                  <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <h6 className="fw-semibold mb-0">Productos</h6>
+                    {items.length > 0 && (
+                      <span className="badge bg-primary-subtle text-primary">
+                        {getTipoPrecioLabel(items[0].tipo_precio)}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="row g-3 align-items-end">
-                    <div className="col-12 col-md-4">
-                      <label className="form-label fw-bold">Buscar producto</label>
+                    {items.length === 0 && (
+                      <div className="col-12 col-md-4">
+                        <label className="form-label">Tipo de precio</label>
+                        <select
+                          className="form-select"
+                          value={nuevoItem.tipo_precio}
+                          onChange={(e) =>
+                            handleItemChange("tipo_precio", e.target.value)
+                          }
+                        >
+                          <option value="">Seleccionar</option>
+                          {tiposPrecios.map((tipo) => (
+                            <option key={tipo.value} value={tipo.value}>
+                              {tipo.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className={items.length === 0 ? "col-12 col-md-5" : "col-12 col-md-6"}>
+                      <label className="form-label">Buscar producto</label>
                       <Input
                         type="text"
-                        placeholder="Buscar por código o descripción"
+                        placeholder="Código o descripción"
                         value={productoFiltro}
                         onChange={(e) => setProductoFiltro(e.target.value)}
                       />
                     </div>
-                    <div className="col-12 col-md-4">
-                      <label className="form-label fw-bold">Producto</label>
+                    <div className={items.length === 0 ? "col-12 col-md-3" : "col-12 col-md-6"}>
+                      <label className="form-label">Producto</label>
                       <select
                         className="form-select"
                         value={nuevoItem.productoId}
@@ -1187,171 +1211,82 @@ export default function VentasPage() {
                           handleItemChange("productoId", e.target.value)
                         }
                       >
-                        <option value="">Seleccionar producto</option>
-                        {productos
-                          .filter((p) =>
-                            `${formatDescripcionProducto(p.descripcion, p.descripcion_extra)}${p.codigo || ""}`
-                              .toLowerCase()
-                              .includes(productoFiltro.toLowerCase())
-                          )
-                          .map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {formatDescripcionProducto(p.descripcion, p.descripcion_extra)} - Código: {p.codigo || "Sin código"} - $
-                              {getPrecioUnitario(
-                                p.id,
-                                nuevoItem.tipo_precio || "Lista"
-                              ).toLocaleString()}
-                            </option>
-                          ))}
-                      </select>
-                      {nuevoItem.productoId &&
-                        (() => {
-                          const producto = productos.find(
-                            (p) => p.id === Number(nuevoItem.productoId)
-                          );
-                          if (producto && producto.estado) {
-                            const puedeVender = producto.estado === "SALON";
-                            return (
-                              <div
-                                className={`mt-2 p-2 rounded-3 border text-sm ${
-                                  puedeVender
-                                    ? "border-success bg-success bg-opacity-10 text-success"
-                                    : "border-danger bg-danger bg-opacity-10 text-danger"
-                                }`}
-                              >
-                                <div className="d-flex align-items-center gap-2">
-                                  <span
-                                    className={`badge rounded-circle p-2 ${
-                                      puedeVender
-                                        ? "bg-success"
-                                        : "bg-danger"
-                                    }`}
-                                  ></span>
-                                  <span className="fw-semibold">
-                                    Estado: {producto.estado}
-                                  </span>
-                                </div>
-                                {!puedeVender && (
-                                  <div className="small mt-2">
-                                    ❌ Este producto no se puede vender. Solo se
-                                    pueden vender productos en estado "SALON".
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-                    </div>
-                    <div className="col-12 col-md-4">
-                      <label className="form-label fw-bold">
-                        Tipo de Precio
-                        {items.length > 0 && (
-                          <span className="text-primary small ms-2">
-                            (Usando: {getTipoPrecioLabel(items[0].tipo_precio)})
-                          </span>
-                        )}
-                      </label>
-                      <select
-                        className="form-select"
-                        value={
-                          items.length > 0
-                            ? items[0].tipo_precio
-                            : nuevoItem.tipo_precio
-                        }
-                        onChange={(e) =>
-                          handleItemChange("tipo_precio", e.target.value)
-                        }
-                        disabled={items.length > 0}
-                      >
-                        <option value="">Seleccionar tipo</option>
-                        {tiposPrecios.map((tipo) => (
-                          <option key={tipo.value} value={tipo.value}>
-                            {tipo.label}
+                        <option value="">Seleccionar</option>
+                        {productosFiltrados.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {formatDescripcionProducto(p.descripcion, p.descripcion_extra)} — {codigoProducto(p)}
                           </option>
                         ))}
                       </select>
-                      {items.length > 0 && (
-                        <div className="text-muted small mt-2">
-                          El tipo de precio se establece con el primer producto
-                        </div>
-                      )}
                     </div>
-                    <div className="col-12 col-md-4 col-lg-2">
+                    <div className="col-12 col-md-auto">
                       <Button
                         variant="success"
                         onClick={agregarItem}
-                        disabled={
-                          !nuevoItem.productoId ||
-                          !nuevoItem.tipo_precio ||
-                          (() => {
-                            const producto = productos.find(
-                              (p) => p.id === Number(nuevoItem.productoId)
-                            );
-                            return !!(
-                              producto &&
-                              producto.estado &&
-                              producto.estado !== "SALON"
-                            );
-                          })()
-                        }
+                        disabled={!puedeAgregarProducto}
                         className="w-100 d-flex align-items-center justify-content-center gap-2"
                       >
                         <Plus className="w-4 h-4" /> Agregar
                       </Button>
-                      {(() => {
-                        const producto = productos.find(
-                          (p) => p.id === Number(nuevoItem.productoId)
-                        );
-                        if (
-                          producto &&
-                          producto.estado &&
-                          producto.estado !== "SALON"
-                        ) {
-                          return (
-                            <div className="text-danger small mt-2 text-center">
-                              No se puede agregar: producto en estado "
-                              {producto.estado}"
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
                     </div>
                   </div>
+
+                  {productoSeleccionado && (
+                    <div className="d-flex flex-wrap align-items-center gap-2 mt-3 small">
+                      <span className="text-muted">Código:</span>
+                      <span className="fw-semibold">{codigoProducto(productoSeleccionado)}</span>
+                      {productoSeleccionado.estado && (
+                        <>
+                          <span className="text-muted ms-2">Estado:</span>
+                          <span
+                            className={`badge ${
+                              productoSeleccionado.estado === "SALON"
+                                ? "bg-success-subtle text-success"
+                                : "bg-danger-subtle text-danger"
+                            }`}
+                          >
+                            {productoSeleccionado.estado}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {productoSeleccionado?.estado &&
+                    productoSeleccionado.estado !== "SALON" && (
+                      <div className="text-danger small mt-2">
+                        Solo se pueden vender productos en estado SALON (actual:{" "}
+                        {productoSeleccionado.estado}).
+                      </div>
+                    )}
                 </div>
               </div>
 
               {items.length > 0 && (
                 <div className="card shadow-sm mb-4">
                   <div className="card-body p-4">
-                    <h6 className="fw-semibold text-secondary mb-3 d-flex align-items-center">
-                      <i className="bi bi-percent me-2 text-warning"></i>
-                      Descuento sobre el total
+                    <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                      <h6 className="fw-semibold mb-0">
+                        Resumen ({items.length})
+                      </h6>
                       {hayDescuentoVenta && (
                         <button
                           type="button"
-                          className="btn btn-outline-danger btn-sm ms-auto"
+                          className="btn btn-outline-danger btn-sm"
                           onClick={resetDescuentoVenta}
                         >
-                          <i className="bi bi-x-circle me-1"></i>
                           Quitar descuento
                         </button>
                       )}
-                    </h6>
+                    </div>
+
                     <div className="row g-3 align-items-end mb-4">
                       <div className="col-12 col-md-5">
-                        <label className="form-label fw-bold">
-                          Porcentaje de descuento
-                        </label>
+                        <label className="form-label">Descuento %</label>
                         <input
                           type="number"
                           className="form-control"
-                          placeholder={
-                            esAdminPrivilegiado
-                              ? "Ej: 7, 12, 23..."
-                              : "Ej: 5, 10, 15..."
-                          }
+                          placeholder="Ej: 10"
                           value={nuevoItem.porcentaje}
                           min={0}
                           max={100}
@@ -1367,42 +1302,38 @@ export default function VentasPage() {
                           className="btn btn-success w-100"
                           onClick={aplicarDescuento}
                         >
-                          <i className="bi bi-plus-circle me-1"></i>
-                          Aplicar descuento
+                          Aplicar
                         </button>
-                      </div>
-                      <div className="col-12">
-                        <small className="text-muted">
-                          <i className="bi bi-info-circle me-1"></i>
-                          {esAdminPrivilegiado
-                            ? "Como administrador podés ingresar cualquier porcentaje. Si supera el 50%, se pedirá motivo."
-                            : "Descuentos mayores a 15% requieren motivo obligatorio."}
-                        </small>
                       </div>
                     </div>
 
-                    <h6 className="fw-semibold text-secondary mb-3 d-flex align-items-center">
-                      <i className="bi bi-list-check me-2 text-purple"></i>
-                      Productos Seleccionados ({items.length})
-                    </h6>
-
-                    <div className="d-flex flex-column gap-3">
-                      {items.map((item, index) => (
+                    <div className="d-flex flex-column gap-2">
+                      {items.map((item) => (
                         <div
-                          key={index}
-                          className="border rounded-3 p-3 bg-light d-flex justify-content-between flex-wrap gap-3"
+                          key={item.productoId}
+                          className="border rounded-3 p-3 bg-light d-flex justify-content-between align-items-center flex-wrap gap-2"
                         >
                           <div className="flex-grow-1">
                             <div className="fw-semibold">{item.productoNombre}</div>
-                            <div className="text-muted small">
-                              Código: {item.productoCodigo || "Sin código"} · Tipo: {getTipoPrecioLabel(item.tipo_precio)}
+                            <div className="d-flex flex-wrap align-items-center gap-2 mt-1 small">
+                              <span className="text-muted">
+                                Código: <span className="text-dark fw-medium">{item.productoCodigo}</span>
+                              </span>
+                              {item.productoEstado && (
+                                <span
+                                  className={`badge ${
+                                    item.productoEstado === "SALON"
+                                      ? "bg-success-subtle text-success"
+                                      : "bg-secondary-subtle text-secondary"
+                                  }`}
+                                >
+                                  {item.productoEstado}
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="d-flex align-items-center gap-3">
-                            <span className="text-muted">
-                              ${item.precio_unitario.toLocaleString()}
-                            </span>
-                            <span className="fw-semibold text-primary">
+                            <span className="fw-semibold">
                               ${item.subtotal.toLocaleString()}
                             </span>
                             <Button
