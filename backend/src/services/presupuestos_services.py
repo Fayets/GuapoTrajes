@@ -62,6 +62,11 @@ def _extra_discount_reason_para_db(value: Optional[str]) -> str:
     return str(value).strip()
 
 
+def _total_pagado_orden(orden, total_presupuesto_anterior: float) -> float:
+    """Importe ya abonado (seña + pagos adicionales), según total y saldo vigentes."""
+    return max(0.0, float(total_presupuesto_anterior) - float(orden.saldo_pendiente))
+
+
 class PresupuestosServices:
     def __init__(self):
         pass
@@ -509,17 +514,17 @@ class PresupuestosServices:
                     presupuesto.extra_discount_applied_by = None
                     presupuesto.extra_discount_created_at = None
 
+                total_presupuesto_anterior = float(presupuesto.total or 0.0)
                 presupuesto.total = total
 
                 if orden:
-                    if orden.seña_pagada > total:
+                    total_pagado = _total_pagado_orden(orden, total_presupuesto_anterior)
+                    if total_pagado > float(total) + 1e-9:
                         raise HTTPException(
                             status_code=400,
-                            detail="El total del presupuesto no puede ser menor que la seña ya pagada.",
+                            detail="El total del presupuesto no puede ser menor que lo ya pagado.",
                         )
-                    orden.saldo_pendiente = max(
-                        0.0, float(total) - float(orden.seña_pagada)
-                    )
+                    orden.saldo_pendiente = max(0.0, float(total) - total_pagado)
                     # Misma regla que al pagar saldo desde la orden: si no queda saldo, marcar pagada.
                     oest = (orden.estado or "").strip().lower()
                     if orden.saldo_pendiente <= 0:
