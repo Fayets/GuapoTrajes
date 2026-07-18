@@ -66,6 +66,34 @@ def ahora_ar() -> datetime:
     return datetime.now(ZONA_ARGENTINA).replace(tzinfo=None)
 
 
+def hoy_ar() -> date:
+    """Día civil actual en Argentina (no usar date.today() del servidor UTC)."""
+    return datetime.now(ZONA_ARGENTINA).date()
+
+
+def utc_naive_a_ar_naive(val: datetime) -> datetime:
+    """Interpreta un datetime naive como UTC y lo convierte a hora Argentina naive."""
+    if val.tzinfo is not None:
+        return val.astimezone(ZONA_ARGENTINA).replace(tzinfo=None)
+    return val.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZONA_ARGENTINA).replace(tzinfo=None)
+
+
+def parece_timestamp_utc_tras_medianoche(val: datetime) -> bool:
+    """
+    Detecta el bug típico: hora de negocio AR (21:00–23:59) guardada como UTC naive
+    (00:00–02:59 del día siguiente). No toca valores ya normalizados a AR.
+    """
+    if val is None:
+        return False
+    naive = val.replace(tzinfo=None) if val.tzinfo is not None else val
+    ar = utc_naive_a_ar_naive(naive)
+    return (
+        ar.date() != naive.date()
+        and naive.hour < 3
+        and ar.hour >= 21
+    )
+
+
 def normalizar_fecha_hora_ar(val: datetime) -> datetime:
     """Normaliza un datetime a hora Argentina naive."""
     if val.tzinfo is None:

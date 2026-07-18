@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { formatMoneyAr } from "@/lib/money";
 
 type ConfirmarGenerarContratoModalProps = {
   open: boolean;
@@ -67,7 +68,7 @@ export function ConfirmarGenerarContratoModal({
               <span>
                 Esta orden tiene un saldo pendiente de{" "}
                 <strong>
-                  ${saldoPendiente.toLocaleString("es-AR")}
+                  {formatMoneyAr(saldoPendiente)}
                 </strong>
                 . Solo podés generar el contrato porque sos administrador.
               </span>

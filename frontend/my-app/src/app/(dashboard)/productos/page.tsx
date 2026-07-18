@@ -18,6 +18,7 @@ import { RoleGate } from "@/components/RoleGate";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { fetchProductosPage } from "@/lib/fetch-productos";
 import { formatDescripcionProducto } from "@/lib/descripcion-producto";
+import { formatMoneyAr } from "@/lib/money";
 
 type ItemConfig = { id: number; nombre: string; codigo: string };
 
@@ -385,6 +386,12 @@ export default function ProductosPage() {
       tela_id: productoSinId.tela_id ?? null,
       talle_id: productoSinId.talle_id ?? null,
       color_id: productoSinId.color_id ?? null,
+      descripcion: buildDescripcionFromIds(
+        productoSinId.linea_id ?? null,
+        productoSinId.talle_id ?? null,
+        productoSinId.tela_id ?? null,
+        productoSinId.color_id ?? null
+      ),
       descripcion_extra: (productoSinId.descripcion_extra || "").trim() || null,
       costo: productoSinId.costo ?? 0,
       precio_alquiler_lista: productoSinId.precio_alquiler_lista ?? 0,
@@ -856,7 +863,7 @@ export default function ProductosPage() {
                     <td>{producto.talle_nombre ?? "-"}</td>
                     <td>{producto.color_nombre ?? "-"}</td>
                     <td>{(producto.descripcion_extra ?? "").trim() || "—"}</td>
-                    <td>{producto.precio_alquiler_lista}</td>
+                    <td>{formatMoneyAr(producto.precio_alquiler_lista)}</td>
                     <td className="text-center">
                       {producto.en_ventana_reserva_hoy === true ? (
                         <span className="text-success" title="Reservado">
@@ -1996,10 +2003,7 @@ export default function ProductosPage() {
                         <div className="col-12 col-sm-6">
                           <label className="form-label fw-bold">Costo</label>
                           <div className="form-control bg-light border-0">
-                            ${productoActual.costo?.toLocaleString("es-AR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }) || "0.00"}
+                            {formatMoneyAr(productoActual.costo ?? 0)}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">
@@ -2007,10 +2011,7 @@ export default function ProductosPage() {
                             Precio Alquiler (Lista)
                           </label>
                           <div className="form-control bg-light border-0">
-                            ${productoActual.precio_alquiler_lista?.toLocaleString("es-AR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }) || "0.00"}
+                            {formatMoneyAr(productoActual.precio_alquiler_lista ?? 0)}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">
@@ -2018,10 +2019,7 @@ export default function ProductosPage() {
                             Precio Alquiler (Efectivo)
                           </label>
                           <div className="form-control bg-light border-0">
-                            ${productoActual.precio_alquiler_efectivo?.toLocaleString("es-AR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }) || "0.00"}
+                            {formatMoneyAr(productoActual.precio_alquiler_efectivo ?? 0)}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">
@@ -2029,10 +2027,7 @@ export default function ProductosPage() {
                             Precio Venta Nuevo (Lista)
                           </label>
                           <div className="form-control bg-light border-0">
-                            ${productoActual.precio_venta_nuevo_lista?.toLocaleString("es-AR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }) || "0.00"}
+                            {formatMoneyAr(productoActual.precio_venta_nuevo_lista ?? 0)}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">
@@ -2040,10 +2035,7 @@ export default function ProductosPage() {
                             Precio Venta Nuevo (Efectivo)
                           </label>
                           <div className="form-control bg-light border-0">
-                            ${productoActual.precio_venta_nuevo_efectivo?.toLocaleString("es-AR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }) || "0.00"}
+                            {formatMoneyAr(productoActual.precio_venta_nuevo_efectivo ?? 0)}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">
@@ -2051,10 +2043,7 @@ export default function ProductosPage() {
                             Precio Medio Uso
                           </label>
                           <div className="form-control bg-light border-0">
-                            ${productoActual.precio_de_venta_medio_uso?.toLocaleString("es-AR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }) || "0.00"}
+                            {formatMoneyAr(productoActual.precio_de_venta_medio_uso ?? 0)}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">
@@ -2062,10 +2051,7 @@ export default function ProductosPage() {
                             Precio Venta Final
                           </label>
                           <div className="form-control bg-light border-0">
-                            ${productoActual.precio_venta?.toLocaleString("es-AR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }) || "0.00"}
+                            {formatMoneyAr(productoActual.precio_venta ?? 0)}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">
@@ -2073,10 +2059,7 @@ export default function ProductosPage() {
                             Precio Liquidación
                           </label>
                           <div className="form-control bg-light border-0">
-                            ${productoActual.precio_liquidacion?.toLocaleString("es-AR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }) || "0.00"}
+                            {formatMoneyAr(productoActual.precio_liquidacion ?? 0)}
                           </div>
                         </div>
                         <div className="col-12 col-sm-6">

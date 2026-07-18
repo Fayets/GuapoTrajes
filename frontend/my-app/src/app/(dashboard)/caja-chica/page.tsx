@@ -47,15 +47,11 @@ const estadoBadgeClasses: Record<string, string> = {
 };
 
 import { getApiBaseUrl } from "@/lib/api-config";
+import { parseMontoInput, formatPesosAr } from "@/lib/money";
 
 const API_BASE = getApiBaseUrl();
 
-const formatCurrency = (value: number) =>
-  value.toLocaleString("es-AR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
+const formatCurrency = (value: number) => formatPesosAr(value);
 const METODO_CAJA_CHICA = "EFECTIVO";
 
 const getMetodoPagoLabel = (value: string) =>
@@ -287,7 +283,8 @@ export default function CajaChicaPage() {
   const esMovimientoEgreso = form.tipo_movimiento === "EGRESO";
   const esFormularioValido = esMovimientoEgreso
     ? form.monto.trim() !== "" &&
-      Number(form.monto) > 0 &&
+      !Number.isNaN(parseMontoInput(form.monto)) &&
+      parseMontoInput(form.monto) > 0 &&
       !!form.tipo_egreso
     : isEditing && isAdmin;
 
@@ -297,10 +294,13 @@ export default function CajaChicaPage() {
       (isEditing && movimientoEditando?.tipo_movimiento === "EGRESO");
 
     const montoNumber = esMovimientoEgreso
-      ? Number(form.monto)
+      ? parseMontoInput(form.monto)
       : movimientoEditando?.monto ?? 0;
 
-    if (esMovimientoEgreso && (!montoNumber || montoNumber <= 0)) {
+    if (
+      esMovimientoEgreso &&
+      (Number.isNaN(montoNumber) || !montoNumber || montoNumber <= 0)
+    ) {
       toast.error("Ingresá un monto válido para registrar el egreso.");
       return;
     }

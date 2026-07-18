@@ -1,3 +1,5 @@
+import { formatMoneyAr } from "@/lib/money";
+
 export type TipoPrecioProducto =
   | "precio_alquiler_lista"
   | "precio_alquiler_efectivo"
@@ -90,6 +92,6 @@ export function inferirTipoPrecioProducto(
 export function resumenPreciosProducto(producto: ProductoPrecios): string {
   return TIPOS_PRECIO_PRODUCTO.map(
     ({ value, label }) =>
-      `${label}: $${precioProductoPorTipo(producto, value).toLocaleString("es-AR")}`
+      `${label}: ${formatMoneyAr(precioProductoPorTipo(producto, value))}`
   ).join(" · ");
 }

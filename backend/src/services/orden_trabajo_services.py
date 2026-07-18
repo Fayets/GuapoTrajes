@@ -15,9 +15,11 @@ from src.models import (
     Lavanderia,
     Modista,
     Roles,
+    TipoMovimiento,
+    Usuario,
 )
-from datetime import datetime, timedelta, date
-from src.fechas_ar import ahora_ar, isoformat_ar
+from datetime import datetime, timedelta
+from src.fechas_ar import ahora_ar, hoy_ar, isoformat_ar
 from src.money import round_pesos
 from typing import List, Optional, Any
 import logging
@@ -686,7 +688,15 @@ class OrdenTrabajoServices:
                     )
 
                 saldo_pendiente_anterior = round_pesos(orden.saldo_pendiente)
-                nuevo_saldo_pendiente = max(0, round_pesos(saldo_pendiente_anterior - monto_total))
+                # Mantener seña_pagada alineada con pagos_services (total abonado).
+                orden.seña_pagada = round_pesos(orden.seña_pagada + monto_total)
+                total_presupuesto = round_pesos(orden.presupuesto.total)
+                nuevo_saldo_pendiente = max(0, round_pesos(total_presupuesto - orden.seña_pagada))
+                # No subir el saldo por drift de float; el pago no puede dejar más pendiente.
+                if nuevo_saldo_pendiente > saldo_pendiente_anterior:
+                    nuevo_saldo_pendiente = max(
+                        0, round_pesos(saldo_pendiente_anterior - monto_total)
+                    )
                 orden.saldo_pendiente = nuevo_saldo_pendiente
 
                 movimiento_caja = None
@@ -858,11 +868,21 @@ class OrdenTrabajoServices:
                                 f"{metodo_pago_display} — {monto_cc_txt} con cuenta corriente"
                             )
 
+                    # Monto de seña inicial desde caja + CC (no usar seña_pagada actual:
+                    # ese campo se incrementa con pagos adicionales).
+                    monto_sena_inicial = 0.0
+                    if seña_inicial_mov is not None:
+                        monto_sena_inicial = round_pesos(seña_inicial_mov.monto)
+                    if cc_debit_sena > 1e-6:
+                        monto_sena_inicial = round_pesos(monto_sena_inicial + cc_debit_sena)
+                    if monto_sena_inicial <= 0:
+                        monto_sena_inicial = round_pesos(orden.seña_pagada)
+
                     historial["pagos"].append({
                         "tipo": "Seña inicial",
                         "fecha": isoformat_ar(orden.fecha_creacion),
                         "fecha_hora": isoformat_ar(orden.fecha_creacion),
-                        "monto": orden.seña_pagada,
+                        "monto": monto_sena_inicial,
                         "metodo_pago": metodo_pago_display,
                         "origen": "Creación de orden",
                         "usuario_nombre": usuario_nombre,
@@ -1147,7 +1167,11 @@ class OrdenTrabajoServices:
                 )
 
     def registrar_contrato_generado(self, orden_id: int, usuario=None) -> dict:
-        """Registrar que se generó el contrato para esta orden (cliente, saldo 0, DNI y dirección)."""
+        """Registrar que se generó el contrato para esta orden (cliente, DNI y dirección).
+
+        Empleados: requieren saldo pendiente 0.
+        ADMIN / SUPER_ADMIN: pueden generar aunque haya deuda.
+        """
         with db_session:
             try:
                 orden = OrdenTrabajo.get(id=orden_id)
@@ -1155,9 +1179,9 @@ class OrdenTrabajoServices:
                     raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
                 if orden.presupuesto.precliente is not None:
                     raise HTTPException(status_code=400, detail="Solo se puede generar contrato para órdenes de cliente (no precliente).")
-                if orden.saldo_pendiente != 0:
-                    rol = getattr(usuario, "rol", None) if usuario else None
-                    rol_str = rol.value if hasattr(rol, "value") else str(rol) if rol else ""
+                saldo = round_pesos(orden.saldo_pendiente or 0)
+                if saldo > 0:
+                    rol_str = self._rol_efectivo_usuario(usuario)
                     if rol_str not in (Roles.ADMIN.value, Roles.SUPER_ADMIN.value):
                         raise HTTPException(status_code=400, detail="El saldo pendiente debe ser cero para generar el contrato.")
                 if not orden.presupuesto.cliente.dni or not orden.presupuesto.cliente.direccion:
@@ -1180,6 +1204,24 @@ class OrdenTrabajoServices:
                 raise
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Error al registrar contrato: {str(e)}")
+
+    @staticmethod
+    def _rol_efectivo_usuario(usuario) -> str:
+        """Rol efectivo: siempre relee por id en la sesión abierta (fuente de verdad)."""
+        if usuario is None:
+            return ""
+        uid = getattr(usuario, "id", None)
+        if uid is not None:
+            from src.models import Usuario
+
+            u = Usuario.get(id=int(uid))
+            if u is not None:
+                rol = u.rol
+                return (rol.value if hasattr(rol, "value") else str(rol)).strip().upper()
+        rol = getattr(usuario, "rol", None)
+        if rol is None:
+            return ""
+        return (rol.value if hasattr(rol, "value") else str(rol)).strip().upper()
 
     def listar_contratos(self) -> list:
         """Listar órdenes que tienen contrato generado (para la vista Contratos)."""
@@ -1227,41 +1269,91 @@ class OrdenTrabajoServices:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Error al listar contratos: {str(e)}")
 
-    def eliminar_orden_trabajo(self, orden_id: int) -> dict:
-        """Eliminar una orden de trabajo y liberar los productos reservados"""
+    def eliminar_orden_trabajo(self, orden_id: int, usuario_id: Optional[int] = None) -> dict:
+        """Eliminar una orden de trabajo, anular señas/pagos en caja y liberar productos."""
         with db_session:
             try:
                 orden = OrdenTrabajo.get(id=orden_id)
                 if not orden:
                     raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
 
-                # Obtener el presupuesto asociado antes de eliminar la orden
                 presupuesto = orden.presupuesto
-                
-                # Eliminar todos los productos reservados asociados a esta orden
-                # Esto libera automáticamente los productos para que estén disponibles
-                productos_reservados = list(orden.productos_reservados)
-                for producto_reservado in productos_reservados:
+                presupuesto_numero = presupuesto.numero if presupuesto else None
+                orden_id_eliminada = orden.id
+                seña_pagada = round_pesos(orden.seña_pagada)
+
+                usuario = None
+                if usuario_id:
+                    usuario = Usuario.get(id=usuario_id)
+                if not usuario:
+                    # Fallback: usuario de algún movimiento de seña / primer admin de la sucursal
+                    for cm in list(CajaMovimiento.select()):
+                        if presupuesto_numero and _origen_caja_liga_presupuesto_o_orden(
+                            getattr(cm, "origen", None), presupuesto_numero, orden_id_eliminada
+                        ):
+                            usuario = cm.usuario
+                            break
+                if not usuario:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No se pudo determinar el usuario para anular los movimientos de caja",
+                    )
+
+                anulaciones_caja = self._anular_ingresos_caja_de_orden(
+                    orden_id=orden_id_eliminada,
+                    presupuesto_numero=presupuesto_numero or "",
+                    usuario=usuario,
+                )
+                anulaciones_cc = self._devolver_saldo_cc_de_orden(orden)
+
+                # Recibos ligados a la orden (FK Required)
+                for recibo in list(orden.recibos):
+                    recibo.delete()
+
+                # Liberar productos reservados
+                for producto_reservado in list(orden.productos_reservados):
                     producto_reservado.delete()
-                
-                # Asegurar que las eliminaciones se apliquen antes de eliminar la orden
+
                 flush()
 
-                # Eliminar la orden
-                orden_id_eliminada = orden.id
                 orden.delete()
-                
-                # Cambiar el estado del presupuesto a "cancelada" ya que la orden fue eliminada
+
                 if presupuesto:
                     presupuesto.estado = "cancelada"
-                    flush()  # Asegurar que el cambio de estado del presupuesto se guarde
+                    flush()
+
+                monto_anulado_caja = round_pesos(sum(a["monto"] for a in anulaciones_caja))
+                monto_devuelto_cc = round_pesos(sum(a["monto"] for a in anulaciones_cc))
+                partes_msg = [
+                    "Orden de trabajo eliminada exitosamente.",
+                    "El presupuesto fue cancelado y los productos liberados.",
+                ]
+                if monto_anulado_caja > 0:
+                    partes_msg.append(
+                        f"Se anuló en caja ${int(monto_anulado_caja):,}".replace(",", ".")
+                        + " (seña/pagos)."
+                    )
+                if monto_devuelto_cc > 0:
+                    partes_msg.append(
+                        f"Se devolvió ${int(monto_devuelto_cc):,}".replace(",", ".")
+                        + " a cuenta corriente del cliente."
+                    )
+                if monto_anulado_caja <= 0 and monto_devuelto_cc <= 0 and seña_pagada > 0:
+                    partes_msg.append(
+                        "No se encontraron movimientos de caja/CC para anular "
+                        "(la seña pudo haberse registrado solo parcialmente)."
+                    )
 
                 return {
-                    "message": "Orden de trabajo eliminada exitosamente. El presupuesto ha sido cancelado y los productos han sido liberados.",
+                    "message": " ".join(partes_msg),
                     "success": True,
                     "data": {
-                        "id": orden_id_eliminada
-                    }
+                        "id": orden_id_eliminada,
+                        "monto_anulado_caja": monto_anulado_caja,
+                        "monto_devuelto_cuenta_corriente": monto_devuelto_cc,
+                        "anulaciones_caja": anulaciones_caja,
+                        "anulaciones_cuenta_corriente": anulaciones_cc,
+                    },
                 }
 
             except HTTPException:
@@ -1270,6 +1362,117 @@ class OrdenTrabajoServices:
                 import traceback
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al eliminar orden de trabajo: {str(e)}")
+
+    def _anular_ingresos_caja_de_orden(
+        self,
+        orden_id: int,
+        presupuesto_numero: str,
+        usuario: Usuario,
+    ) -> list:
+        """Genera EGRESOS que anulan INGRESOS de seña/pagos adicionales de la orden."""
+        anulaciones = []
+        if not presupuesto_numero:
+            return anulaciones
+
+        ingresos = []
+        for cm in list(CajaMovimiento.select()):
+            tipo_val = cm.tipo.value if hasattr(cm.tipo, "value") else str(cm.tipo)
+            if tipo_val != "INGRESO":
+                continue
+            if not _origen_caja_liga_presupuesto_o_orden(
+                getattr(cm, "origen", None), presupuesto_numero, orden_id
+            ):
+                continue
+            ingresos.append(cm)
+
+        for ingreso in ingresos:
+            origen_anul = f"ANULACION_ORDEN:{orden_id}:MOV:{ingreso.id}"
+            ya_anulado = False
+            for cm in list(CajaMovimiento.select()):
+                if (cm.origen or "") == origen_anul:
+                    ya_anulado = True
+                    break
+            if ya_anulado:
+                continue
+
+            monto = round_pesos(ingreso.monto)
+            if monto <= 0:
+                continue
+
+            CajaMovimiento(
+                fecha_hora=ahora_ar(),
+                tipo=TipoMovimiento.EGRESO,
+                monto=monto,
+                payment_method=ingreso.payment_method,
+                metodo_pago_configurable=ingreso.metodo_pago_configurable,
+                submetodo_pago=ingreso.submetodo_pago,
+                origen=origen_anul,
+                categoria="OTROS_EGRESOS",
+                destino=f"Devolución seña/pago — anulación orden {orden_id}",
+                venta=None,
+                usuario=usuario,
+                sucursal=ingreso.sucursal,
+                cuenta_destino=ingreso.cuenta_destino,
+            )
+            anulaciones.append(
+                {
+                    "movimiento_original_id": ingreso.id,
+                    "origen_original": ingreso.origen,
+                    "monto": monto,
+                    "origen_anulacion": origen_anul,
+                }
+            )
+        flush()
+        return anulaciones
+
+    def _devolver_saldo_cc_de_orden(self, orden: OrdenTrabajo) -> list:
+        """Si se usó saldo a favor (débitos CC) en la orden, lo restituye como crédito."""
+        from src.services.pagos_services import PagosServices
+
+        anulaciones = []
+        cliente = None
+        try:
+            if orden.presupuesto and orden.presupuesto.cliente:
+                cliente = orden.presupuesto.cliente
+        except Exception:
+            cliente = None
+        if not cliente:
+            return anulaciones
+
+        pagos = PagosServices()
+        debitos = [
+            m
+            for m in list(CuentaCorriente.select())
+            if getattr(m, "referencia_orden", None) == orden.id
+            and getattr(m, "tipo", "") == "debito"
+            and float(m.monto or 0) > 0
+        ]
+        for deb in debitos:
+            monto = round_pesos(deb.monto)
+            if monto <= 0:
+                continue
+            concepto = (
+                f"Anulación orden {orden.id} — devolución saldo usado "
+                f"({deb.concepto or 'pago'})"
+            )
+            mov = pagos.append_movimiento_cuenta_corriente(
+                cliente,
+                "credito",
+                monto,
+                concepto,
+                None,
+                None,
+                None,
+            )
+            anulaciones.append(
+                {
+                    "debito_original_id": deb.id,
+                    "credito_id": mov.id,
+                    "monto": monto,
+                }
+            )
+        flush()
+        return anulaciones
 
     def _obtener_cliente_orden(self, orden: "OrdenTrabajo") -> tuple:
         """Obtiene nombre y celular del cliente/precliente de la orden."""
@@ -1307,7 +1510,7 @@ class OrdenTrabajoServices:
                 raise HTTPException(status_code=404, detail="Modista no encontrada")
 
         estado_enum = getattr(EstadoProducto, destino, None) or EstadoProducto.SALON
-        hoy = date.today()
+        hoy = hoy_ar()
         notas = (descripcion or "").strip() or None
         cli_nombre = (cliente_nombre or "").strip() or None
         cli_celular = (cliente_celular or "").strip() or None

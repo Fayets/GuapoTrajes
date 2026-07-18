@@ -119,7 +119,12 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
     direccion: "",
   })
 
-  const { token } = useAuth()
+  const { token, me, isAdmin, isSuperAdmin } = useAuth()
+  const puedeAdministrar =
+    isAdmin ||
+    isSuperAdmin ||
+    me?.role === "ADMIN" ||
+    me?.role === "SUPER_ADMIN"
   const API_BASE = getApiBaseUrl()
   const L = config.labels
 
@@ -458,10 +463,12 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
           <h1 className="page-title mb-1">{L.title}</h1>
           <p className="text-muted mb-0">{L.subtitle}</p>
         </div>
-        <Button className="btn-oxblood d-flex align-items-center gap-2" onClick={nuevoEntity}>
-          <i className="bi bi-plus-lg"></i>
-          {L.newEntity}
-        </Button>
+        {puedeAdministrar && (
+          <Button className="btn-oxblood d-flex align-items-center gap-2" onClick={nuevoEntity}>
+            <i className="bi bi-plus-lg"></i>
+            {L.newEntity}
+          </Button>
+        )}
       </div>
 
       <div className="row g-3 align-items-center mb-4">
@@ -488,7 +495,9 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                 <TableHead>Nombre</TableHead>
                 <TableHead>Dirección</TableHead>
                 <TableHead>Celular</TableHead>
-                <TableHead className="text-center">Acciones</TableHead>
+                {puedeAdministrar && (
+                  <TableHead className="text-center">Acciones</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -498,29 +507,31 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                     <TableCell className="fw-semibold">{entity.nombre}</TableCell>
                     <TableCell>{entity.direccion}</TableCell>
                     <TableCell className="text-nowrap">{entity.telefono}</TableCell>
-                    <TableCell>
-                      <div className="d-flex justify-content-center gap-2">
-                        <button
-                          className="btn-action btn-action--editar"
-                          onClick={() => editarEntity(entity)}
-                          title="Editar"
-                        >
-                          <Pencil size={16} strokeWidth={1.75} aria-hidden />
-                        </button>
-                        <button
-                          className="btn-action btn-action--borrar"
-                          onClick={() => confirmarEliminar(entity)}
-                          title="Eliminar"
-                        >
-                          <Trash2 size={16} strokeWidth={1.75} aria-hidden />
-                        </button>
-                      </div>
-                    </TableCell>
+                    {puedeAdministrar && (
+                      <TableCell>
+                        <div className="d-flex justify-content-center gap-2">
+                          <button
+                            className="btn-action btn-action--editar"
+                            onClick={() => editarEntity(entity)}
+                            title="Editar"
+                          >
+                            <Pencil size={16} strokeWidth={1.75} aria-hidden />
+                          </button>
+                          <button
+                            className="btn-action btn-action--borrar"
+                            onClick={() => confirmarEliminar(entity)}
+                            title="Eliminar"
+                          >
+                            <Trash2 size={16} strokeWidth={1.75} aria-hidden />
+                          </button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted py-4">
+                  <TableCell colSpan={puedeAdministrar ? 4 : 3} className="text-center text-muted py-4">
                     {L.emptyList}
                   </TableCell>
                 </TableRow>

@@ -7,6 +7,7 @@ import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { formatDdMmYyyyDesdeIso } from "@/lib/fecha-calendario";
+import { formatMoneyAr, formatPesosAr } from "@/lib/money";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,
@@ -107,7 +108,7 @@ function clasificarMovimientoCC(m: MovimientoCC): {
 }
 
 function formatearMontoCC(n: number): string {
-  return `$${Math.round(Math.abs(n) || 0).toLocaleString("es-AR", { maximumFractionDigits: 0 })}`;
+  return formatMoneyAr(Math.abs(n) || 0);
 }
 
 export default function ClientePerfilPage() {
@@ -391,10 +392,20 @@ export default function ClientePerfilPage() {
           <div className="small text-muted">Saldo a favor</div>
           <div className={`fs-4 fw-bold ${saldoActual > 0 ? "text-success" : "text-muted"}`}>
             $
-            {saldoActual.toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+            {formatPesosAr(saldoActual)}
           </div>
         </div>
       </div>
+
+      {cliente?.notas?.trim() && (
+        <div className="alert alert-warning d-flex align-items-start gap-2 mb-3" role="alert">
+          <i className="bi bi-exclamation-triangle-fill mt-1" aria-hidden />
+          <div>
+            <div className="fw-bold">Observación interna del cliente</div>
+            <div style={{ whiteSpace: "pre-wrap" }}>{cliente.notas.trim()}</div>
+          </div>
+        </div>
+      )}
 
       <ul className="nav nav-tabs mb-3">
         <li className="nav-item">
@@ -593,7 +604,7 @@ export default function ClientePerfilPage() {
                           <span className="badge bg-secondary">{o.estado}</span>
                         </td>
                         <td className="text-end">
-                          ${Math.round(o.saldo_pendiente).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                          {formatMoneyAr(o.saldo_pendiente)}
                         </td>
                       </tr>
                     ))}
@@ -648,7 +659,7 @@ export default function ClientePerfilPage() {
                           <span className="badge bg-secondary">{row.estado}</span>
                         </td>
                         <td className="text-end">
-                          ${Math.round(row.precioUnitario).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                          {formatMoneyAr(row.precioUnitario)}
                         </td>
                       </tr>
                     ))
@@ -760,7 +771,7 @@ function DetallePresupuestoBody({ data }: { data: PresupuestoDetalle }) {
         <dt className="col-sm-3 text-muted">Total</dt>
         <dd className="col-sm-9">
           $
-          {Math.round(Number(data.total) || 0).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+          {formatPesosAr(Number(data.total) || 0)}
         </dd>
         <dt className="col-sm-3 text-muted">Fecha evento</dt>
         <dd className="col-sm-9">{fechaEv}</dd>
@@ -798,7 +809,7 @@ function DetallePresupuestoBody({ data }: { data: PresupuestoDetalle }) {
                   <tr key={String(row.id ?? idx)}>
                     <td>{desc}</td>
                     <td className="text-end">
-                      ${Math.round(sub).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                      {formatMoneyAr(sub)}
                     </td>
                   </tr>
                 );

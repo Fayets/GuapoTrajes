@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/auth-context";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { MetodoPagoSelector } from "@/components/metodo-pago-selector";
+import { parseMontoInput, formatPesosAr, formatMoneyAr } from "@/lib/money";
 
 interface CajaMovimiento {
   id: number;
@@ -109,21 +110,21 @@ export default function CajaPage() {
 
   // Función de validación para formularios
   const isIngresoValid = (formData: { monto: string; concepto: string; metodoPagoId: number | null; categoria: string; cuentaDestinoId: number | null }) => {
+    const monto = parseMontoInput(formData.monto);
     return (
       formData.monto.trim() !== "" &&
       formData.concepto.trim() !== "" &&
       formData.metodoPagoId !== null &&
       formData.categoria.trim() !== "" &&
       formData.cuentaDestinoId !== null &&
-      parseFloat(formData.monto) > 0
+      !Number.isNaN(monto) &&
+      monto > 0
     );
   };
 
   const isTransferValid = (formData: { monto: string; descripcion: string }) => {
-    return (
-      formData.monto.trim() !== "" &&
-      parseFloat(formData.monto) > 0
-    );
+    const monto = parseMontoInput(formData.monto);
+    return formData.monto.trim() !== "" && !Number.isNaN(monto) && monto > 0;
   };
 
   const API_BASE = getApiBaseUrl();
@@ -277,8 +278,8 @@ export default function CajaPage() {
     }
 
     // Validar que el monto sea un número válido y positivo
-    const montoNumber = parseFloat(nuevoIngreso.monto);
-    if (isNaN(montoNumber) || montoNumber <= 0) {
+    const montoNumber = parseMontoInput(nuevoIngreso.monto);
+    if (Number.isNaN(montoNumber) || montoNumber <= 0) {
       toast.error("El monto debe ser un número positivo");
       return;
     }
@@ -344,8 +345,8 @@ export default function CajaPage() {
       return;
     }
 
-    const monto = parseFloat(nuevaTransferencia.monto);
-    if (isNaN(monto) || monto <= 0) {
+    const monto = parseMontoInput(nuevaTransferencia.monto);
+    if (Number.isNaN(monto) || monto <= 0) {
       toast.error("El monto debe ser un número positivo");
       return;
     }
@@ -376,10 +377,7 @@ export default function CajaPage() {
       }
 
       toast.success(
-        `$${monto.toLocaleString("es-AR", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })} transferido a Caja Chica exitosamente.`
+        `${formatMoneyAr(monto)} transferido a Caja Chica exitosamente.`
       );
 
       setShowTransferModal(false);
@@ -399,8 +397,8 @@ export default function CajaPage() {
       return;
     }
 
-    const monto = parseFloat(nuevaTransferenciaConcentradora.monto);
-    if (isNaN(monto) || monto <= 0) {
+    const monto = parseMontoInput(nuevaTransferenciaConcentradora.monto);
+    if (Number.isNaN(monto) || monto <= 0) {
       toast.error("El monto debe ser un número positivo");
       return;
     }
@@ -431,10 +429,7 @@ export default function CajaPage() {
       }
 
       toast.success(
-        `$${monto.toLocaleString("es-AR", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })} enviados correctamente a la Caja Concentradora.`
+        `${formatMoneyAr(monto)} enviados correctamente a la Caja Concentradora.`
       );
 
       setShowTransferConcentradoraModal(false);
@@ -983,10 +978,7 @@ export default function CajaPage() {
                       <>
                         <span className="text-warning fw-semibold">
                           Falta para cierre: $
-                          {saldoParaCierre.toLocaleString("es-AR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatPesosAr(saldoParaCierre)}
                         </span>
                         <span className="text-muted ms-2">
                           <i className="bi bi-clock me-1"></i>
@@ -1057,7 +1049,7 @@ export default function CajaPage() {
                           estaActivo ? "text-oxblood" : "text-ink"
                         }`}
                       >
-                        ${total.toLocaleString("es-AR")}
+                        {formatMoneyAr(total)}
                       </div>
                     </button>
                   );
@@ -1088,7 +1080,7 @@ export default function CajaPage() {
                       metodoFiltro ? "text-muted" : "text-oxblood"
                     }`}
                   >
-                    ${totalGeneralCalculado.toLocaleString("es-AR")}
+                    {formatMoneyAr(totalGeneralCalculado)}
                   </div>
                 </button>
               </div>
@@ -1191,7 +1183,7 @@ export default function CajaPage() {
                                 }
                               >
                                 {movimiento.tipo === "INGRESO" ? "+" : "-"}$
-                                {movimiento.monto.toLocaleString("es-AR")}
+                                {formatPesosAr(movimiento.monto)}
                               </span>
                             </td>
                             <td className="text-muted">
@@ -1739,7 +1731,7 @@ export default function CajaPage() {
               <div className="alert alert-light border py-2 px-3 mb-2 d-flex align-items-center justify-content-between small">
                 <span className="text-muted">Saldo efectivo</span>
                 <span className={`fw-bold ${Math.abs(saldoParaCierre) < 0.01 ? "text-success" : "text-warning"}`}>
-                  ${saldoParaCierre.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatMoneyAr(saldoParaCierre)}
                 </span>
               </div>
               {Math.abs(saldoParaCierre) >= 0.01 && (

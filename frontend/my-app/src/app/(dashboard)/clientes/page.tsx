@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import ReactPaginate from "react-paginate";
 import Link from "next/link";
-import { Eye, PlusCircle, Pencil, Trash2 } from "lucide-react";
+import { Eye, Plus, PlusCircle, Pencil, Trash2 } from "lucide-react";
 import ClienteModal from "@/components/modales/clienteModal";
 import { RoleGate } from "@/components/RoleGate";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getApiBaseUrl } from "@/lib/api-config";
-import { formatDdMmYyyyDesdeIso, fechaIsoCalendario } from "@/lib/fecha-calendario";
+import { formatDdMmYyyyDesdeIso, fechaIsoCalendario, formatDateTimeArgentina } from "@/lib/fecha-calendario";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth-context";
 import { MetodoPagoSelector } from "@/components/metodo-pago-selector";
+import { formatMoneyAr, parseMontoInput } from "@/lib/money";
+import { abrirWhatsAppEnvio, normalizarTelefonoWhatsapp } from "@/lib/whatsapp";
 
 type Cliente = {
   id: number;
@@ -87,6 +89,11 @@ export default function ClientesPage() {
   const [token, setToken] = useState<string | null>(null);
   const API_BASE = getApiBaseUrl();
 
+  const [showObservacionModal, setShowObservacionModal] = useState(false);
+  const [clienteObservacion, setClienteObservacion] = useState<Cliente | null>(null);
+  const [textoObservacion, setTextoObservacion] = useState("");
+  const [guardandoObservacion, setGuardandoObservacion] = useState(false);
+
   const [showCreditoModal, setShowCreditoModal] = useState(false);
   const [clienteCredito, setClienteCredito] = useState<Cliente | null>(null);
   const [montoCredito, setMontoCredito] = useState("");
@@ -99,6 +106,14 @@ export default function ClientesPage() {
   const [cuentasDestinoCredito, setCuentasDestinoCredito] = useState<
     Array<{ id: number; nombre_titular: string }>
   >([]);
+  const [reciboCredito, setReciboCredito] = useState<{
+    fecha_hora: string;
+    monto: number;
+    motivo: string;
+    cliente_nombre: string;
+    cliente_celular?: string;
+    presupuesto_numero: string;
+  } | null>(null);
 
   useEffect(() => {
     const t = localStorage.getItem("token");
@@ -182,7 +197,9 @@ export default function ClientesPage() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -213,6 +230,65 @@ export default function ClientesPage() {
       notas: cliente.notas,
     });
     setShowModal(true);
+  };
+
+  const abrirObservacion = (cliente: Cliente) => {
+    setClienteObservacion(cliente);
+    setTextoObservacion(cliente.notas || "");
+    setShowObservacionModal(true);
+  };
+
+  const cerrarObservacion = () => {
+    setShowObservacionModal(false);
+    setClienteObservacion(null);
+    setTextoObservacion("");
+  };
+
+  const guardarObservacion = async () => {
+    if (!clienteObservacion || !token) return;
+    setGuardandoObservacion(true);
+    try {
+      const payload = {
+        nombre: clienteObservacion.nombre,
+        apellido: clienteObservacion.apellido,
+        dni: clienteObservacion.dni,
+        direccion: clienteObservacion.direccion,
+        celular: clienteObservacion.celular,
+        fecha_nacimiento: clienteObservacion.fecha_nacimiento || null,
+        notas: textoObservacion.trim(),
+      };
+      const res = await fetch(
+        `${API_BASE}/clientes/update/${clienteObservacion.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.detail || data.message || "No se pudo guardar la observación");
+      }
+      const notasGuardadas = (data.data?.notas ?? textoObservacion.trim()) as string;
+      setClientes((prev) =>
+        prev.map((c) =>
+          c.id === clienteObservacion.id ? { ...c, notas: notasGuardadas } : c
+        )
+      );
+      toast.success(
+        notasGuardadas
+          ? "Observación interna guardada"
+          : "Observación interna eliminada"
+      );
+      cerrarObservacion();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al guardar la observación");
+    } finally {
+      setGuardandoObservacion(false);
+    }
   };
 
   const confirmarEliminar = async (cliente: Cliente) => {
@@ -458,7 +534,8 @@ export default function ClientesPage() {
       const nombreCompleto = `${cliente.apellido} ${cliente.nombre}`.trim();
       const dni = (cliente.dni ?? "").toString().trim();
       if (normalizarParaBusqueda(dni).includes(termino)) return true;
-      return normalizarParaBusqueda(nombreCompleto).includes(termino);
+      if (normalizarParaBusqueda(nombreCompleto).includes(termino)) return true;
+      return normalizarParaBusqueda(cliente.notas || "").includes(termino);
     });
   })();
   const clientesPaginados = clientesFiltrados.slice(
@@ -507,10 +584,76 @@ export default function ClientesPage() {
     void cargarCuentasDestinoCredito();
   };
 
+  const imprimirReciboAnticipo = (recibo: {
+    fecha_hora: string;
+    monto: number;
+    motivo: string;
+    cliente_nombre: string;
+    presupuesto_numero: string;
+  }) => {
+    const fechaRecibo = recibo.fecha_hora
+      ? formatDateTimeArgentina(recibo.fecha_hora)
+      : formatDateTimeArgentina(new Date());
+    const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Recibo - Anticipo</title>
+<style>@media print{body{margin:0}.no-print{display:none}} body{font-family:'Courier New',monospace;width:80mm;margin:0 auto;padding:8px;font-size:10px;}
+.info-row{display:flex;justify-content:space-between;margin-bottom:4px;}.header{text-align:center;border-bottom:1px dashed #000;padding-bottom:5px;margin-bottom:8px;}
+</style></head>
+<body>
+<div class="header"><h1>RECIBO</h1><div>GUAPO TRAJES</div></div>
+<div class="info-row"><span>Comprobante:</span><span>${recibo.presupuesto_numero}</span></div>
+<div class="info-row"><span>Cliente:</span><span>${recibo.cliente_nombre}</span></div>
+<div class="info-row"><span>Fecha:</span><span>${fechaRecibo}</span></div>
+<div class="info-row"><span>Monto:</span><span>${formatMoneyAr(Number(recibo.monto))}</span></div>
+<div class="info-row"><span>Concepto:</span><span>${recibo.motivo}</span></div>
+<div class="no-print" style="margin-top:15px;text-align:center;">
+<button onclick="window.print()">Imprimir</button><button onclick="window.close()">Cerrar</button>
+</div>
+</body></html>`;
+    const ventana = window.open("", "_blank", "width=320,height=420");
+    if (ventana) {
+      ventana.document.write(html);
+      ventana.document.close();
+      setTimeout(() => ventana.print(), 400);
+    } else {
+      toast.error("Permití ventanas emergentes para imprimir.");
+    }
+  };
+
+  const compartirReciboAnticipoWhatsApp = (
+    recibo: {
+      fecha_hora: string;
+      monto: number;
+      motivo: string;
+      cliente_nombre: string;
+      presupuesto_numero: string;
+    },
+    telefono?: string | null
+  ) => {
+    const tel = normalizarTelefonoWhatsapp(telefono || "");
+    if (!tel) {
+      toast.error("No hay número de teléfono del cliente para enviar por WhatsApp.");
+      return;
+    }
+    const fecha = recibo.fecha_hora
+      ? formatDateTimeArgentina(recibo.fecha_hora)
+      : formatDateTimeArgentina(new Date());
+    const texto =
+      `*GUAPO TRAJES - Recibo*\n\n` +
+      `Comprobante: ${recibo.presupuesto_numero}\n` +
+      `Cliente: ${recibo.cliente_nombre}\n` +
+      `Fecha: ${fecha}\n` +
+      `Monto: ${formatMoneyAr(Number(recibo.monto))}\n` +
+      `Concepto: ${recibo.motivo}`;
+    abrirWhatsAppEnvio(tel, texto);
+  };
+
   const guardarCreditoManual = async () => {
     if (!token || !clienteCredito) return;
-    const monto = parseFloat(montoCredito.replace(",", "."));
-    if (!monto || monto <= 0) {
+    const monto = parseMontoInput(montoCredito);
+    if (!monto || Number.isNaN(monto) || monto <= 0) {
       toast.error("Ingresá un monto válido mayor a cero.");
       return;
     }
@@ -559,14 +702,28 @@ export default function ClientesPage() {
         throw new Error(msg || "No se pudo registrar el crédito");
       }
       const data = await res.json();
-      toast.success(
-        data.registrado_en_caja
-          ? "Crédito y ingreso en caja diaria registrados correctamente."
-          : "Crédito registrado (ajuste sin movimiento de caja)."
-      );
+      const clienteParaRecibo = clienteCredito;
       setShowCreditoModal(false);
       setClienteCredito(null);
       await fetchClientes();
+
+      if (data.recibo) {
+        setReciboCredito({
+          fecha_hora: data.recibo.fecha_hora,
+          monto: Number(data.recibo.monto),
+          motivo: data.recibo.motivo || concepto,
+          cliente_nombre: data.recibo.cliente_nombre,
+          cliente_celular:
+            data.recibo.cliente_celular || clienteParaRecibo.celular || "",
+          presupuesto_numero: data.recibo.presupuesto_numero || "ANTICIPO",
+        });
+      } else {
+        toast.success(
+          data.registrado_en_caja
+            ? "Crédito y ingreso en caja diaria registrados correctamente."
+            : "Crédito registrado (ajuste sin movimiento de caja)."
+        );
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error al registrar crédito");
     } finally {
@@ -621,7 +778,7 @@ export default function ClientesPage() {
                   <TableHead>Fecha nac.</TableHead>
                   <TableHead>Dirección</TableHead>
                   <TableHead>Celular</TableHead>
-                  <TableHead>Notas</TableHead>
+                  <TableHead>Observación interna</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -639,8 +796,27 @@ export default function ClientesPage() {
                       </TableCell>
                       <TableCell>{cliente.direccion}</TableCell>
                       <TableCell className="text-nowrap">{cliente.celular}</TableCell>
-                      <TableCell className="text-muted">
-                        {cliente.notas || "Sin notas"}
+                      <TableCell className="text-center">
+                        {(cliente.notas || "").trim() ? (
+                          <button
+                            type="button"
+                            className="btn-action btn-action--wide btn-action--brass"
+                            onClick={() => abrirObservacion(cliente)}
+                            title="Ver observación interna"
+                          >
+                            Abrir
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-action btn-action--ver"
+                            onClick={() => abrirObservacion(cliente)}
+                            title="Agregar observación interna"
+                            aria-label="Agregar observación interna"
+                          >
+                            <Plus size={16} strokeWidth={1.75} aria-hidden />
+                          </button>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="d-flex justify-content-center gap-2 flex-wrap">
@@ -736,6 +912,56 @@ export default function ClientesPage() {
         onSave={guardarCliente}
         modoEdicion={!!clienteActual}
       />
+
+      <Dialog
+        open={showObservacionModal}
+        onOpenChange={(open) => {
+          if (!open) cerrarObservacion();
+        }}
+      >
+        <DialogContent dialogClassName="modal-dialog-centered">
+          <DialogHeader className="border-bottom pb-3">
+            <DialogTitle className="fw-semibold">
+              Observación interna
+              {clienteObservacion
+                ? ` — ${clienteObservacion.apellido}, ${clienteObservacion.nombre}`
+                : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="modal-body">
+            <DialogDescription className="small mb-2">
+              Dato interno del cliente (ej.: devolvió con demora, ropa muy sucia o descuidada).
+            </DialogDescription>
+            <textarea
+              className="form-control"
+              rows={5}
+              maxLength={2000}
+              value={textoObservacion}
+              onChange={(e) => setTextoObservacion(e.target.value)}
+              placeholder="Escribí la observación interna…"
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="border-top pt-3 gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={cerrarObservacion}
+              disabled={guardandoObservacion}
+            >
+              Cerrar
+            </button>
+            <button
+              type="button"
+              className="btn btn-oxblood"
+              onClick={() => void guardarObservacion()}
+              disabled={guardandoObservacion}
+            >
+              {guardandoObservacion ? "Guardando…" : "Guardar"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal para confirmar eliminación */}
       <div
@@ -912,6 +1138,65 @@ export default function ClientesPage() {
             >
               {guardandoCredito ? "Guardando…" : "Confirmar"}
             </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!reciboCredito}
+        onOpenChange={(open) => !open && setReciboCredito(null)}
+      >
+        <DialogContent
+          dialogClassName="modal-dialog-centered"
+          dialogStyle={{ maxWidth: "480px", width: "95%" }}
+        >
+          <DialogHeader className="border-bottom pb-3">
+            <DialogTitle className="fw-semibold">Recibo generado</DialogTitle>
+            <DialogDescription className="mb-0">
+              ¿Desea imprimir o compartir el recibo por WhatsApp?
+            </DialogDescription>
+          </DialogHeader>
+          {reciboCredito && (
+            <div className="modal-body py-3 small text-muted">
+              <p className="mb-1">{reciboCredito.presupuesto_numero}</p>
+              <p className="mb-0">
+                {reciboCredito.cliente_nombre} · {formatMoneyAr(reciboCredito.monto)} ·{" "}
+                {reciboCredito.motivo}
+              </p>
+            </div>
+          )}
+          <DialogFooter className="border-top pt-3 gap-2">
+            <button
+              type="button"
+              className="btn btn-light border"
+              onClick={() => setReciboCredito(null)}
+            >
+              Cerrar
+            </button>
+            {reciboCredito && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => imprimirReciboAnticipo(reciboCredito)}
+                >
+                  Imprimir
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={() =>
+                    compartirReciboAnticipoWhatsApp(
+                      reciboCredito,
+                      reciboCredito.cliente_celular
+                    )
+                  }
+                >
+                  <i className="bi bi-whatsapp me-2"></i>
+                  Compartir por WhatsApp
+                </button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

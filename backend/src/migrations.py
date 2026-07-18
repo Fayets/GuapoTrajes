@@ -309,6 +309,87 @@ def ensure_timestamps_negocio_hora_ar() -> None:
         logger.warning("Error aplicando patch %s: %s", patch_name, e)
 
 
+def reparar_contratos_generados_hora_ar() -> int:
+    """
+    Corrige contrato_generado_at guardados como UTC naive (02/07 → 03/07 tras las 00 UTC).
+    Retorna la cantidad de órdenes actualizadas.
+    """
+    from src.fechas_ar import (
+        parece_timestamp_utc_tras_medianoche,
+        utc_naive_a_ar_naive,
+    )
+    from src.models import OrdenTrabajo
+
+    corregidos = 0
+    with db_session:
+        # list() evita bug de Pony con iteradores en Python 3.13+
+        ordenes = list(OrdenTrabajo.select())
+        for o in ordenes:
+            ts = getattr(o, "contrato_generado_at", None)
+            if ts is None or not parece_timestamp_utc_tras_medianoche(ts):
+                continue
+            o.contrato_generado_at = utc_naive_a_ar_naive(ts)
+            corregidos += 1
+    return corregidos
+
+
+def ensure_contratos_generado_at_hora_ar() -> None:
+    """
+    One-shot: repara contratos con fecha corrida por UTC (después de las 00 UTC).
+    Idempotente vía _schema_patches en Postgres.
+    """
+    force = config("FORCE_REPAIR_CONTRATOS_AR", default="false").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    env = config("ENV", default="production").lower()
+    if not force and (not _is_postgres() or env != "production"):
+        logger.debug(
+            "Patch contratos_generado_at_hora_ar omitido (postgres=%s ENV=%s)",
+            _is_postgres(),
+            env,
+        )
+        return
+
+    patch_name = "contratos_generado_at_utc_heuristica_v1"
+    try:
+        if _is_postgres():
+            with db_session:
+                db.execute(
+                    'CREATE TABLE IF NOT EXISTS "_schema_patches" ('
+                    '"name" VARCHAR(255) PRIMARY KEY, '
+                    '"applied_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)'
+                )
+                conn = db.get_connection()
+                cur = conn.cursor()
+                cur.execute(
+                    'SELECT 1 FROM "_schema_patches" WHERE "name" = %s', (patch_name,)
+                )
+                if cur.fetchone():
+                    logger.debug("Patch %s ya aplicado", patch_name)
+                    return
+
+        corregidos = reparar_contratos_generados_hora_ar()
+
+        if _is_postgres():
+            with db_session:
+                conn = db.get_connection()
+                cur = conn.cursor()
+                cur.execute(
+                    'INSERT INTO "_schema_patches" ("name") VALUES (%s)',
+                    (patch_name,),
+                )
+                conn.commit()
+        logger.info(
+            "Patch %s: %s contrato(s) con contrato_generado_at corregido a hora AR",
+            patch_name,
+            corregidos,
+        )
+    except Exception as e:
+        logger.warning("Error aplicando patch %s: %s", patch_name, e)
+
+
 def apply_schema_migrations() -> None:
     """Aplica migraciones mínimas necesarias para el nuevo flujo financiero."""
     if not _is_postgres():
@@ -324,6 +405,8 @@ def apply_schema_migrations() -> None:
                 'ALTER TABLE "CajaChica" ADD COLUMN IF NOT EXISTS "referencia" VARCHAR(255)',
                 'ALTER TABLE "CajaChica" ADD COLUMN IF NOT EXISTS "caja_movimiento_id" INTEGER',
                 'ALTER TABLE "CajaMovimientos" ADD COLUMN IF NOT EXISTS "destino" VARCHAR(255)',
+                # Observación interna del cliente (instalaciones antiguas)
+                'ALTER TABLE "Cliente" ADD COLUMN IF NOT EXISTS "notas" TEXT',
                 # Migraciones para CajaConcentradora
                 'ALTER TABLE "CajaConcentradora" ADD COLUMN IF NOT EXISTS "usuario_id" INTEGER',
                 'ALTER TABLE "CajaConcentradora" ADD COLUMN IF NOT EXISTS "tipo_movimiento" VARCHAR(32)',

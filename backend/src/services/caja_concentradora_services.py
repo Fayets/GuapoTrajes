@@ -238,9 +238,8 @@ class CajaConcentradoraServices:
             # Intentar acceder a fecha_envio si existe (para compatibilidad)
             try:
                 return getattr(mov, 'fecha_envio', mov.fecha) if hasattr(mov, 'fecha_envio') else mov.fecha
-            except:
-                from datetime import datetime
-                return datetime.now()
+            except Exception:
+                return ahora_ar()
 
         movimientos.sort(key=get_fecha, reverse=True)
 
@@ -340,7 +339,7 @@ class CajaConcentradoraServices:
 
         for envio in envios_activos:
             envio.activo = False
-            envio.fecha_vaciado = datetime.now()
+            envio.fecha_vaciado = ahora_ar()
             envio.vaciado_por = usuario
 
         flush()
@@ -361,7 +360,7 @@ class CajaConcentradoraServices:
             "data": {
                 "sucursal_id": sucursal.id,
                 "monto_vaciado": float(total_vaciado),
-                "fecha_vaciado": datetime.now(),
+                "fecha_vaciado": ahora_ar(),
                 "cantidad_movimientos": len(envios_activos),
             },
         }
@@ -385,7 +384,7 @@ class CajaConcentradoraServices:
             sucursal=sucursal,
             usuario=usuario,
             usuario_envio=usuario,
-            fecha=datetime.now(),
+            fecha=ahora_ar(),
             tipo_movimiento=TipoMovimientoConcentradora.INGRESO,
             origen=OrigenConcentradora.CAJA_DIARIA,
             destino=None,
@@ -426,7 +425,7 @@ class CajaConcentradoraServices:
             sucursal=sucursal,
             usuario=usuario,
             usuario_envio=None,
-            fecha=datetime.now(),
+            fecha=ahora_ar(),
             tipo_movimiento=TipoMovimientoConcentradora.EGRESO,
             origen=OrigenConcentradora.MANUAL,
             destino=DestinoConcentradora.OTRO,
@@ -477,7 +476,7 @@ class CajaConcentradoraServices:
             sucursal=sucursal,
             usuario=usuario,
             usuario_envio=None,
-            fecha=datetime.now(),
+            fecha=ahora_ar(),
             tipo_movimiento=TipoMovimientoConcentradora.EGRESO,
             origen=OrigenConcentradora.MANUAL,
             destino=DestinoConcentradora.CAJA_CHICA,

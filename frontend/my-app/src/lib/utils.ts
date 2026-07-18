@@ -1,4 +1,5 @@
 import { type ClassValue, clsx } from "clsx"
+import { formatMoneyAr } from "./money"
 
 /**
  * Combina nombres de clases de manera condicional.
@@ -10,15 +11,10 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Formatea un valor monetario como string con formato de moneda.
+ * Formatea un valor monetario como string con formato de moneda ($1.000).
  */
 export function formatCurrency(value: number): string {
-  return value.toLocaleString("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  })
+  return formatMoneyAr(value)
 }
 
 /**

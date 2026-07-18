@@ -145,6 +145,31 @@ class PagosServices:
                     submetodo_pago,
                 )
 
+                recibo = None
+                # Comprobante solo cuando hubo abono real (ingreso en caja).
+                if data.registrar_en_caja and movimiento_caja_id:
+                    cliente_nombre = f"{(cliente.nombre or '').strip()} {(cliente.apellido or '').strip()}".strip()
+                    fecha_recibo = mov.fecha
+                    recibo = {
+                        "tipo": "anticipo",
+                        "fecha_hora": (
+                            fecha_recibo.isoformat()
+                            if hasattr(fecha_recibo, "isoformat")
+                            else str(fecha_recibo)
+                        ),
+                        "monto": round_pesos(monto),
+                        "motivo": texto,
+                        "cliente_id": cliente.id,
+                        "cliente_nombre": cliente_nombre or "Cliente",
+                        "cliente_dni": (cliente.dni or "").strip(),
+                        "cliente_celular": (cliente.celular or "").strip(),
+                        "movimiento_id": mov.id,
+                        "movimiento_caja_id": movimiento_caja_id,
+                        "saldo_post": float(mov.saldo_post),
+                        "concepto": "anticipo",
+                        "presupuesto_numero": f"ANTICIPO-{mov.id}",
+                    }
+
                 return {
                     "mensaje": "Crédito registrado correctamente",
                     "movimiento_id": mov.id,
@@ -152,6 +177,7 @@ class PagosServices:
                     "cliente_id": data.cliente_id,
                     "movimiento_caja_id": movimiento_caja_id,
                     "registrado_en_caja": bool(data.registrar_en_caja),
+                    "recibo": recibo,
                 }
             except HTTPException:
                 raise

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { fetchAllProductos } from "@/lib/fetch-productos";
 import { formatDescripcionProducto } from "@/lib/descripcion-producto";
+import { formatMoneyAr } from "@/lib/money";
 import { MetodoPagoSelector } from "@/components/metodo-pago-selector";
 import {
   Table,
@@ -30,8 +31,9 @@ import { Loader2, Eye, Trash2, Plus } from "lucide-react";
 import { RoleGate } from "@/components/RoleGate";
 import { useAuth } from "@/context/auth-context";
 import {
-  GUAPO_VENTA_IMPORT_PAYLOAD,
   clearScanQueue,
+  peekVentaImport,
+  clearVentaImport,
   type ScanQueueRow,
 } from "@/lib/scan-queue";
 
@@ -299,26 +301,9 @@ export default function VentasPage() {
   }, [me]);
 
   useEffect(() => {
-    let raw: string | null = null;
-    try {
-      raw = sessionStorage.getItem(GUAPO_VENTA_IMPORT_PAYLOAD);
-    } catch {
-      /* ignore */
-    }
-    if (!raw?.trim()) return;
-    try {
-      sessionStorage.removeItem(GUAPO_VENTA_IMPORT_PAYLOAD);
-    } catch {
-      /* ignore */
-    }
-    let parsed: { items?: ScanQueueRow[] };
-    try {
-      parsed = JSON.parse(raw) as { items?: ScanQueueRow[] };
-    } catch {
-      return;
-    }
-    const rows = parsed?.items;
-    if (!Array.isArray(rows) || rows.length === 0) return;
+    const rows = peekVentaImport();
+    if (!rows?.length) return;
+    // No borrar acá (Strict Mode). clearVentaImport tras cargar ítems / guardar.
 
     pendingVentaImportRef.current = rows;
     setVentaActual({
@@ -348,6 +333,7 @@ export default function VentasPage() {
     toast.info(
       "Desde la cola: completá el cliente y revisá las prendas; después elegí el método de pago."
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- import one-shot; resetDescuentoVenta es estable en práctica
   }, []);
 
   const resetDescuentoVenta = () => {
@@ -419,6 +405,7 @@ export default function VentasPage() {
     setItems(newItems);
     importedFromQueueRef.current = true;
     pendingVentaImportRef.current = null;
+    clearVentaImport();
   };
 
   useEffect(() => {
@@ -544,6 +531,7 @@ export default function VentasPage() {
       toast.success("Venta registrada correctamente");
       if (importedFromQueueRef.current) {
         clearScanQueue();
+        clearVentaImport();
         importedFromQueueRef.current = false;
       }
       limpiarFormularioVenta();
@@ -951,12 +939,12 @@ export default function VentasPage() {
                       <TableCell className="text-nowrap">
                         {(v.productos || []).map((p) => (
                           <div key={`${v.id}-${p.producto_id}-precio`}>
-                            ${p.precio_unitario?.toLocaleString()}
+                            {formatMoneyAr(p.precio_unitario ?? 0)}
                           </div>
                         ))}
                       </TableCell>
                       <TableCell className="fw-semibold text-nowrap">
-                        ${(v.total ?? 0).toLocaleString()}
+                        {formatMoneyAr(v.total ?? 0)}
                       </TableCell>
                       <TableCell>
                         <div className="d-flex justify-content-center gap-2 flex-wrap">
@@ -1051,11 +1039,7 @@ export default function VentasPage() {
               <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span className="fw-semibold">Total a cobrar</span>
                 <span className="fs-5 fw-bold">
-                  $
-                  {totalMostrarVenta.toLocaleString("es-AR", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  {formatMoneyAr(totalMostrarVenta)}
                   {etiquetaDescuentoVenta && (
                     <small className="text-success ms-2">
                       {etiquetaDescuentoVenta}
@@ -1429,7 +1413,7 @@ export default function VentasPage() {
                           </div>
                           <div className="d-flex align-items-center gap-3">
                             <span className="fw-semibold">
-                              ${item.subtotal.toLocaleString()}
+                              {formatMoneyAr(item.subtotal)}
                             </span>
                             <Button
                               size="sm"
@@ -1449,19 +1433,11 @@ export default function VentasPage() {
                             <span
                               className="text-muted d-block text-decoration-line-through fs-6"
                             >
-                              Subtotal: $
-                              {totalOriginalVenta.toLocaleString("es-AR", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
+                              Subtotal: {formatMoneyAr(totalOriginalVenta)}
                             </span>
                           )}
                           <span className="text-primary">
-                            Total: $
-                            {totalMostrarVenta.toLocaleString("es-AR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                            Total: {formatMoneyAr(totalMostrarVenta)}
                             {etiquetaDescuentoVenta && (
                               <span className="text-success ms-2 fs-6">
                                 {etiquetaDescuentoVenta}
@@ -1700,10 +1676,10 @@ export default function VentasPage() {
                                 <td className="fw-medium text-dark">{descripcion}</td>
                                 <td>{codigo}</td>
                                 <td className="text-end">
-                                  ${p.precio_unitario?.toLocaleString()}
+                                  {formatMoneyAr(p.precio_unitario ?? 0)}
                                 </td>
                                 <td className="text-end fw-semibold text-primary">
-                                  ${p.subtotal?.toLocaleString()}
+                                  {formatMoneyAr(p.subtotal ?? 0)}
                                 </td>
                               </tr>
                             );
@@ -1714,7 +1690,7 @@ export default function VentasPage() {
                     <div className="d-flex justify-content-end align-items-baseline gap-3 border-top px-4 py-3">
                       <span className="text-muted text-uppercase small">Total</span>
                       <span className="fs-4 fw-bold text-primary">
-                        ${ventaParaVer.total.toLocaleString()}
+                        {formatMoneyAr(ventaParaVer.total)}
                       </span>
                     </div>
                   </div>

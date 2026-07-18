@@ -3,6 +3,7 @@ from pony.orm import db_session
 from src import schemas
 from src.services.lavanderia_services import LavanderiaServices
 from src.controllers.auth_controller import get_current_user
+from src.deps import require_role
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from datetime import date
@@ -23,7 +24,12 @@ class AsignarProductoLavanderiaBody(BaseModel):
     cliente_nombre: Optional[str] = None
     cliente_celular: Optional[str] = None
 
-@router.post("/register", response_model=RegisterMessage, status_code=201)
+@router.post(
+    "/register",
+    response_model=RegisterMessage,
+    status_code=201,
+    dependencies=[Depends(require_role("ADMIN", "SUPER_ADMIN"))],
+)
 def registrar_lavanderia(lavanderia: schemas.LavanderiaCreate, current_user=Depends(get_current_user)):
     try:
         return servicio.crear_lavanderia(lavanderia)
@@ -46,7 +52,11 @@ class UpdateMessage(BaseModel):
     message: str
     success: bool
 
-@router.put("/update/{lavanderia_id}", response_model=RegisterMessage)
+@router.put(
+    "/update/{lavanderia_id}",
+    response_model=RegisterMessage,
+    dependencies=[Depends(require_role("ADMIN", "SUPER_ADMIN"))],
+)
 def actualizar_lavanderia(lavanderia_id: int, lavanderia_actualizar: schemas.LavanderiaCreate, current_user=Depends(get_current_user)):
     try:
         return servicio.actualizar_lavanderia(lavanderia_id, lavanderia_actualizar)
@@ -58,7 +68,11 @@ def actualizar_lavanderia(lavanderia_id: int, lavanderia_actualizar: schemas.Lav
         print(traceback.format_exc())
         return {"message": "Error inesperado al actualizar la lavandería.", "success": False, "data": None}
 
-@router.delete("/delete/{lavanderia_id}", response_model=UpdateMessage)
+@router.delete(
+    "/delete/{lavanderia_id}",
+    response_model=UpdateMessage,
+    dependencies=[Depends(require_role("ADMIN", "SUPER_ADMIN"))],
+)
 def eliminar_lavanderia(lavanderia_id: int, current_user=Depends(get_current_user)):
     try:
         servicio.eliminar_lavanderia(lavanderia_id)

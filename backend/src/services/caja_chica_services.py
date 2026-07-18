@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from pony.orm import db_session, flush, select, desc
 
+from src.fechas_ar import ahora_ar
 from src.models import (
     CajaChica,
     CajaConcentradora,
@@ -301,7 +302,7 @@ class CajaChicaService:
         movimiento = CajaChica(
             sucursal=sucursal,
             usuario=usuario,
-            fecha=datetime.now(),
+            fecha=ahora_ar(),
             tipo=tipo,
             metodo_pago=metodo_pago,
             tipo_egreso=tipo_egreso,
@@ -430,7 +431,7 @@ class CajaChicaService:
         movimiento = CajaChica(
             sucursal=sucursal,
             usuario=usuario,
-            fecha=datetime.now(),
+            fecha=ahora_ar(),
             tipo=TipoMovimientoCajaChica.INGRESO,
             metodo_pago=MetodoPagoCajaChica.EFECTIVO,
             tipo_egreso=None,
@@ -468,7 +469,7 @@ class CajaChicaService:
             usuario=usuario,
             monto=movimiento.monto,
             descripcion=movimiento.descripcion,
-            fecha=datetime.now(),
+            fecha=ahora_ar(),
             tipo_movimiento=TipoMovimientoConcentradora.INGRESO,
             origen=OrigenConcentradora.CAJA_CHICA,
             destino=None,

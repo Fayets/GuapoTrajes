@@ -113,7 +113,7 @@ export function Sidebar({ collapsed, toggleSidebar, mobileOpen = false, onMobile
     {
       title: "Ajustes",
       icon: "bi-gear",
-      allow: ["ADMIN", "SUPER_ADMIN"],
+      allow: ["ADMIN", "SUPER_ADMIN", "EMPLEADO"],
       subItems: [
         {
           title: "Eventos",
@@ -125,13 +125,13 @@ export function Sidebar({ collapsed, toggleSidebar, mobileOpen = false, onMobile
           title: "Modista",
           icon: "bi-scissors",
           href: "/modista",
-          allow: ["ADMIN", "SUPER_ADMIN"],
+          allow: ["ADMIN", "SUPER_ADMIN", "EMPLEADO"],
         },
         {
           title: "Lavanderia",
           icon: "bi-basket",
           href: "/lavanderia",
-          allow: ["ADMIN", "SUPER_ADMIN"],
+          allow: ["ADMIN", "SUPER_ADMIN", "EMPLEADO"],
         },
         {
           title: "Sucursales",

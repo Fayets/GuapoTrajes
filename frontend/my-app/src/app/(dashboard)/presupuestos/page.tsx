@@ -20,7 +20,7 @@ import {
   observacionesParaCliente,
   observacionesParaGuardar,
 } from "@/lib/presupuesto-observaciones";
-import { formatPesosAr, parseMontoInput, roundPesos } from "@/lib/money";
+import { formatPesosAr, formatMoneyAr, parseMontoInput, roundPesos } from "@/lib/money";
 import { abrirWhatsAppEnvio, normalizarTelefonoWhatsapp } from "@/lib/whatsapp";
 import {
   Dialog,
@@ -37,8 +37,11 @@ import {
   type MetodoPagoComplemento,
 } from "@/components/metodo-pago-selector";
 import {
-  GUAPO_PRESUPUESTO_IMPORT_PAYLOAD,
   clearScanQueue,
+  peekPresupuestoImport,
+  clearPresupuestoImport,
+  shouldNotifyPresupuestoImport,
+  shouldValidateQuoteAvailability,
   type ScanQueueRow,
 } from "@/lib/scan-queue";
 import {
@@ -235,6 +238,8 @@ export default function PresupuestosPage() {
   >(null);
 
   const [items, setItems] = useState<ItemPresupuesto[]>([]);
+  /** Confirmación explícita del administrador para omitir conflictos entre reservas. */
+  const ignorarConflictosReservaRef = useRef(false);
   const [tipoPrecioPresupuesto, setTipoPrecioPresupuesto] =
     useState<TipoPrecioProducto>("precio_alquiler_lista");
   const [avisoAgregarProducto, setAvisoAgregarProducto] = useState<string | null>(
@@ -649,13 +654,6 @@ export default function PresupuestosPage() {
       producto.descripcion_extra
     );
 
-    if (!fechaEvento) {
-      return "Completá la fecha del evento antes de agregar productos.";
-    }
-    if (!fechaRetiro || !fechaDevolucion) {
-      return "Completá las fechas de retiro y devolución antes de agregar productos.";
-    }
-
     if (itemsActuales.some((i) => i.productoId === producto.id)) {
       return "Este producto ya está en el presupuesto (cada prenda es única).";
     }
@@ -669,8 +667,31 @@ export default function PresupuestosPage() {
       return `El producto ${nombre} no está disponible (estado actual: ${estado}). Debe estar en salón.`;
     }
 
+    if (
+      !shouldValidateQuoteAvailability(
+        fechaEvento,
+        fechaRetiro,
+        fechaDevolucion
+      )
+    ) {
+      return null;
+    }
+
     if (producto.disponible_en_fechas === false) {
-      return `El producto ${nombre} no está disponible en las fechas elegidas (reservado en otra orden).`;
+      if (!esAdmin) {
+        return `El producto ${nombre} no está disponible en las fechas elegidas (reservado en otra orden).`;
+      }
+      if (
+        !ignorarConflictosReservaRef.current &&
+        !window.confirm(
+          `${nombre} está dentro de la ventana de seguridad de otra reserva.\n\n` +
+            "Como administrador podés omitir este bloqueo. ¿Agregarlo de todos modos?"
+        )
+      ) {
+        return "No se agregó el producto porque se mantuvo el bloqueo de seguridad.";
+      }
+      ignorarConflictosReservaRef.current = true;
+      return null;
     }
 
     try {
@@ -686,7 +707,19 @@ export default function PresupuestosPage() {
       }
       const data = (await res.json()) as { disponible?: boolean };
       if (!data.disponible) {
-        return `El producto ${nombre} no está disponible en las fechas elegidas (conflicto con otra reserva).`;
+        if (!esAdmin) {
+          return `El producto ${nombre} no está disponible en las fechas elegidas (conflicto con otra reserva).`;
+        }
+        if (
+          !ignorarConflictosReservaRef.current &&
+          !window.confirm(
+            `${nombre} está dentro de la ventana de seguridad de otra reserva.\n\n` +
+              "Como administrador podés omitir este bloqueo. ¿Agregarlo de todos modos?"
+          )
+        ) {
+          return "No se agregó el producto porque se mantuvo el bloqueo de seguridad.";
+        }
+        ignorarConflictosReservaRef.current = true;
       }
     } catch (error) {
       console.error("Error al verificar disponibilidad", error);
@@ -694,7 +727,7 @@ export default function PresupuestosPage() {
     }
 
     return null;
-  }, [fechasAlquilerEfectivas, presupuestoSeleccionado?.orden_id, items]);
+  }, [fechasAlquilerEfectivas, presupuestoSeleccionado?.orden_id, items, esAdmin]);
 
   const resetCamposAgregarProducto = useCallback(() => {
     setProductoFiltro("");
@@ -881,6 +914,7 @@ export default function PresupuestosPage() {
 
       if (agregados > 0) {
         setItems(itemsLocales);
+        clearPresupuestoImport();
         toast.success(
           `Se agregaron ${agregados} prenda(s) de la cola del escáner.`
         );
@@ -890,6 +924,9 @@ export default function PresupuestosPage() {
           `${rechazados} prenda(s) de la cola no se pudieron agregar.`
         );
       }
+      if (agregados === 0 && rechazados > 0) {
+        clearPresupuestoImport();
+      }
     },
     [items, productos, tipoPrecioPresupuesto, validarProductoParaAgregar]
   );
@@ -898,18 +935,11 @@ export default function PresupuestosPage() {
     const pending = pendingQueueImportRef.current;
     if (!showModal || verModoLectura || !pending?.length) return;
 
-    const { fechaEvento, fechaRetiro, fechaDevolucion } = fechasAlquilerEfectivas();
-    if (!fechaEvento || !fechaRetiro || !fechaDevolucion) return;
-
     pendingQueueImportRef.current = null;
     void procesarColaPendiente(pending);
   }, [
     showModal,
     verModoLectura,
-    formData.fechaEvento,
-    formData.fechaRetiro,
-    formData.fechaDevolucion,
-    fechasAlquilerEfectivas,
     procesarColaPendiente,
   ]);
 
@@ -943,6 +973,7 @@ export default function PresupuestosPage() {
   };
 
   const nuevoPresupuesto = () => {
+    ignorarConflictosReservaRef.current = false;
     setPresupuestoActual(null);
     setPresupuestoSeleccionado(null);
     setVerModoLectura(false);
@@ -976,26 +1007,10 @@ export default function PresupuestosPage() {
   nuevoPresupuestoRef.current = nuevoPresupuesto;
 
   useEffect(() => {
-    let raw: string | null = null;
-    try {
-      raw = sessionStorage.getItem(GUAPO_PRESUPUESTO_IMPORT_PAYLOAD);
-    } catch {
-      /* ignore */
-    }
-    if (!raw?.trim()) return;
-    try {
-      sessionStorage.removeItem(GUAPO_PRESUPUESTO_IMPORT_PAYLOAD);
-    } catch {
-      /* ignore */
-    }
-    let parsed: { items?: ScanQueueRow[] };
-    try {
-      parsed = JSON.parse(raw) as { items?: ScanQueueRow[] };
-    } catch {
-      return;
-    }
-    const rows = parsed?.items;
-    if (!Array.isArray(rows) || rows.length === 0) return;
+    const rows = peekPresupuestoImport();
+    if (!rows?.length) return;
+    // No borrar acá: React Strict Mode remonta y volvería a necesitar el payload.
+    // Se limpia en clearPresupuestoImport tras agregar prendas (o al guardar).
 
     importedFromQueueRef.current = true;
     pendingQueueImportRef.current = rows;
@@ -1020,11 +1035,12 @@ export default function PresupuestosPage() {
         return next;
       });
     });
-    toast.info(
-      "Cola importada. Completá las fechas del evento para validar y agregar cada prenda."
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- import one-shot al montar; ref apunta a nuevoPresupuesto actualizado
-  }, []);
+    if (shouldNotifyPresupuestoImport(rows)) {
+      toast.info(
+        "Cotización rápida cargada. Ya podés ver las prendas y el total; completá los datos solo si el cliente acepta."
+      );
+    }
+  }, [pathname]);
 
   const guardarPresupuesto = async () => {
     const sel = clienteOPreclienteSeleccionado;
@@ -1089,6 +1105,8 @@ export default function PresupuestosPage() {
       nombre_agasajado: formData.agasajado,
       lugar_evento: formData.lugar,
       observaciones: observacionesParaGuardar(formData.observaciones),
+      ignorar_conflictos_reserva:
+        esAdmin && ignorarConflictosReservaRef.current,
       items: itemsParaEnviar.map((item) => ({
         producto_id: item.productoId,
         cantidad: item.cantidad,
@@ -1139,6 +1157,7 @@ export default function PresupuestosPage() {
         );
         if (importedFromQueueRef.current) {
           clearScanQueue();
+          clearPresupuestoImport();
           importedFromQueueRef.current = false;
         }
         preclienteIdRef.current = null;
@@ -1262,10 +1281,11 @@ export default function PresupuestosPage() {
     clienteNombre: string,
     metodoPago: string
   ) => {
-    const seña = prompt(
+    const señaRaw = prompt(
       `Ingrese el monto de la seña recibida de ${clienteNombre}:`
     );
-    if (!seña || isNaN(parseFloat(seña))) {
+    const seña = señaRaw ? parseMontoInput(señaRaw) : NaN;
+    if (!señaRaw || Number.isNaN(seña) || seña <= 0) {
       alert("Monto inválido.");
       return;
     }
@@ -1279,7 +1299,7 @@ export default function PresupuestosPage() {
         },
         body: JSON.stringify({
           presupuesto_id: presupuestoId,
-          seña_pagada: parseFloat(seña),
+          seña_pagada: seña,
           payment_method: metodoPago, // Cambiado a payment_method
         }),
       });
@@ -1319,6 +1339,7 @@ export default function PresupuestosPage() {
   }
 
   const abrirPresupuestoInterno = (presupuesto: Presupuesto, verLectura: boolean) => {
+    ignorarConflictosReservaRef.current = false;
     const pr = toPresupuestoResponse(presupuesto);
     setPresupuestoSeleccionado(pr);
     const nombre = pr.cliente_nombre?.trim();
@@ -1496,8 +1517,10 @@ export default function PresupuestosPage() {
       metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
       !!presupuestoAConvertir.cliente_id &&
       saldoClienteSenia > 0;
-    const creditoAplicado = esCC ? Math.min(saldoClienteSenia, monto) : 0;
-    const montoCaja = Math.max(monto - creditoAplicado, 0);
+    const creditoAplicado = esCC
+      ? roundPesos(Math.min(saldoClienteSenia, monto))
+      : 0;
+    const montoCaja = roundPesos(Math.max(monto - creditoAplicado, 0));
 
     if (esCC && monto > saldoClienteSenia + 1e-9 && !metodoPagoComplementoSenia?.metodoId) {
       alert("Indicá el método de pago para el importe que ingresa en caja.");
@@ -1664,10 +1687,7 @@ export default function PresupuestosPage() {
       presupuesto.cliente_nombre ||
       "";
 
-    const totalFormateado = presupuesto.total.toLocaleString("es-AR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+    const totalFormateado = formatPesosAr(presupuesto.total);
 
     const formatearFecha = (fecha?: string) => {
       if (!fecha) return null;
@@ -1861,7 +1881,7 @@ export default function PresupuestosPage() {
                         {p.fecha_evento ? formatDdMmYyyyDesdeIso(p.fecha_evento) : "Sin fecha"}
                       </td>
 
-                      <td>${p.total.toLocaleString()}</td>
+                      <td>{formatMoneyAr(p.total)}</td>
                       <td>
                         <span className={`badge ${getEstadoClass(p.estado)}`}>
                           {p.estado.charAt(0).toUpperCase() + p.estado.slice(1)}
@@ -2092,14 +2112,12 @@ export default function PresupuestosPage() {
                 <div className="mb-4">
                   <label className="form-label fw-bold">Monto de la seña</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     className="form-control w-100"
-                    placeholder="Ingresá el monto recibido"
+                    placeholder="Ingresá el monto recibido (ej: 40059 o 40.059)"
                     value={senia}
                     onChange={(e) => setSenia(e.target.value)}
-                    min={1}
-                    step={1}
-                    max={roundPesos(presupuestoAConvertir?.total ?? 0)}
                   />
                   {!!presupuestoAConvertir && (
                     <div className="small text-muted mt-2">
@@ -2145,7 +2163,7 @@ export default function PresupuestosPage() {
                     metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                     !!presupuestoAConvertir?.cliente_id &&
                     saldoClienteSenia > 0;
-                  const cred = esCC ? Math.min(saldoClienteSenia, mt) : 0;
+                  const cred = esCC ? roundPesos(Math.min(saldoClienteSenia, mt)) : 0;
                   const montoCajaUi = Math.max(mt - cred, 0);
                   return montoCajaUi > 1e-6 ? (
                     <div className="mb-4">
@@ -2230,8 +2248,8 @@ export default function PresupuestosPage() {
                   metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                   !!presupuestoAConvertir?.cliente_id &&
                   saldoClienteSenia > 0;
-                const cred = esCC ? Math.min(saldoClienteSenia, mt) : 0;
-                const montoCajaUi = Math.max(mt - cred, 0);
+                const cred = esCC ? roundPesos(Math.min(saldoClienteSenia, mt)) : 0;
+                const montoCajaUi = roundPesos(Math.max(mt - cred, 0));
                 const faltaComplemento =
                   esCC &&
                   mt > saldoClienteSenia + 1e-9 &&

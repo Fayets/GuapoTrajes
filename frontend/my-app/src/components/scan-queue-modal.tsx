@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  GUAPO_PRESUPUESTO_IMPORT_PAYLOAD,
-  GUAPO_VENTA_IMPORT_PAYLOAD,
+  stashPresupuestoImport,
+  stashVentaImport,
   type ScanQueueRow,
 } from "@/lib/scan-queue";
 
@@ -38,12 +38,7 @@ export function ScanQueueModal({
       toast.error("La cola está vacía.");
       return;
     }
-    try {
-      sessionStorage.setItem(
-        GUAPO_PRESUPUESTO_IMPORT_PAYLOAD,
-        JSON.stringify({ items })
-      );
-    } catch {
+    if (!stashPresupuestoImport(items)) {
       toast.error("No se pudo preparar el envío a Presupuestos.");
       return;
     }
@@ -56,12 +51,7 @@ export function ScanQueueModal({
       toast.error("La cola está vacía.");
       return;
     }
-    try {
-      sessionStorage.setItem(
-        GUAPO_VENTA_IMPORT_PAYLOAD,
-        JSON.stringify({ items })
-      );
-    } catch {
+    if (!stashVentaImport(items)) {
       toast.error("No se pudo preparar el envío a Ventas.");
       return;
     }

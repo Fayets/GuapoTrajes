@@ -468,6 +468,8 @@ class PresupuestoCreate(BaseModel):
     extra_discount_percentage: Optional[float] = None
     extra_discount_amount: Optional[float] = None
     extra_discount_reason: Optional[str] = None
+    # Solo ADMIN / SUPER_ADMIN pueden omitir conflictos con la ventana de reserva.
+    ignorar_conflictos_reserva: bool = False
 
     @field_validator("fecha_evento", "fecha_retiro", "fecha_devolucion", mode="before")
     @classmethod

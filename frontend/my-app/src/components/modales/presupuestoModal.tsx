@@ -27,6 +27,7 @@ import {
   fechaNegocioYmd,
   ymdWeekdayUtc,
 } from "@/lib/fecha-calendario";
+import { formatMoneyAr } from "@/lib/money";
 
 /** ISO / YYYY-MM-DD → DD/MM/AAAA (día ya normalizado a negocio AR). */
 function formatFechaArgentina(iso: string): string {
@@ -378,6 +379,12 @@ export default function PresupuestoModal({
   const totalMostrar = hayDescuento
     ? (totalConDescuento as number)
     : totalOriginal;
+  const esCotizacionRapida =
+    !verModoLectura &&
+    !presupuestoSeleccionado?.id &&
+    items.length > 0 &&
+    clienteOPreclienteSeleccionado == null &&
+    !formData.fechaEvento;
 
   return (
     <Dialog open={show} onOpenChange={(open) => !open && onClose()}>
@@ -399,11 +406,21 @@ export default function PresupuestoModal({
               ? "Visualización de presupuesto existente"
               : presupuestoSeleccionado?.id
                 ? "Modificá fechas o ítems; se revalida disponibilidad y las reservas de la orden si aplica."
-                : "Completá los datos del evento y seleccioná los productos"}
+                : "Armá el conjunto y mirá el total. Si el cliente acepta, completá sus datos y las fechas para guardarlo."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="modal-body px-3 px-md-4">
+          {esCotizacionRapida && (
+            <div className="alert alert-info d-flex align-items-start gap-2 py-2" role="status">
+              <i className="bi bi-lightning-charge-fill mt-1" aria-hidden />
+              <div>
+                <strong>Cotización rápida.</strong> Las prendas y el total ya se
+                pueden consultar. Todavía no se reservó stock; completá cliente,
+                fechas y categoría únicamente si el cliente confirma.
+              </div>
+            </div>
+          )}
           <div className="row g-4 align-items-lg-start">
             <div className="col-12 col-lg-6 col-xl-6 d-flex flex-column gap-3 gap-lg-4">
           <div className="card shadow-sm mb-0">
@@ -873,7 +890,7 @@ export default function PresupuestoModal({
                               {nombreProducto}
                             </span>
                             <span className="badge bg-primary rounded-pill text-end justify-self-end">
-                              ${Number(subtotal).toLocaleString("es-AR")}
+                              {formatMoneyAr(Number(subtotal))}
                             </span>
                             <span />
                           </div>
@@ -1030,7 +1047,7 @@ export default function PresupuestoModal({
                                 {item.productoNombre}
                               </span>
                               <span className="badge bg-primary rounded-pill text-nowrap justify-self-end">
-                                ${item.subtotal.toLocaleString("es-AR")}
+                                {formatMoneyAr(item.subtotal)}
                               </span>
                               <button
                                 type="button"
@@ -1060,11 +1077,11 @@ export default function PresupuestoModal({
                                     fontSize: "0.9rem",
                                   }}
                                 >
-                                  ${totalOriginal.toLocaleString()}
+                                  {formatMoneyAr(totalOriginal)}
                                 </span>
                               )}
                               <span className="text-primary fw-bold d-block">
-                                ${totalMostrar.toLocaleString()}
+                                {formatMoneyAr(totalMostrar)}
                                 {etiquetaDescuento && (
                                   <span className="text-success ms-1">
                                     {etiquetaDescuento}
@@ -1113,24 +1130,13 @@ export default function PresupuestoModal({
                                             textDecoration: "line-through",
                                           }}
                                         >
-                                          $
-                                          {totalOriginal.toLocaleString(
-                                            "es-AR",
-                                            {
-                                              minimumFractionDigits: 2,
-                                              maximumFractionDigits: 2,
-                                            }
-                                          )}
+                                          {formatMoneyAr(totalOriginal)}
                                         </span>
                                       </div>
                                       <div className="mb-1">
                                         <strong>Total con descuento:</strong>{" "}
                                         <span className="text-success fw-bold">
-                                          $
-                                          {totalFinal.toLocaleString("es-AR", {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                          })}
+                                          {formatMoneyAr(totalFinal)}
                                         </span>
                                       </div>
                                       <div className="mb-1">
@@ -1139,14 +1145,8 @@ export default function PresupuestoModal({
                                       </div>
                                       {montoDescontado > 0 && (
                                         <div className="mb-1">
-                                          <strong>Monto descontado:</strong> $
-                                          {montoDescontado.toLocaleString(
-                                            "es-AR",
-                                            {
-                                              minimumFractionDigits: 2,
-                                              maximumFractionDigits: 2,
-                                            }
-                                          )}
+                                          <strong>Monto descontado:</strong>{" "}
+                                          {formatMoneyAr(montoDescontado)}
                                         </div>
                                       )}
                                     </>
@@ -1285,11 +1285,11 @@ export default function PresupuestoModal({
                           fontSize: "0.9rem",
                         }}
                       >
-                        ${totalOriginal.toLocaleString()}
+                        {formatMoneyAr(totalOriginal)}
                       </div>
                     )}
                     <div className="fw-bold">
-                      ${totalMostrar.toLocaleString()}
+                      {formatMoneyAr(totalMostrar)}
                       {etiquetaDescuento && (
                         <span className="text-success ms-1">
                           {etiquetaDescuento}

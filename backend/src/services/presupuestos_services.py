@@ -3,9 +3,8 @@ from datetime import datetime, date, timedelta
 from typing import List, Optional
 from decouple import config
 from fastapi import HTTPException
-from src.fechas_ar import fecha_presupuesto_api_ymd, instante_a_fecha_ar
+from src.fechas_ar import fecha_presupuesto_api_ymd, instante_a_fecha_ar, ahora_ar, isoformat_ar
 from src.money import round_pesos
-from src.fechas_ar import ahora_ar
 from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, Roles, Usuario, db
 from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse, ConjuntoMismaFechaCategoriaOut
 from src.descripcion_producto import format_descripcion_producto
@@ -54,6 +53,25 @@ def _descuento_maximo_estandar(usuario: Optional[Usuario]) -> float:
     return 15.0
 
 
+def _puede_ignorar_conflictos_reserva(current_user) -> bool:
+    """El rol efectivo se relee de BD; no se confía en un valor enviado por frontend."""
+    user_id = getattr(current_user, "id", None)
+    if user_id is None:
+        return False
+    usuario = Usuario.get(id=int(user_id))
+    return bool(usuario and usuario.rol in (Roles.ADMIN, Roles.SUPER_ADMIN))
+
+
+def _validar_override_conflictos(data: PresupuestoCreate, current_user) -> bool:
+    solicitado = bool(data.ignorar_conflictos_reserva)
+    if solicitado and not _puede_ignorar_conflictos_reserva(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo un administrador puede omitir el bloqueo entre reservas.",
+        )
+    return solicitado
+
+
 def _extra_discount_reason_para_db(value: Optional[str]) -> str:
     """
     Motivo de descuento extra: en algunos despliegues Pony/BD no aceptan NULL en la columna.
@@ -76,6 +94,7 @@ class PresupuestosServices:
     def crear_presupuesto(self, data: PresupuestoCreate, current_user=None) -> dict:
         with db_session:
             try:
+                ignorar_conflictos = _validar_override_conflictos(data, current_user)
                 
                 # Cliente o precliente
                 cliente = None
@@ -105,6 +124,7 @@ class PresupuestosServices:
                         fecha_devolucion=fecha_devolucion,
                         orden_excluir_id=None,
                         es_reuso_del_mismo_presupuesto=False,
+                        ignorar_conflicto_reserva=ignorar_conflictos,
                     )
 
                 # Calcular total base sumando los subtotales de los items
@@ -258,7 +278,7 @@ class PresupuestosServices:
                         observaciones=p.observaciones or "",
                         total=p.total,
                         estado=p.estado,
-                        fecha_creacion=str(p.fecha_creacion) if p.fecha_creacion else None,
+                        fecha_creacion=isoformat_ar(p.fecha_creacion) if p.fecha_creacion else None,
                         items=[
                             ItemPresupuestoResponse(
                                 id=item.id,
@@ -386,6 +406,7 @@ class PresupuestosServices:
     def editar_presupuesto(self, presupuesto_id: int, data: PresupuestoCreate, current_user=None) -> dict:
         with db_session:
             try:
+                ignorar_conflictos = _validar_override_conflictos(data, current_user)
                 presupuesto = Presupuesto.get(id=presupuesto_id)
                 if not presupuesto:
                     raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
@@ -434,6 +455,7 @@ class PresupuestosServices:
                         fecha_devolucion=fecha_devolucion,
                         orden_excluir_id=orden_excluir_id,
                         es_reuso_del_mismo_presupuesto=(producto.id in old_product_ids),
+                        ignorar_conflicto_reserva=ignorar_conflictos,
                     )
 
                 # Actualizar presupuesto
@@ -606,7 +628,7 @@ class PresupuestosServices:
                     observaciones=presupuesto.observaciones or "",
                     total=presupuesto.total,
                     estado=presupuesto.estado,
-                    fecha_creacion=str(presupuesto.fecha_creacion) if presupuesto.fecha_creacion else None,
+                    fecha_creacion=isoformat_ar(presupuesto.fecha_creacion) if presupuesto.fecha_creacion else None,
                     items=[
                         ItemPresupuestoResponse(
                             id=item.id,

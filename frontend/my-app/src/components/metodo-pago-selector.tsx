@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { getApiBaseUrl } from "@/lib/api-config"
 import { useAuth } from "@/context/auth-context"
 import { toast } from "sonner"
+import { formatPesosAr } from "@/lib/money"
 
 /** ID sintético para “pago con saldo a favor” (no existe en BD de métodos configurables). */
 export const METODO_PAGO_CUENTA_CORRIENTE_ID = -9000001
@@ -342,8 +343,7 @@ export function MetodoPagoSelector({
               <div>
                 <span className="fw-semibold d-block">Cuenta corriente</span>
                 <span className="small text-muted">
-                  Saldo disponible: $
-                  {Math.round(saldoCC).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                  Saldo disponible: ${formatPesosAr(saldoCC)}
                 </span>
               </div>
             </div>
@@ -433,11 +433,8 @@ export function MetodoPagoSelector({
       {necesitaComplemento && (
         <div className="mt-4 p-3 border rounded bg-light">
           <p className="small fw-semibold mb-2">
-            El saldo a favor cubre $
-            {Math.round(saldoCC).toLocaleString("es-AR", { maximumFractionDigits: 0 })} de $
-            {Math.round(montoRef).toLocaleString("es-AR", { maximumFractionDigits: 0 })}. Indicá cómo se registra el
-            resto ($
-            {Math.round(montoRef - saldoCC).toLocaleString("es-AR", { maximumFractionDigits: 0 })}):
+            El saldo a favor cubre ${formatPesosAr(saldoCC)} de ${formatPesosAr(montoRef)}. Indicá cómo se registra el
+            resto (${formatPesosAr(montoRef - saldoCC)}):
           </p>
           <div className="row g-2">
             {metodosParaMostrar

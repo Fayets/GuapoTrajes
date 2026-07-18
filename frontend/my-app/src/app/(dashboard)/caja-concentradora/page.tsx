@@ -25,15 +25,11 @@ type MovimientoConcentradora = {
 };
 
 import { getApiBaseUrl } from "@/lib/api-config";
+import { parseMontoInput, formatPesosAr } from "@/lib/money";
 
 const API_BASE = getApiBaseUrl();
 
-const formatCurrency = (value: number) =>
-  value.toLocaleString("es-AR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
+const formatCurrency = (value: number) => formatPesosAr(value);
 const estadoBadgeClasses: Record<string, string> = {
   Pendiente: "bg-warning-subtle text-warning",
   Confirmado: "bg-success-subtle text-success",
@@ -222,8 +218,8 @@ export default function CajaConcentradoraPage() {
           movimientoEditando.tipo_movimiento === "EGRESO" &&
           movimientoEditando.origen !== "Caja Diaria"
         ) {
-          if (form.monto && parseFloat(form.monto) > 0) {
-            payload["monto"] = parseFloat(form.monto);
+          if (form.monto && parseMontoInput(form.monto) > 0) {
+            payload["monto"] = parseMontoInput(form.monto);
           }
           if (form.destino) {
             payload["destino"] = form.destino;
@@ -255,7 +251,8 @@ export default function CajaConcentradoraPage() {
       }
     } else {
       // Crear nuevo movimiento
-      if (!form.monto || parseFloat(form.monto) <= 0) {
+      const montoCrear = parseMontoInput(form.monto);
+      if (!form.monto || Number.isNaN(montoCrear) || montoCrear <= 0) {
         toast.error("Ingresá un monto válido");
         return;
       }
@@ -264,7 +261,7 @@ export default function CajaConcentradoraPage() {
       try {
         const payload = {
           sucursal_id: sucursalId,
-          monto: parseFloat(form.monto),
+          monto: montoCrear,
           descripcion: form.descripcion || null,
         };
 
@@ -372,7 +369,12 @@ export default function CajaConcentradoraPage() {
   };
 
   const handleEnviarACajaChica = async () => {
-    if (!transferenciaChica.monto || parseFloat(transferenciaChica.monto) <= 0) {
+    const montoTransfer = parseMontoInput(transferenciaChica.monto);
+    if (
+      !transferenciaChica.monto ||
+      Number.isNaN(montoTransfer) ||
+      montoTransfer <= 0
+    ) {
       toast.error("Ingresá un monto válido");
       return;
     }
@@ -381,7 +383,7 @@ export default function CajaConcentradoraPage() {
     try {
       const payload = {
         sucursal_id: sucursalId,
-        monto: parseFloat(transferenciaChica.monto),
+        monto: montoTransfer,
         descripcion: transferenciaChica.descripcion || null,
       };
 
@@ -882,7 +884,8 @@ export default function CajaConcentradoraPage() {
                 disabled={
                   isSaving ||
                   !form.monto ||
-                  parseFloat(form.monto) <= 0 ||
+                  Number.isNaN(parseMontoInput(form.monto)) ||
+                  parseMontoInput(form.monto) <= 0 ||
                   (isEditing &&
                     movimientoEditando?.origen === "Caja Diaria" &&
                     !form.descripcion)
@@ -967,7 +970,8 @@ export default function CajaConcentradoraPage() {
                 disabled={
                   isSaving ||
                   !transferenciaChica.monto ||
-                  parseFloat(transferenciaChica.monto) <= 0
+                  Number.isNaN(parseMontoInput(transferenciaChica.monto)) ||
+                  parseMontoInput(transferenciaChica.monto) <= 0
                 }
               >
                 {isSaving ? "Enviando..." : "Enviar"}

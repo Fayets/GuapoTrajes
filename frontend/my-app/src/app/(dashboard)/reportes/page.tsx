@@ -280,7 +280,7 @@ export default function ReportesPage() {
       {
         key: "recibos_por_fecha",
         title: "Recibos por fecha",
-        desc: "Comprobantes de señas y pagos adicionales",
+        desc: "Comprobantes de señas, pagos adicionales, ventas y anticipos",
         icon: Receipt,
       },
       {
@@ -833,8 +833,10 @@ export default function ReportesPage() {
       const params = new URLSearchParams({
         fecha_desde: fechaDesdeContratos,
         fecha_hasta: fechaHastaContratos,
-        filtro_fecha: "fecha_creacion", // Siempre filtrar por fecha de creación
-        tipo: "todos", // Siempre mostrar todos los tipos
+        filtro_fecha: "fecha_creacion",
+        // Solo órdenes: con tipo "todos" el backend sumaba presupuesto+orden y
+        // el toast decía 10 mientras el listado (solo órdenes) mostraba 5.
+        tipo: "ordenes_trabajo",
       });
 
       const response = await fetch(
@@ -854,10 +856,19 @@ export default function ReportesPage() {
       const data = await response.json();
       console.log("📊 Respuesta de contratos:", data);
       if (data.success && data.data) {
-        setContratos(data.data.contratos || []);
-        setPaginaActualContratos(1); // Resetear a la primera página cuando se genera un nuevo reporte
+        const lista = data.data.contratos || [];
+        setContratos(lista);
+        setPaginaActualContratos(1);
+        const esAdmin =
+          me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
+        const visibles = lista.filter((c: Contrato) => {
+          if (c.tipo !== "orden_trabajo") return false;
+          if (esAdmin) return true;
+          const saldo = Number(c.saldo_pendiente ?? 0);
+          return !Number.isFinite(saldo) || Math.abs(saldo) < 0.5;
+        });
         toast.success(
-          `Reporte generado: ${data.data.total_contratos} contratos encontrados`
+          `Reporte generado: ${visibles.length} contrato${visibles.length !== 1 ? "s" : ""} en el listado`
         );
       } else {
         throw new Error("Formato de respuesta inválido");
@@ -872,11 +883,15 @@ export default function ReportesPage() {
   };
 
   const contratosFiltrados = useMemo(() => {
-    let list = contratos.filter(
-      (c) =>
-        c.tipo === "orden_trabajo" &&
-        (c.saldo_pendiente === null || c.saldo_pendiente === 0)
-    );
+    const esAdmin = me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
+    let list = contratos.filter((c) => {
+      if (c.tipo !== "orden_trabajo") return false;
+      const saldo = Number(c.saldo_pendiente ?? 0);
+      // Admin puede ver (e imprimir) contratos/órdenes con deuda
+      if (esAdmin) return true;
+      // Empleado: solo sin saldo (tolerancia por float)
+      return !Number.isFinite(saldo) || Math.abs(saldo) < 0.5;
+    });
     const termino = filtroBusquedaContratos.trim().toLowerCase();
     if (!termino) return list;
     return list.filter((contrato) => {
@@ -886,7 +901,7 @@ export default function ReportesPage() {
         : "";
       return nombreCliente.includes(termino) || dniCliente.includes(termino);
     });
-  }, [contratos, filtroBusquedaContratos]);
+  }, [contratos, filtroBusquedaContratos, me?.role]);
 
   const totalMontoContratos = useMemo(
     () => contratosFiltrados.reduce((sum, c) => sum + (c.total ?? 0), 0),
@@ -944,10 +959,10 @@ export default function ReportesPage() {
 
   const generarPDFContrato = async (contrato: Contrato) => {
     const esAdmin = me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
-    const saldoPendiente = contrato.saldo_pendiente ?? 0;
+    const saldoPendiente = Number(contrato.saldo_pendiente ?? 0);
     if (
       contrato.tipo !== "orden_trabajo" ||
-      (saldoPendiente !== 0 && !esAdmin)
+      (saldoPendiente > 0 && !esAdmin)
     ) {
       toast.error(
         "Solo se pueden generar contratos de órdenes con saldo pendiente cero"
@@ -2584,6 +2599,8 @@ export default function ReportesPage() {
                 ? "Seña"
                 : recibo.concepto === "venta"
                 ? "Venta"
+                : recibo.concepto === "anticipo"
+                ? "Anticipo"
                 : "Pago adicional"
             }</p>
             <p><strong>Método de pago:</strong> ${recibo.metodo_pago}</p>
@@ -3180,7 +3197,7 @@ export default function ReportesPage() {
               Contratos por Fecha
             </h5>
             <p className="text-muted small mb-0">
-              Listado de contratos (presupuestos) en un rango de fechas
+              Listado de órdenes de trabajo (contratos) en un rango de fechas
             </p>
           </div>
           <div className="card-body">
@@ -3274,7 +3291,9 @@ export default function ReportesPage() {
                     <p className="text-muted">
                       {filtroBusquedaContratos.trim()
                         ? "No se encontraron contratos que coincidan con la búsqueda."
-                        : "Solo se pueden ver contratos de órdenes de trabajo con saldo pendiente cero."}
+                        : me?.role === "ADMIN" || me?.role === "SUPER_ADMIN"
+                          ? "No hay órdenes de trabajo en el rango de fechas."
+                          : "Solo se pueden ver contratos de órdenes de trabajo con saldo pendiente cero."}
                     </p>
                   </div>
                 ) : (
@@ -3313,9 +3332,11 @@ export default function ReportesPage() {
                           <div className="alert alert-info mb-0 w-100 d-flex align-items-center">
                             <i className="bi bi-info-circle me-2"></i>
                             <span className="small">
-                              Órdenes con saldo pendiente cero
+                              {me?.role === "ADMIN" || me?.role === "SUPER_ADMIN"
+                                ? "Órdenes de trabajo del período (incluye con saldo pendiente)"
+                                : "Órdenes de trabajo con saldo pendiente cero"}
                               {filtroBusquedaContratos.trim()
-                                ? ` (filtrado de ${contratos.filter((c) => c.tipo === "orden_trabajo" && (c.saldo_pendiente === null || c.saldo_pendiente === 0)).length})`
+                                ? ` (filtrado de ${contratos.filter((c) => c.tipo === "orden_trabajo").length})`
                                 : ""}
                             </span>
                           </div>
@@ -3548,7 +3569,7 @@ export default function ReportesPage() {
               Recibos por Fecha
             </h5>
             <p className="text-muted small mb-0">
-              Comprobantes de ingresos: señas, pagos adicionales y ventas
+              Comprobantes de ingresos: señas, pagos adicionales, ventas y anticipos
             </p>
           </div>
           <div className="card-body">
@@ -3706,6 +3727,8 @@ export default function ReportesPage() {
                                   ? "bg-info"
                                   : recibo.concepto === "venta"
                                   ? "bg-success"
+                                  : recibo.concepto === "anticipo"
+                                  ? "bg-warning text-dark"
                                   : "bg-oxblood"
                               }`}
                             >

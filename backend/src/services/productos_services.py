@@ -11,6 +11,7 @@ from src.db import db
 from datetime import datetime, date
 from typing import Optional, Tuple, List, Dict
 import traceback
+from src.fechas_ar import ahora_ar
 
 
 def _producto_to_response_dict(p: "models.Producto") -> dict:
@@ -560,18 +561,23 @@ class ProductoServices:
                         raise HTTPException(status_code=400, detail="Estado inválido.")
 
                 # Resolver FKs de atributos
+                attrs_touched = False
                 if "linea_id" in update_data:
                     v = update_data.pop("linea_id")
                     update_data["linea"] = models.ProductoLinea.get(id=v) if v else None
+                    attrs_touched = True
                 if "talle_id" in update_data:
                     v = update_data.pop("talle_id")
                     update_data["talle"] = models.ProductoTalle.get(id=v) if v else None
+                    attrs_touched = True
                 if "tela_id" in update_data:
                     v = update_data.pop("tela_id")
                     update_data["tela"] = models.ProductoTela.get(id=v) if v else None
+                    attrs_touched = True
                 if "color_id" in update_data:
                     v = update_data.pop("color_id")
                     update_data["color"] = models.ProductoColor.get(id=v) if v else None
+                    attrs_touched = True
 
                 if "descripcion_extra" in update_data:
                     update_data["descripcion_extra"] = (
@@ -580,8 +586,18 @@ class ProductoServices:
                         else None
                     )
 
+                # Si cambian línea/talle/tela/color, la descripción se regenera sola
+                # (el front a veces no manda `descripcion` en el PUT).
+                if attrs_touched:
+                    update_data.pop("descripcion", None)
+
                 for k, v in update_data.items():
                     setattr(producto, k, v)
+
+                if attrs_touched:
+                    producto.descripcion = _build_descripcion(
+                        producto.linea, producto.talle, producto.tela, producto.color
+                    )
 
                 flush()
                 commit()
@@ -870,7 +886,7 @@ class ProductoServices:
                     raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
                 is_admin = user.rol in (Roles.ADMIN, Roles.SUPER_ADMIN)
-                now = datetime.now()
+                now = ahora_ar()
                 actualizados = 0
                 no_encontrados: List[int] = []
 

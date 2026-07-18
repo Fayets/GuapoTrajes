@@ -2,8 +2,8 @@ from pony.orm import *
 from enum import Enum
 from decimal import Decimal
 from .db import db
-from datetime import date, datetime 
-from src.fechas_ar import ahora_ar
+from datetime import date, datetime
+from src.fechas_ar import ahora_ar, hoy_ar
 
 # Definicion de los roles
 class Roles(str, Enum):
@@ -177,7 +177,7 @@ class ProductoModista(db.Entity):
     id = PrimaryKey(int, auto=True)
     producto = Required(Producto)
     modista = Required(Modista)
-    fecha_ingreso = Required(date, default=lambda: date.today())
+    fecha_ingreso = Required(date, default=hoy_ar)
     fecha_salida = Optional(date)
     notas = Optional(str)
     cliente_nombre = Optional(str)
@@ -188,7 +188,7 @@ class ProductoLavanderia(db.Entity):
     id = PrimaryKey(int, auto=True)
     producto = Required(Producto)
     lavanderia = Required(Lavanderia)
-    fecha_ingreso = Required(date, default=lambda: date.today())
+    fecha_ingreso = Required(date, default=hoy_ar)
     fecha_salida = Optional(date)
     notas = Optional(str)
     cliente_nombre = Optional(str)
@@ -353,7 +353,7 @@ class EstadoMovimientoCajaChica(str, Enum):
 
 class Venta(db.Entity):
     id = PrimaryKey(int, auto=True)
-    fecha = Required(date, default=lambda: date.today())  # Columna que existe en la BD
+    fecha = Required(date, default=hoy_ar)  # Columna que existe en la BD
     fecha_hora = Required(datetime, default=ahora_ar)
     cliente = Required(Cliente, column="cliente")  # Columna que existe en la BD
     tipo_precio = Required(str)  # <- Usa str y validalo como Enum desde FastAPI

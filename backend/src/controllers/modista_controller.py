@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from src import schemas
 from src.services.modista_services import ModistaServices
 from src.controllers.auth_controller import get_current_user
+from src.deps import require_role
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 
@@ -23,7 +24,12 @@ class AsignarProductoModistaBody(BaseModel):
     cliente_celular: Optional[str] = None
 
 
-@router.post("/register", response_model=RegisterMessage, status_code=201)
+@router.post(
+    "/register",
+    response_model=RegisterMessage,
+    status_code=201,
+    dependencies=[Depends(require_role("ADMIN", "SUPER_ADMIN"))],
+)
 def registrar_modista(modista: schemas.ModistaCreate, current_user=Depends(get_current_user)):
     try:
         return servicio.crear_modista(modista)
@@ -49,7 +55,11 @@ class UpdateMessage(BaseModel):
     success: bool
 
 
-@router.put("/update/{modista_id}", response_model=RegisterMessage)
+@router.put(
+    "/update/{modista_id}",
+    response_model=RegisterMessage,
+    dependencies=[Depends(require_role("ADMIN", "SUPER_ADMIN"))],
+)
 def actualizar_modista(
     modista_id: int, modista_actualizar: schemas.ModistaCreate, current_user=Depends(get_current_user)
 ):
@@ -65,7 +75,11 @@ def actualizar_modista(
         return {"message": "Error inesperado al actualizar la modista.", "success": False, "data": None}
 
 
-@router.delete("/delete/{modista_id}", response_model=UpdateMessage)
+@router.delete(
+    "/delete/{modista_id}",
+    response_model=UpdateMessage,
+    dependencies=[Depends(require_role("ADMIN", "SUPER_ADMIN"))],
+)
 def eliminar_modista(modista_id: int, current_user=Depends(get_current_user)):
     try:
         servicio.eliminar_modista(modista_id)

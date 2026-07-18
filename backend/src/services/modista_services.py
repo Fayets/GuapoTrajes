@@ -4,8 +4,9 @@ from pony.orm.core import TransactionIntegrityError
 from src import models, schemas
 from src.descripcion_producto import format_descripcion_producto
 from src.services.productos_services import _producto_to_response_dict
-from datetime import date
 from typing import List, Optional
+
+from src.fechas_ar import hoy_ar
 
 
 class ModistaServices:
@@ -71,7 +72,7 @@ class ModistaServices:
             if not producto:
                 raise HTTPException(status_code=404, detail="Producto no encontrado")
 
-            hoy = date.today()
+            hoy = hoy_ar()
             for pl in list(producto.productos_lavanderias):
                 if pl.fecha_salida is None:
                     pl.fecha_salida = hoy
@@ -124,7 +125,7 @@ class ModistaServices:
                     detail="El producto no está en modista o ya fue regresado",
                 )
 
-            producto_modista.fecha_salida = date.today()
+            producto_modista.fecha_salida = hoy_ar()
             producto.estado = models.EstadoProducto.SALON
             producto.inmovilizado = False
 
@@ -187,7 +188,7 @@ class ModistaServices:
         """Marca salida de modista y estado SALON para cada producto válido."""
         regresados: List[int] = []
         errores: List[dict] = []
-        hoy = date.today()
+        hoy = hoy_ar()
         with db_session:
             for pid in productos_ids:
                 try:

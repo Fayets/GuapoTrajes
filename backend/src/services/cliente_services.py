@@ -14,7 +14,7 @@ def _cliente_a_dict(cliente: models.Cliente) -> dict:
         "dni": cliente.dni,
         "direccion": cliente.direccion,
         "celular": cliente.celular,
-        "notas": cliente.notas,
+        "notas": (cliente.notas or "").strip(),
         "fecha_nacimiento": fn.isoformat() if fn else None,
     }
 
@@ -54,6 +54,7 @@ class ClientServices:
                     notas=cliente.notas.strip() if cliente.notas else "",
                     fecha_nacimiento=cliente.fecha_nacimiento,
                 )
+                flush()
                 return {
                     "message": "Cliente creado exitosamente",
                     "success": True,
@@ -120,19 +121,22 @@ class ClientServices:
                     raise HTTPException(status_code=404, detail="Cliente no encontrado")
                 
                 #actualiza los atributos del cliente
-                cliente.nombre = cliente_actualizar.nombre
-                cliente.apellido = cliente_actualizar.apellido
-                cliente.dni = cliente_actualizar.dni
-                cliente.direccion = cliente_actualizar.direccion
-                cliente.celular = cliente_actualizar.celular
-                cliente.notas = cliente_actualizar.notas
+                cliente.nombre = cliente_actualizar.nombre.strip()
+                cliente.apellido = cliente_actualizar.apellido.strip()
+                cliente.dni = cliente_actualizar.dni.strip()
+                cliente.direccion = cliente_actualizar.direccion.strip()
+                cliente.celular = cliente_actualizar.celular.strip()
+                cliente.notas = (cliente_actualizar.notas or "").strip()
                 cliente.fecha_nacimiento = cliente_actualizar.fecha_nacimiento
+                flush()
                 return {
                     "message": "Cliente actualizado correctamente",
                     "success": True,
                     "data": _cliente_a_dict(cliente),
                 }
             
+            except HTTPException:
+                raise
             except Exception as e:
                 print(f"Error al actualizar el cliente: {e}")
                 raise HTTPException(status_code=500, detail="Error inesperado al actualizar el cliente")

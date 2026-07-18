@@ -22,6 +22,7 @@ import { useSucursal } from "@/context/sucursal-context";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { useScanQueueWithScanner } from "@/hooks/use-scan-queue-with-scanner";
 import { ScanQueueModal } from "@/components/scan-queue-modal";
+import { formatMoneyAr } from "@/lib/money";
 
 type Rol = "ADMIN" | "EMPLEADO" | "SUPER_ADMIN";
 
@@ -41,12 +42,7 @@ const KPIS_INICIALES: Kpis = {
   prendasSalon: null,
 };
 
-const formatMoney = (n: number) =>
-  n.toLocaleString("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  });
+const formatMoney = (n: number) => formatMoneyAr(n);
 
 export default function Dashboard() {
   const { me, loading } = useAuth();

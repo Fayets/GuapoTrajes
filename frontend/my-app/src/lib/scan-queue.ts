@@ -15,6 +15,23 @@ export type ScanQueueRow = {
   precio_alquiler_efectivo: number;
 };
 
+/**
+ * Una cotización rápida puede mostrar prendas y precios sin fechas.
+ * La disponibilidad por reservas solo se debe consultar cuando la ventana
+ * completa del alquiler ya fue definida.
+ */
+export function shouldValidateQuoteAvailability(
+  fechaEvento?: string | null,
+  fechaRetiro?: string | null,
+  fechaDevolucion?: string | null
+): boolean {
+  return Boolean(
+    fechaEvento?.trim() &&
+      fechaRetiro?.trim() &&
+      fechaDevolucion?.trim()
+  );
+}
+
 type ScanQueueFileV2 = { v: 2; items: ScanQueueRow[] };
 type ScanQueueFileV1 = {
   v: 1;
@@ -63,6 +80,18 @@ function parseStored(raw: string): ScanQueueRow[] {
     /* ignore */
   }
   return [];
+}
+
+function parseImportPayload(raw: string): ScanQueueRow[] {
+  try {
+    const parsed = JSON.parse(raw) as { items?: ScanQueueRow[] };
+    if (!Array.isArray(parsed?.items)) return [];
+    return parsed.items.filter(
+      (r) => r && typeof r.productoId === "number" && !Number.isNaN(r.productoId)
+    );
+  } catch {
+    return [];
+  }
 }
 
 export function loadScanQueue(): ScanQueueRow[] {
@@ -124,4 +153,114 @@ export function applyToggleProductInQueue(
       precio_alquiler_efectivo: meta.precio_alquiler_efectivo,
     },
   ];
+}
+
+/**
+ * Memoria de módulo: sobrevive al remount de React Strict Mode.
+ * Antes se borraba sessionStorage en el primer mount y el segundo perdía la cola.
+ */
+let presupuestoImportMemory: ScanQueueRow[] | null = null;
+let ventaImportMemory: ScanQueueRow[] | null = null;
+
+/** @internal tests */
+export function _resetImportMemoryForTests(): void {
+  presupuestoImportMemory = null;
+  ventaImportMemory = null;
+  lastPresupuestoImportNotifyKey = "";
+}
+
+let lastPresupuestoImportNotifyKey = "";
+
+export function stashPresupuestoImport(items: ScanQueueRow[]): boolean {
+  if (!items.length) return false;
+  presupuestoImportMemory = items;
+  lastPresupuestoImportNotifyKey = "";
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(
+        GUAPO_PRESUPUESTO_IMPORT_PAYLOAD,
+        JSON.stringify({ items })
+      );
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export function peekPresupuestoImport(): ScanQueueRow[] | null {
+  if (presupuestoImportMemory?.length) return presupuestoImportMemory;
+  try {
+    if (typeof sessionStorage === "undefined") return null;
+    const raw = sessionStorage.getItem(GUAPO_PRESUPUESTO_IMPORT_PAYLOAD);
+    if (!raw?.trim()) return null;
+    const rows = parseImportPayload(raw);
+    if (!rows.length) return null;
+    presupuestoImportMemory = rows;
+    return rows;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPresupuestoImport(): void {
+  presupuestoImportMemory = null;
+  lastPresupuestoImportNotifyKey = "";
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem(GUAPO_PRESUPUESTO_IMPORT_PAYLOAD);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Evita toast duplicado por remount de Strict Mode. */
+export function shouldNotifyPresupuestoImport(rows: ScanQueueRow[]): boolean {
+  const key = rows.map((r) => r.productoId).join(",");
+  if (!key || key === lastPresupuestoImportNotifyKey) return false;
+  lastPresupuestoImportNotifyKey = key;
+  return true;
+}
+
+export function stashVentaImport(items: ScanQueueRow[]): boolean {
+  if (!items.length) return false;
+  ventaImportMemory = items;
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(
+        GUAPO_VENTA_IMPORT_PAYLOAD,
+        JSON.stringify({ items })
+      );
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export function peekVentaImport(): ScanQueueRow[] | null {
+  if (ventaImportMemory?.length) return ventaImportMemory;
+  try {
+    if (typeof sessionStorage === "undefined") return null;
+    const raw = sessionStorage.getItem(GUAPO_VENTA_IMPORT_PAYLOAD);
+    if (!raw?.trim()) return null;
+    const rows = parseImportPayload(raw);
+    if (!rows.length) return null;
+    ventaImportMemory = rows;
+    return rows;
+  } catch {
+    return null;
+  }
+}
+
+export function clearVentaImport(): void {
+  ventaImportMemory = null;
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem(GUAPO_VENTA_IMPORT_PAYLOAD);
+    }
+  } catch {
+    /* ignore */
+  }
 }

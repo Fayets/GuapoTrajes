@@ -13,7 +13,7 @@ type FormData = {
 type ClienteModalProps = {
   show: boolean
   formData: FormData
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
   onClose: () => void
   onSave: () => void
   modoEdicion?: boolean
@@ -29,7 +29,7 @@ const CAMPOS_TEXTO: Array<{
   { key: "dni", label: "DNI", requeridoEnAlta: true },
   { key: "direccion", label: "Dirección", requeridoEnAlta: true },
   { key: "celular", label: "Celular" },
-  { key: "notas", label: "Notas" },
+  { key: "notas", label: "Observación interna" },
 ]
 
 export default function ClienteModal({
@@ -98,14 +98,19 @@ export default function ClienteModal({
                     <label htmlFor={key} className="form-label">
                       {label}
                     </label>
-                    <input
-                      type="text"
+                    <textarea
                       className="form-control"
                       id={key}
                       name={key}
                       value={formData[key]}
                       onChange={onChange}
+                      rows={4}
+                      maxLength={2000}
+                      placeholder="Ej.: devolvió con demora, ropa muy sucia o descuidada"
                     />
+                    <div className="form-text">
+                      Solo para uso interno. Se mostrará como advertencia en el perfil.
+                    </div>
                   </div>
                 ))}
               </form>

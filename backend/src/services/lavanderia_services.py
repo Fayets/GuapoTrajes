@@ -6,8 +6,9 @@ from src.descripcion_producto import format_descripcion_producto
 from src.services.productos_services import _producto_to_response_dict
 
 # from src.schemas import RegresoProductoLavanderiaResponse
-from datetime import date
 from typing import List, Optional
+
+from src.fechas_ar import hoy_ar
 
 class LavanderiaServices:
     def crear_lavanderia(self, nueva_lavanderia: schemas.LavanderiaCreate) -> dict:
@@ -64,7 +65,7 @@ class LavanderiaServices:
             if not producto:
                 raise HTTPException(status_code=404, detail="Producto no encontrado")
 
-            hoy = date.today()
+            hoy = hoy_ar()
             # No usar select(lambda … producto == entidad): Pony no traduce bien la captura;
             # recorremos las relaciones cargadas en la misma sesión.
             for pl in list(producto.productos_lavanderias):
@@ -122,7 +123,7 @@ class LavanderiaServices:
                 raise HTTPException(status_code=400, detail="El producto no está en lavandería o ya fue regresado")
 
             # Actualizamos la fecha de salida
-            producto_lavanderia.fecha_salida = date.today()
+            producto_lavanderia.fecha_salida = hoy_ar()
 
             # Cambiamos el estado del producto a SALON (o el estado que corresponda)
             producto.estado = models.EstadoProducto.SALON
@@ -188,7 +189,7 @@ class LavanderiaServices:
         """Marca salida de lavandería y estado SALON para cada producto válido."""
         regresados: List[int] = []
         errores: List[dict] = []
-        hoy = date.today()
+        hoy = hoy_ar()
         with db_session:
             for pid in productos_ids:
                 try:

@@ -1,7 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from pony.orm import db_session, select, sum, count, flush
 from datetime import date, datetime
-from src.fechas_ar import ahora_ar, formatear_fecha_ar, formatear_hora_ar, instante_a_fecha_ar
+from src.fechas_ar import ahora_ar, formatear_fecha_ar, formatear_hora_ar, instante_a_fecha_ar, hoy_ar
 from src.money import round_pesos
 from src.models import CajaMovimiento, Venta, Usuario, Sucursal, TipoMovimiento, MetodoPago, CuentaDestino, Presupuesto, CierreCaja, Cliente
 from fastapi import HTTPException
@@ -737,7 +737,7 @@ class CajaServices:
         """Para administrador: sucursales sin cierre de caja para la fecha (por defecto ayer)."""
         from datetime import timedelta
         try:
-            ref = fecha_referencia or (date.today() - timedelta(days=1))
+            ref = fecha_referencia or (hoy_ar() - timedelta(days=1))
             sucursales = list(Sucursal.select())
             pendientes = []
             for s in sucursales:

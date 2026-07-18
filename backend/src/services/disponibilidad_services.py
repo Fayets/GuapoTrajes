@@ -7,12 +7,15 @@ from datetime import date, datetime, timedelta
 from fastapi import HTTPException
 
 from src.descripcion_producto import format_descripcion_producto
+from src.fechas_ar import hoy_ar
 from src.models import ProductoReservado, Producto, EstadoProducto
 
 
 def _as_date(d: date | datetime) -> date:
     if isinstance(d, datetime):
-        return d.date()
+        from src.fechas_ar import instante_a_fecha_ar
+
+        return instante_a_fecha_ar(d)
     return d
 
 
@@ -40,7 +43,7 @@ def producto_ids_en_ventana_reserva_el_dia(ref: Optional[date] = None) -> set[in
 
     Debe ejecutarse dentro de un db_session activo (p. ej. desde ProductoServices).
     """
-    dia = _as_date(ref) if ref is not None else date.today()
+    dia = _as_date(ref) if ref is not None else hoy_ar()
     out: set[int] = set()
 
     for pr in ProductoReservado.select():
@@ -125,6 +128,7 @@ def validar_producto_para_item_presupuesto(
     fecha_devolucion: date,
     orden_excluir_id: Optional[int],
     es_reuso_del_mismo_presupuesto: bool,
+    ignorar_conflicto_reserva: bool = False,
 ) -> None:
     """
     Valida disponibilidad por ventana de reserva y, si el ítem no es reutilización del mismo
@@ -133,7 +137,7 @@ def validar_producto_para_item_presupuesto(
     desc = format_descripcion_producto(
         producto.descripcion, producto.descripcion_extra
     ) or f"#{producto.id}"
-    if not verificar_disponibilidad(
+    if not ignorar_conflicto_reserva and not verificar_disponibilidad(
         producto.id,
         fecha_retiro,
         fecha_devolucion,

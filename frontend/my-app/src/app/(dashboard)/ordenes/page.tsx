@@ -28,7 +28,7 @@ import {
 } from "@/components/metodo-pago-selector";
 import { ConfirmarGenerarContratoModal } from "@/components/modales/confirmar-generar-contrato-modal";
 import { imprimirEtiquetas100x50Lote } from "@/lib/imprimir-etiqueta-100x50";
-import { formatPesosAr, parseMontoInput, roundPesos } from "@/lib/money";
+import { formatPesosAr, formatMoneyAr, parseMontoInput, roundPesos } from "@/lib/money";
 import {
   ahoraArgentinaPartes,
   formatDateTimeArgentina,
@@ -165,10 +165,12 @@ function OrdenesTrabajoContent() {
   const ORDENES_POR_PAGINA = 18;
   const verContratoAbiertoRef = useRef<number | null>(null);
 
-  const { me } = useAuth();
+  const { me, isAdmin, isSuperAdmin } = useAuth();
   const searchParams = useSearchParams();
   const esAdmin =
-    me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
+    isAdmin || isSuperAdmin || me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
+  const tieneSaldoPendiente = (orden: { saldo_pendiente?: number | null }) =>
+    Number(orden.saldo_pendiente ?? 0) > 0;
 
   // Métodos de pago (etiquetas en historial de señas)
   const metodosPago = [
@@ -344,8 +346,10 @@ function OrdenesTrabajoContent() {
       metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
       ordenSeleccionada.cliente_id != null &&
       saldoClienteCC > 0;
-    const creditoAplicado = esMetodoCC ? Math.min(saldoClienteCC, montoTotal) : 0;
-    const montoCaja = Math.max(montoTotal - creditoAplicado, 0);
+    const creditoAplicado = esMetodoCC
+      ? roundPesos(Math.min(saldoClienteCC, montoTotal))
+      : 0;
+    const montoCaja = roundPesos(Math.max(montoTotal - creditoAplicado, 0));
     if (esMetodoCC && montoTotal > saldoClienteCC + 1e-9 && !metodoPagoComplemento?.metodoId) {
       toast.error("Indicá el método de pago para el importe que ingresa en caja.");
       return;
@@ -439,7 +443,9 @@ function OrdenesTrabajoContent() {
 
   const eliminarOrden = async (orden: OrdenTrabajo) => {
     const confirmacion = window.confirm(
-      `¿Estás seguro de que querés eliminar la orden #${orden.id}?\n\nEsta acción liberará los productos reservados y no se puede deshacer.`
+      `¿Estás seguro de que querés eliminar la orden #${orden.id}?\n\n` +
+        `Se anularán en caja la seña y los pagos asociados (y se devolverá saldo de cuenta corriente si se usó).\n` +
+        `Los productos reservados se liberan. Esta acción no se puede deshacer.`
     );
     if (!confirmacion) return;
 
@@ -532,7 +538,7 @@ function OrdenesTrabajoContent() {
     const fecha = recibo.fecha_hora
       ? formatDateTimeArgentina(recibo.fecha_hora)
       : formatDateTimeArgentina(new Date(), { day: "2-digit", month: "2-digit", year: "numeric" });
-    return `*GUAPO TRAJES - Recibo*\n\nOrden N°: ${recibo.orden_id}\nPresupuesto: ${recibo.presupuesto_numero}\nCliente: ${recibo.cliente_nombre}\nFecha: ${fecha}\nMonto: $${Number(recibo.monto).toLocaleString("es-AR")}\nConcepto: ${recibo.motivo}`;
+    return `*GUAPO TRAJES - Recibo*\n\nOrden N°: ${recibo.orden_id}\nPresupuesto: ${recibo.presupuesto_numero}\nCliente: ${recibo.cliente_nombre}\nFecha: ${fecha}\nMonto: ${formatMoneyAr(Number(recibo.monto))}\nConcepto: ${recibo.motivo}`;
   };
 
   const imprimirReciboPago = (recibo: { orden_id: number; fecha_hora: string; monto: number; motivo: string; cliente_nombre: string; presupuesto_numero: string }) => {
@@ -552,7 +558,7 @@ function OrdenesTrabajoContent() {
 <div class="info-row"><span>Presupuesto:</span><span>${recibo.presupuesto_numero}</span></div>
 <div class="info-row"><span>Cliente:</span><span>${recibo.cliente_nombre}</span></div>
 <div class="info-row"><span>Fecha:</span><span>${fechaRecibo}</span></div>
-<div class="info-row"><span>Monto:</span><span>$${Number(recibo.monto).toLocaleString("es-AR")}</span></div>
+<div class="info-row"><span>Monto:</span><span>${formatMoneyAr(Number(recibo.monto))}</span></div>
 <div class="info-row"><span>Concepto:</span><span>${recibo.motivo}</span></div>
 <div class="no-print" style="margin-top:15px;text-align:center;">
 <button onclick="window.print()">Imprimir</button><button onclick="window.close()">Cerrar</button>
@@ -1173,7 +1179,7 @@ function OrdenesTrabajoContent() {
   };
 
   const generarContratoDesdeFila = (orden: OrdenTrabajo) => {
-    if (orden.saldo_pendiente !== 0 && !esAdmin) {
+    if (tieneSaldoPendiente(orden) && !esAdmin) {
       toast.error("El saldo pendiente debe ser cero para generar el contrato.");
       return;
     }
@@ -1190,7 +1196,7 @@ function OrdenesTrabajoContent() {
   const generarContrato = () => {
     if (!ordenSeleccionada) return;
     if (
-      (ordenSeleccionada.saldo_pendiente !== 0 && !esAdmin) ||
+      (tieneSaldoPendiente(ordenSeleccionada) && !esAdmin) ||
       ordenSeleccionada.es_precliente ||
       !ordenSeleccionada.cliente_dni ||
       !ordenSeleccionada.cliente_direccion
@@ -1721,7 +1727,7 @@ function OrdenesTrabajoContent() {
                             title={
                               orden.contrato_generado_at
                                 ? "Contrato generado - Ver en Contratos"
-                                : orden.saldo_pendiente !== 0 && esAdmin
+                                : tieneSaldoPendiente(orden) && esAdmin
                                   ? "Generar contrato (saldo pendiente — solo administrador)"
                                   : "Generar contrato (solo cliente con saldo cero)"
                             }
@@ -1825,12 +1831,10 @@ function OrdenesTrabajoContent() {
                       Monto a registrar
                     </label>
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={montoPago}
                       onChange={(e) => setMontoPago(e.target.value)}
-                      min="1"
-                      max={roundPesos(ordenSeleccionada.saldo_pendiente)}
-                      step="1"
                       placeholder={`Máximo: $${formatPesosAr(ordenSeleccionada.saldo_pendiente)}`}
                     />
                     {montoPago &&
@@ -1850,20 +1854,20 @@ function OrdenesTrabajoContent() {
                           metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                           !!ordenSeleccionada.cliente_id &&
                           saldoClienteCC > 0;
-                        const cred = esCC ? Math.min(saldoClienteCC, mt) : 0;
-                        const caja = Math.max(mt - cred, 0);
+                        const cred = esCC ? roundPesos(Math.min(saldoClienteCC, mt)) : 0;
+                        const caja = roundPesos(Math.max(mt - cred, 0));
                         return (
                           <ul className="mb-0 ps-3">
                             <li>
                               Desde cuenta corriente:{" "}
                               <strong>
-                                ${cred.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatMoneyAr(cred)}
                               </strong>
                             </li>
                             <li>
                               Ingreso en caja:{" "}
                               <strong>
-                                ${caja.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {formatMoneyAr(caja)}
                               </strong>
                             </li>
                           </ul>
@@ -1906,7 +1910,7 @@ function OrdenesTrabajoContent() {
                       metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                       !!ordenSeleccionada.cliente_id &&
                       saldoClienteCC > 0;
-                    const cred = esCC ? Math.min(saldoClienteCC, mt) : 0;
+                    const cred = esCC ? roundPesos(Math.min(saldoClienteCC, mt)) : 0;
                     const montoCajaUi = Math.max(mt - cred, 0);
                     return montoCajaUi > 1e-6 ? (
                       <div className="mb-4">
@@ -1976,8 +1980,8 @@ function OrdenesTrabajoContent() {
                     metodoPagoId === METODO_PAGO_CUENTA_CORRIENTE_ID &&
                     !!ordenSeleccionada.cliente_id &&
                     saldoClienteCC > 0;
-                  const cred = esCC ? Math.min(saldoClienteCC, mt) : 0;
-                  const montoCajaUi = Math.max(mt - cred, 0);
+                  const cred = esCC ? roundPesos(Math.min(saldoClienteCC, mt)) : 0;
+                  const montoCajaUi = roundPesos(Math.max(mt - cred, 0));
                   const requiereCaja = montoCajaUi > 1e-6;
                   const faltaComplemento =
                     esCC &&
@@ -2014,7 +2018,7 @@ function OrdenesTrabajoContent() {
           {reciboRecienGenerado && (
             <div className="px-4 py-4 space-y-3 small text-muted border-top border-bottom">
               <p className="mb-0 ps-0">Orden N° {reciboRecienGenerado.recibo.orden_id} · {reciboRecienGenerado.recibo.presupuesto_numero}</p>
-              <p className="mb-0">{reciboRecienGenerado.recibo.cliente_nombre} · ${reciboRecienGenerado.recibo.monto.toLocaleString("es-AR")} · {reciboRecienGenerado.recibo.motivo}</p>
+              <p className="mb-0">{reciboRecienGenerado.recibo.cliente_nombre} · {formatMoneyAr(reciboRecienGenerado.recibo.monto)} · {reciboRecienGenerado.recibo.motivo}</p>
             </div>
           )}
           <DialogFooter className="gap-3 px-4 py-4">
@@ -2291,11 +2295,11 @@ function OrdenesTrabajoContent() {
                         Total del presupuesto
                       </span>
                       <span className="fw-semibold text-success">
-                        ${(
+                        {formatMoneyAr(
                           ordenSeleccionada.total_presupuesto ??
                           ordenSeleccionada.total ??
                           ordenSeleccionada.seña_pagada + ordenSeleccionada.saldo_pendiente
-                        ).toLocaleString()}
+                        )}
                       </span>
                     </div>
                     <div className="col-12 col-md-6">
@@ -2573,10 +2577,7 @@ function OrdenesTrabajoContent() {
                                 </td>
                                 <td className="text-end fw-semibold text-success px-2 py-1 text-nowrap">
                                   $
-                                  {seña.monto.toLocaleString("es-AR", {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  {formatMoneyAr(seña.monto)}
                                 </td>
                                 <td className="px-2 py-1">
                                   {labelMetodoPago(seña.metodo_pago || "") || seña.metodo_pago || "N/A"}
@@ -2606,13 +2607,9 @@ function OrdenesTrabajoContent() {
                                 Total:
                               </td>
                               <td className="text-end fw-bold text-success px-2 py-1 pt-2">
-                                $
-                                {historialSeñas
-                                  .reduce((sum, seña) => sum + seña.monto, 0)
-                                  .toLocaleString("es-AR", {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
+                                {formatMoneyAr(
+                                  historialSeñas.reduce((sum, seña) => sum + seña.monto, 0)
+                                )}
                               </td>
                               <td colSpan={3} className="px-2 py-1 pt-2"></td>
                             </tr>
@@ -2661,7 +2658,7 @@ function OrdenesTrabajoContent() {
                                   : "N/A"}
                               </span>
                               {" · "}
-                              <strong>${Number(recibo.monto).toLocaleString("es-AR")}</strong>
+                              <strong>{formatMoneyAr(Number(recibo.monto))}</strong>
                               {" · "}
                               <span>{recibo.motivo || "Pago"}</span>
                             </div>
@@ -2741,21 +2738,13 @@ function OrdenesTrabajoContent() {
                                   <span
                                     style={{ textDecoration: "line-through" }}
                                   >
-                                    $
-                                    {totalOriginal.toLocaleString("es-AR", {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })}
+                                    {formatMoneyAr(totalOriginal)}
                                   </span>
                                 </div>
                                 <div className="mb-1">
                                   <strong>Total con descuento:</strong>{" "}
                                   <span className="text-success fw-bold">
-                                    $
-                                    {totalConDescuento.toLocaleString("es-AR", {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })}
+                                    {formatMoneyAr(totalConDescuento)}
                                   </span>
                                 </div>
                                 <div className="mb-1">
@@ -2763,11 +2752,8 @@ function OrdenesTrabajoContent() {
                                 </div>
                                 {montoDescontado > 0 && (
                                   <div className="mb-1">
-                                    <strong>Monto descontado:</strong> $
-                                    {montoDescontado.toLocaleString("es-AR", {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })}
+                                    <strong>Monto descontado:</strong>{" "}
+                                    {formatMoneyAr(montoDescontado)}
                                   </div>
                                 )}
                               </>

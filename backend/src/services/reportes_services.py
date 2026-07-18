@@ -435,13 +435,17 @@ class ReportesServices:
                         except Exception as e:
                             print(f"⚠️ Error al obtener datos del cliente en presupuesto {presupuesto.id}: {e}")
                         
-                        # Verificar si tiene orden de trabajo
+                        # Evitar duplicar: si el presupuesto ya tiene orden, la fila
+                        # de contrato útil es la de la orden (no el presupuesto).
                         tiene_orden = presupuesto.orden_trabajo is not None
+                        if tiene_orden and tipo == "todos":
+                            continue
+
                         orden_id = None
                         if tiene_orden:
                             try:
                                 orden_id = presupuesto.orden_trabajo.id
-                            except:
+                            except Exception:
                                 pass
                         
                         # Calcular total de items
@@ -455,7 +459,7 @@ class ReportesServices:
                             "cliente_id": presupuesto.cliente.id if presupuesto.cliente else None,
                             "cliente_nombre": cliente_nombre,
                             "cliente_dni": cliente_dni,
-                            "fecha_creacion": presupuesto.fecha_creacion.isoformat() if isinstance(presupuesto.fecha_creacion, datetime) else str(presupuesto.fecha_creacion),
+                            "fecha_creacion": isoformat_ar(presupuesto.fecha_creacion) if isinstance(presupuesto.fecha_creacion, datetime) else str(presupuesto.fecha_creacion),
                             "fecha_evento": presupuesto.fecha_evento.isoformat() if presupuesto.fecha_evento else None,
                             "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
                             "fecha_devolucion": presupuesto.fecha_devolucion.isoformat() if presupuesto.fecha_devolucion else None,
@@ -541,7 +545,7 @@ class ReportesServices:
                             "cliente_id": presupuesto.cliente.id if presupuesto.cliente else None,
                             "cliente_nombre": cliente_nombre,
                             "cliente_dni": cliente_dni,
-                            "fecha_creacion": orden.fecha_creacion.isoformat() if isinstance(orden.fecha_creacion, datetime) else str(orden.fecha_creacion),
+                            "fecha_creacion": isoformat_ar(orden.fecha_creacion) if isinstance(orden.fecha_creacion, datetime) else str(orden.fecha_creacion),
                             "fecha_evento": orden.fecha_evento.isoformat() if orden.fecha_evento else None,
                             "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
                             "fecha_devolucion": presupuesto.fecha_devolucion.isoformat() if presupuesto.fecha_devolucion else None,
@@ -617,9 +621,10 @@ class ReportesServices:
                     es_seña = origen.startswith("SEÑA_PRESUPUESTO:")
                     es_pago_adicional = origen.startswith("PAGO_ADICIONAL_ORDEN:")
                     es_venta = origen.startswith("VENTA:")
+                    es_anticipo = origen.startswith("PAGO_CUENTA_CORRIENTE:")
                     
-                    # Solo procesar señas, pagos adicionales y ventas
-                    if not (es_seña or es_pago_adicional or es_venta):
+                    # Señas, pagos adicionales, ventas y anticipos (crédito a cuenta corriente)
+                    if not (es_seña or es_pago_adicional or es_venta or es_anticipo):
                         continue
                     
                     # Filtrar por fecha
@@ -673,6 +678,17 @@ class ReportesServices:
                                 cliente_dni = presupuesto.cliente.dni or "N/A"
                         except Exception as e:
                             print(f"⚠️ Error al obtener datos del presupuesto {numero_presupuesto}: {e}")
+                    elif es_anticipo:
+                        concepto = "anticipo"
+                        presupuesto_numero = f"ANTICIPO-{movimiento.id}"
+                        try:
+                            cliente_id = int(origen.replace("PAGO_CUENTA_CORRIENTE:", "").strip())
+                            cliente = Cliente.get(id=cliente_id)
+                            if cliente:
+                                cliente_nombre = f"{cliente.nombre} {cliente.apellido}".strip()
+                                cliente_dni = cliente.dni or "N/A"
+                        except Exception as e:
+                            print(f"⚠️ Error al obtener datos del cliente para anticipo {origen}: {e}")
                     
                     # Obtener información del usuario que registró el movimiento
                     usuario_nombre = "N/A"

@@ -264,9 +264,9 @@ def registrar_contrato_generado(orden_id: int, current_user=Depends(get_current_
 
 @router.delete("/{orden_id}", dependencies=[Depends(require_role("ADMIN"))])
 def eliminar_orden_trabajo(orden_id: int, current_user=Depends(get_current_user)):
-    """Eliminar una orden de trabajo (solo ADMIN). Libera los productos reservados."""
+    """Eliminar una orden de trabajo (solo ADMIN). Anula señas/pagos en caja y libera productos."""
     try:
-        return servicio.eliminar_orden_trabajo(orden_id)
+        return servicio.eliminar_orden_trabajo(orden_id, current_user.id)
     except HTTPException as e:
         raise e
     except Exception as e:
