@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import ReactPaginate from "react-paginate";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -250,6 +252,21 @@ export default function CajaChicaPage() {
     });
   }, [movimientos, search]);
 
+  const [paginaActual, setPaginaActual] = useState(0);
+  const MOVIMIENTOS_POR_PAGINA = 18;
+
+  useEffect(() => {
+    setPaginaActual(0);
+  }, [search]);
+
+  const pageCount = Math.ceil(movimientosFiltrados.length / MOVIMIENTOS_POR_PAGINA);
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * MOVIMIENTOS_POR_PAGINA;
+  const movimientosPaginados = movimientosFiltrados.slice(
+    offsetPagina,
+    offsetPagina + MOVIMIENTOS_POR_PAGINA
+  );
+
   const totalCalculado = useMemo(() => {
     return movimientos.reduce((acc, mov) => {
       if (mov.estado === "RECHAZADO") return acc;
@@ -450,45 +467,16 @@ export default function CajaChicaPage() {
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="gt-page-header d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
         <div>
-          <h1 className="fw-bold">Caja Chica</h1>
+          <h1 className="page-title mb-1">Caja Chica</h1>
           <p className="text-muted mb-0">Gestión de ingresos y egresos por sucursal.</p>
         </div>
-        <div className="d-flex flex-wrap align-items-end gap-2">
-          <div className="d-flex flex-wrap align-items-end gap-2 border rounded px-3 py-2 bg-light">
-            <div>
-              <label className="form-label small mb-1">Exportar desde</label>
-              <input
-                type="date"
-                className="form-control form-control-sm"
-                value={fechaExportDesde}
-                onChange={(e) => setFechaExportDesde(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="form-label small mb-1">Exportar hasta</label>
-              <input
-                type="date"
-                className="form-control form-control-sm"
-                value={fechaExportHasta}
-                onChange={(e) => setFechaExportHasta(e.target.value)}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => void exportarExcel()}
-              disabled={exportando || !token}
-              className="btn btn-outline-secondary btn-sm"
-            >
-              <i className="bi bi-file-earmark-excel me-1"></i>
-              {exportando ? "Exportando…" : "Excel"}
-            </button>
-          </div>
+        <div className="d-flex flex-wrap align-items-center gap-2">
           <button
             onClick={fetchMovimientos}
             disabled={isLoading}
-            className="btn btn-outline-secondary"
+            className="btn btn-outline-ink"
           >
             {isLoading ? (
               <i className="bi bi-arrow-clockwise spin me-2"></i>
@@ -499,7 +487,7 @@ export default function CajaChicaPage() {
           </button>
           <button
             onClick={abrirModalCrear}
-            className="btn btn-primary"
+            className="btn btn-oxblood"
           >
             <i className="bi bi-plus me-2"></i>
             Registrar Movimiento
@@ -509,10 +497,10 @@ export default function CajaChicaPage() {
 
       <div className="row mb-4">
         <div className="col-md-3">
-          <div className="card border-0 bg-primary bg-opacity-10">
+          <div className="card border-0 bg-oxblood-soft">
             <div className="card-body">
               <div className="text-muted small mb-1">Total en Caja</div>
-              <div className="h4 text-primary mb-0">
+              <div className="h4 text-oxblood mb-0">
                 ${formatCurrency(totalVisible)}
               </div>
             </div>
@@ -529,14 +517,45 @@ export default function CajaChicaPage() {
                 {movimientosFiltrados.length} movimiento{movimientosFiltrados.length === 1 ? "" : "s"} encontrado{movimientosFiltrados.length === 1 ? "" : "s"}.
               </p>
             </div>
-            <div className="d-flex gap-2 w-100 w-lg-auto">
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Buscar movimientos..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
+            <div className="d-flex flex-column flex-md-row align-items-md-center gap-2 w-100 w-lg-auto">
+              <div className="input-group gt-search">
+                <span className="input-group-text">
+                  <i className="bi bi-search"></i>
+                </span>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Buscar movimientos..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+              <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                <input
+                  type="date"
+                  className="form-control form-control-sm gt-select"
+                  title="Exportar desde"
+                  value={fechaExportDesde}
+                  onChange={(e) => setFechaExportDesde(e.target.value)}
+                />
+                <span className="text-muted small">a</span>
+                <input
+                  type="date"
+                  className="form-control form-control-sm gt-select"
+                  title="Exportar hasta"
+                  value={fechaExportHasta}
+                  onChange={(e) => setFechaExportHasta(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => void exportarExcel()}
+                  disabled={exportando || !token}
+                  className="btn btn-outline-ink btn-sm text-nowrap"
+                >
+                  <i className="bi bi-file-earmark-excel me-1"></i>
+                  {exportando ? "Exportando…" : "Excel"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -556,8 +575,8 @@ export default function CajaChicaPage() {
             </div>
           ) : (
             <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
+              <table className="table gt-table align-middle mb-0">
+                <thead>
                   <tr>
                     <th>Fecha</th>
                     <th>Usuario</th>
@@ -570,7 +589,7 @@ export default function CajaChicaPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {movimientosFiltrados.map((movimiento) => (
+                  {movimientosPaginados.map((movimiento) => (
                     <tr key={movimiento.id}>
                       <td className="fw-medium">
                         {format(new Date(movimiento.fecha), "dd/MM/yyyy HH:mm", { locale: es })}
@@ -602,7 +621,7 @@ export default function CajaChicaPage() {
                       <td>
                         <div className="small">{movimiento.descripcion || "—"}</div>
                         {movimiento.etiqueta && (
-                          <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs d-inline-block mt-1">
+                          <span className="bg-oxblood-soft text-oxblood small px-2 py-1 rounded d-inline-block mt-1">
                             {movimiento.etiqueta}
                           </span>
                         )}
@@ -617,34 +636,34 @@ export default function CajaChicaPage() {
                           {isAdmin && (
                             <>
                               <button
-                                className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                                className="btn-action btn-action--editar"
                                 onClick={() => abrirModalEditar(movimiento)}
+                                title="Editar"
                               >
-                                <i className="bi bi-pencil"></i>
-                                Editar
+                                <Pencil size={16} strokeWidth={1.75} aria-hidden />
                               </button>
                               {movimiento.tipo_movimiento === "EGRESO" && (
                                 <button
-                                  className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
+                                  className="btn-action btn-action--borrar"
                                   onClick={() => handleDelete(movimiento)}
                                   disabled={eliminandoId === movimiento.id}
+                                  title="Eliminar"
                                 >
                                   {eliminandoId === movimiento.id ? (
                                     <i className="bi bi-arrow-clockwise spin"></i>
                                   ) : (
-                                    <i className="bi bi-trash"></i>
+                                    <Trash2 size={16} strokeWidth={1.75} aria-hidden />
                                   )}
-                                  Eliminar
                                 </button>
                               )}
                             </>
                           )}
                           <button
-                            className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                            className="btn-action btn-action--ver"
                             onClick={() => abrirDetalle(movimiento)}
+                            title="Ver detalle"
                           >
-                            <i className="bi bi-eye"></i>
-                            Ver
+                            <Eye size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                         </div>
                       </td>
@@ -654,10 +673,39 @@ export default function CajaChicaPage() {
               </table>
             </div>
           )}
+          {!isLoading && pageCount > 1 && (
+            <div className="d-flex flex-column align-items-center gap-1 px-3 py-2 border-top">
+              <ReactPaginate
+                previousLabel={"←"}
+                nextLabel={"→"}
+                breakLabel={"..."}
+                pageCount={pageCount}
+                pageRangeDisplayed={3}
+                marginPagesDisplayed={1}
+                onPageChange={({ selected }) => setPaginaActual(selected)}
+                containerClassName={"pagination"}
+                pageClassName={"page-item"}
+                pageLinkClassName={"page-link"}
+                previousClassName={"page-item"}
+                previousLinkClassName={"page-link"}
+                nextClassName={"page-item"}
+                nextLinkClassName={"page-link"}
+                breakClassName={"page-item"}
+                breakLinkClassName={"page-link"}
+                activeClassName={"active"}
+                forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+              />
+              <span className="text-muted small text-center">
+                Mostrando {offsetPagina + 1}–
+                {Math.min(offsetPagina + MOVIMIENTOS_POR_PAGINA, movimientosFiltrados.length)} de{" "}
+                {movimientosFiltrados.length} movimientos
+              </span>
+            </div>
+          )}
         </div>
         <div className="card-footer text-end bg-white">
           <span className="text-muted me-2 fw-semibold">Total en Caja:</span>
-          <span className="text-primary fw-bold">${formatCurrency(totalVisible)}</span>
+          <span className="text-oxblood fw-bold">${formatCurrency(totalVisible)}</span>
         </div>
       </div>
 
@@ -672,7 +720,7 @@ export default function CajaChicaPage() {
               <h5 className="modal-title">
                 <i
                   className={`bi ${
-                    isEditing ? "bi-pencil text-warning" : "bi-plus-circle text-primary"
+                    isEditing ? "bi-pencil text-warning" : "bi-plus-circle text-oxblood"
                   } me-2`}
                 ></i>
                 {isEditing ? "Editar Movimiento" : "Registrar Movimiento"}
@@ -698,7 +746,7 @@ export default function CajaChicaPage() {
                     <option value="INGRESO">Ingreso</option>
                   </select>
                   {esIngresoManual && (
-                    <div className="text-primary small mt-2">
+                    <div className="text-oxblood small mt-2">
                       Los ingresos se generan automáticamente desde Caja Diaria.
                     </div>
                   )}
@@ -795,7 +843,7 @@ export default function CajaChicaPage() {
                 Cancelar
               </button>
               <button
-                className="btn btn-primary"
+                className="btn btn-oxblood"
                 onClick={handleSubmit}
                 disabled={isSaving || !esFormularioValido}
               >

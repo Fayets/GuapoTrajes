@@ -2620,33 +2620,30 @@ export default function ReportesPage() {
   };
 
   return (
-    <div className="p-3 p-md-4">
+    <div className="px-2 px-sm-3 px-md-4 py-3">
       <div className="mb-4">
-        <h1 className="fw-bold">Reportes</h1>
-        <p className="text-muted">Elegí un reporte para ver o exportar.</p>
+        <h1 className="page-title mb-1">Reportes</h1>
+        <p className="text-muted mb-0">Elegí un reporte para ver o exportar.</p>
       </div>
-      <div className="row g-2 align-items-stretch mb-4">
+      <div className="row g-2 g-md-3 align-items-stretch mb-4">
         {reportTiles.map(({ key, title, desc, icon: Icon }) => (
           <div key={key} className="col-12 col-sm-6 col-md-4 col-lg-3 d-flex">
             <button
+              type="button"
               onClick={() => setSelectedReporte(key)}
-              className={`card text-start h-100 w-100 border ${
-                selectedReporte === key ? "border-primary" : ""
+              className={`reporte-tile ${
+                selectedReporte === key ? "reporte-tile--active" : ""
               }`}
-              style={{ background: "none", border: "1px solid #dee2e6" }}
             >
-              <div className="card-body d-flex align-items-start gap-2">
-                <div
-                  className="p-2 rounded bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center"
-                  style={{ width: 36, height: 36 }}
-                >
-                  <Icon size={20} />
+              <div className="d-flex align-items-start gap-2 p-3">
+                <div className="reporte-tile__icon">
+                  <Icon size={18} strokeWidth={1.75} aria-hidden />
                 </div>
                 <div
                   className="d-flex flex-column justify-content-between flex-grow-1"
                   style={{ minHeight: 52 }}
                 >
-                  <div className="fw-semibold lh-sm">{title}</div>
+                  <div className="fw-semibold lh-sm text-ink">{title}</div>
                   <div className="small text-muted lh-sm">{desc}</div>
                 </div>
               </div>
@@ -2658,7 +2655,7 @@ export default function ReportesPage() {
       {/* Contenido del reporte seleccionado */}
       {selectedReporte === "alquileres_por_prenda" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-graph-up me-2"></i>
               Alquileres por Prenda
@@ -2675,7 +2672,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha desde</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaDesde}
                   onChange={(e) => setFechaDesde(e.target.value)}
                 />
@@ -2684,7 +2681,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha hasta</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaHasta}
                   onChange={(e) => setFechaHasta(e.target.value)}
                 />
@@ -2693,7 +2690,7 @@ export default function ReportesPage() {
                 <button
                   onClick={obtenerAlquileresPorPrenda}
                   disabled={isLoading || !fechaDesde || !fechaHasta}
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoading ? (
                     <>
@@ -2710,7 +2707,7 @@ export default function ReportesPage() {
                 {alquileres.length > 0 && (
                   <button
                     onClick={exportarAlquileresExcel}
-                    className="btn btn-outline-success"
+                    className="btn btn-outline-ink"
                   >
                     <i className="bi bi-download me-2"></i>
                     Excel
@@ -2749,8 +2746,8 @@ export default function ReportesPage() {
                 </div>
 
                 <div className="table-responsive">
-                  <table className="table table-hover table-striped">
-                    <thead className="table-light">
+                  <table className="table gt-table align-middle">
+                    <thead>
                       <tr>
                         <th>Código</th>
                         <th>Descripción</th>
@@ -2778,7 +2775,7 @@ export default function ReportesPage() {
                           <td className="text-center fw-semibold text-success">
                             {item.cantidad_total_alquilada}
                           </td>
-                          <td className="text-center fw-semibold text-primary">
+                          <td className="text-center fw-semibold text-oxblood">
                             {item.cantidad_veces_alquilada}
                           </td>
                         </tr>
@@ -2803,7 +2800,7 @@ export default function ReportesPage() {
       {/* Reporte: Ranking de Alquileres */}
       {selectedReporte === "ranking_alquileres" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-trophy me-2"></i>
               Ranking de Alquileres
@@ -2819,7 +2816,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha desde</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaDesdeRanking}
                   onChange={(e) => setFechaDesdeRanking(e.target.value)}
                 />
@@ -2828,7 +2825,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha hasta</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaHastaRanking}
                   onChange={(e) => setFechaHastaRanking(e.target.value)}
                 />
@@ -2836,7 +2833,7 @@ export default function ReportesPage() {
               <div className="col-md-3">
                 <label className="form-label">Filtrar por veces</label>
                 <select
-                  className="form-select"
+                  className="form-select gt-select"
                   value={filtroVeces}
                   onChange={(e) =>
                     setFiltroVeces(
@@ -2856,7 +2853,7 @@ export default function ReportesPage() {
                   disabled={
                     isLoadingRanking || !fechaDesdeRanking || !fechaHastaRanking
                   }
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingRanking ? (
                     <>
@@ -2873,7 +2870,7 @@ export default function ReportesPage() {
                 {ranking.length > 0 && (
                   <button
                     onClick={exportarRankingExcel}
-                    className="btn btn-outline-success"
+                    className="btn btn-outline-ink"
                   >
                     <i className="bi bi-download me-2"></i>
                     Excel
@@ -2961,9 +2958,9 @@ export default function ReportesPage() {
                     <div className="mb-3">
                       <div className="row">
                         <div className="col-md-12">
-                          <div className="card border-primary">
+                          <div className="card border-oxblood">
                             <div className="card-body text-center">
-                              <div className="text-primary small mb-1">
+                              <div className="text-oxblood small mb-1">
                                 Total Prendas en Ranking
                                 {filtroVeces !== "todos" && (
                                   <span className="text-muted ms-2">
@@ -2977,7 +2974,7 @@ export default function ReportesPage() {
                                   </span>
                                 )}
                               </div>
-                              <div className="h3 text-primary fw-bold">
+                              <div className="h3 text-oxblood fw-bold">
                                 {productosFiltrados.length}
                               </div>
                             </div>
@@ -2987,8 +2984,8 @@ export default function ReportesPage() {
                     </div>
 
                     <div className="table-responsive">
-                      <table className="table table-hover table-striped">
-                        <thead className="table-light">
+                      <table className="table gt-table align-middle">
+                        <thead>
                           <tr>
                             <th style={{ width: "60px" }}>Pos.</th>
                             <th>Código</th>
@@ -3069,7 +3066,7 @@ export default function ReportesPage() {
                                   className={`text-center fw-semibold ${
                                     nuncaAlquilado
                                       ? "text-muted"
-                                      : "text-primary"
+                                      : "text-oxblood"
                                   }`}
                                 >
                                   {item.cantidad_veces_alquilada}
@@ -3177,7 +3174,7 @@ export default function ReportesPage() {
       {/* Reporte: Contratos por Fecha */}
       {selectedReporte === "contratos_por_fecha" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-file-text me-2"></i>
               Contratos por Fecha
@@ -3193,7 +3190,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha desde</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaDesdeContratos}
                   onChange={(e) => setFechaDesdeContratos(e.target.value)}
                 />
@@ -3202,7 +3199,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha hasta</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaHastaContratos}
                   onChange={(e) => setFechaHastaContratos(e.target.value)}
                 />
@@ -3215,7 +3212,7 @@ export default function ReportesPage() {
                     !fechaDesdeContratos ||
                     !fechaHastaContratos
                   }
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingContratos ? (
                     <>
@@ -3234,7 +3231,7 @@ export default function ReportesPage() {
                     type="button"
                     onClick={() => void exportarContratosExcel()}
                     disabled={contratosFiltrados.length === 0}
-                    className="btn btn-outline-success"
+                    className="btn btn-outline-ink"
                     title="Exportar listado filtrado a Excel"
                   >
                     <i className="bi bi-download me-2"></i>
@@ -3258,7 +3255,7 @@ export default function ReportesPage() {
                     <div className="col-md-6">
                       <input
                         type="text"
-                        className="form-control"
+                        className="form-control gt-select"
                         placeholder="Buscar por nombre del cliente o DNI..."
                         value={filtroBusquedaContratos}
                         onChange={(e) => {
@@ -3285,12 +3282,12 @@ export default function ReportesPage() {
                     <div className="mb-3">
                       <div className="row g-3">
                         <div className="col-md-4">
-                          <div className="card border-primary h-100">
+                          <div className="card border-oxblood h-100">
                             <div className="card-body text-center">
-                              <div className="text-primary small mb-1">
+                              <div className="text-oxblood small mb-1">
                                 Contratos en el listado
                               </div>
-                              <div className="h3 text-primary fw-bold mb-0">
+                              <div className="h3 text-oxblood fw-bold mb-0">
                                 {contratosFiltrados.length}
                               </div>
                             </div>
@@ -3341,8 +3338,8 @@ export default function ReportesPage() {
                       return (
                         <>
                           <div className="table-responsive">
-                            <table className="table table-hover table-striped">
-                              <thead className="table-light">
+                            <table className="table gt-table align-middle">
+                              <thead>
                                 <tr>
                                   <th>N° Contrato</th>
                                   <th>Fecha del contrato</th>
@@ -3379,7 +3376,7 @@ export default function ReportesPage() {
                                     </td>
                                     <td className="text-center">
                                       <button
-                                        className="btn btn-sm btn-primary"
+                                        className="btn btn-sm btn-oxblood"
                                         onClick={() =>
                                           generarPDFContrato(contrato)
                                         }
@@ -3392,7 +3389,7 @@ export default function ReportesPage() {
                                   </tr>
                                 ))}
                               </tbody>
-                              <tfoot className="table-light">
+                              <tfoot>
                                 <tr>
                                   <td
                                     colSpan={4}
@@ -3545,7 +3542,7 @@ export default function ReportesPage() {
       {/* Reporte: Recibos por Fecha */}
       {selectedReporte === "recibos_por_fecha" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-receipt me-2"></i>
               Recibos por Fecha
@@ -3561,7 +3558,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha desde</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaDesdeRecibos}
                   onChange={(e) => setFechaDesdeRecibos(e.target.value)}
                 />
@@ -3570,7 +3567,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha hasta</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaHastaRecibos}
                   onChange={(e) => setFechaHastaRecibos(e.target.value)}
                 />
@@ -3581,7 +3578,7 @@ export default function ReportesPage() {
                   disabled={
                     isLoadingRecibos || !fechaDesdeRecibos || !fechaHastaRecibos
                   }
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingRecibos ? (
                     <>
@@ -3598,7 +3595,7 @@ export default function ReportesPage() {
                 {recibos.length > 0 && (
                   <button
                     onClick={exportarRecibosExcel}
-                    className="btn btn-outline-success"
+                    className="btn btn-outline-ink"
                   >
                     <i className="bi bi-download me-2"></i>
                     Excel
@@ -3618,12 +3615,12 @@ export default function ReportesPage() {
                 <div className="mb-3">
                   <div className="row">
                     <div className="col-md-6">
-                      <div className="card border-primary">
+                      <div className="card border-oxblood">
                         <div className="card-body text-center">
-                          <div className="text-primary small mb-1">
+                          <div className="text-oxblood small mb-1">
                             Total Recibos
                           </div>
-                          <div className="h3 text-primary fw-bold">
+                          <div className="h3 text-oxblood fw-bold">
                             {recibos.length}
                           </div>
                         </div>
@@ -3651,8 +3648,8 @@ export default function ReportesPage() {
                 </div>
 
                 <div className="table-responsive">
-                  <table className="table table-hover table-striped">
-                    <thead className="table-light">
+                  <table className="table gt-table align-middle">
+                    <thead>
                       <tr>
                         <th>Fecha y Hora</th>
                         <th>Presupuesto</th>
@@ -3709,7 +3706,7 @@ export default function ReportesPage() {
                                   ? "bg-info"
                                   : recibo.concepto === "venta"
                                   ? "bg-success"
-                                  : "bg-primary"
+                                  : "bg-oxblood"
                               }`}
                             >
                               {recibo.concepto}
@@ -3723,7 +3720,7 @@ export default function ReportesPage() {
                           </td>
                           <td className="text-center">
                             <button
-                              className="btn btn-sm btn-outline-primary"
+                              className="btn btn-sm btn-outline-ink"
                               onClick={() => generarReciboImprimir(recibo)}
                               title="Imprimir recibo"
                             >
@@ -3756,7 +3753,7 @@ export default function ReportesPage() {
       {/* Reporte: Ingresos por Tipo */}
       {selectedReporte === "ingresos_por_tipo" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-cash-coin me-2"></i>
               Ingresos por Tipo
@@ -3772,7 +3769,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha desde</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaDesdeIngresos}
                   onChange={(e) => setFechaDesdeIngresos(e.target.value)}
                 />
@@ -3781,7 +3778,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha hasta</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaHastaIngresos}
                   onChange={(e) => setFechaHastaIngresos(e.target.value)}
                 />
@@ -3789,7 +3786,7 @@ export default function ReportesPage() {
               <div className="col-md-3">
                 <label className="form-label">Cuenta Destino</label>
                 <select
-                  className="form-select"
+                  className="form-select gt-select"
                   value={filtroCuentaDestinoIngresos || ""}
                   onChange={(e) => setFiltroCuentaDestinoIngresos(e.target.value ? Number(e.target.value) : null)}
                 >
@@ -3804,7 +3801,7 @@ export default function ReportesPage() {
               <div className="col-md-3">
                 <label className="form-label">Categoría</label>
                 <select
-                  className="form-select"
+                  className="form-select gt-select"
                   value={filtroCategoriaIngresos}
                   onChange={(e) => setFiltroCategoriaIngresos(e.target.value)}
                 >
@@ -3821,7 +3818,7 @@ export default function ReportesPage() {
               <div className="col-md-3">
                 <label className="form-label">Método de Pago</label>
                 <select
-                  className="form-select"
+                  className="form-select gt-select"
                   value={filtroMetodoPagoIngresos}
                   onChange={(e) => setFiltroMetodoPagoIngresos(e.target.value)}
                 >
@@ -3843,7 +3840,7 @@ export default function ReportesPage() {
                     !fechaDesdeIngresos ||
                     !fechaHastaIngresos
                   }
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingIngresos ? (
                     <>
@@ -3862,7 +3859,7 @@ export default function ReportesPage() {
                     (ingresosPorTipo.ingresos_por_tipo?.length ?? 0) > 0) && (
                     <button
                       onClick={abrirModalExportIngresos}
-                      className="btn btn-outline-success"
+                      className="btn btn-outline-ink"
                     >
                       <i className="bi bi-download me-2"></i>
                       Exportar detalle
@@ -3884,12 +3881,12 @@ export default function ReportesPage() {
                 <div className="mb-3">
                   <div className="row">
                     <div className="col-md-4">
-                      <div className="card border-primary">
+                      <div className="card border-oxblood">
                         <div className="card-body text-center">
-                          <div className="text-primary small mb-1">
+                          <div className="text-oxblood small mb-1">
                             Total General
                           </div>
-                          <div className="h3 text-primary fw-bold">
+                          <div className="h3 text-oxblood fw-bold">
                             $
                             {ingresosPorTipo.total_general.toLocaleString(
                               "es-AR",
@@ -3930,8 +3927,8 @@ export default function ReportesPage() {
                 </div>
 
                 <div className="table-responsive">
-                  <table className="table table-hover table-striped">
-                    <thead className="table-light">
+                  <table className="table gt-table align-middle">
+                    <thead>
                       <tr>
                         <th>Método de Pago</th>
                         <th className="text-center">Cantidad</th>
@@ -4029,8 +4026,8 @@ export default function ReportesPage() {
                       Detalle de Movimientos ({ingresosPorTipo.detalles.length})
                     </h6>
                     <div className="table-responsive">
-                      <table className="table table-sm table-hover table-striped">
-                        <thead className="table-light">
+                      <table className="table table-sm gt-table align-middle">
+                        <thead>
                           <tr>
                             <th>Fecha/Hora</th>
                             <th>Origen/Concepto</th>
@@ -4111,7 +4108,7 @@ export default function ReportesPage() {
       {/* Reporte: Stock por Estado */}
       {selectedReporte === "stock_estado" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-boxes me-2"></i>
               Stock por Estado
@@ -4128,7 +4125,7 @@ export default function ReportesPage() {
                 <button
                   onClick={obtenerStockPorEstado}
                   disabled={isLoadingStock}
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingStock ? (
                     <>
@@ -4148,7 +4145,7 @@ export default function ReportesPage() {
                 stockPorEstado.stock_por_estado.length > 0 && (
                   <button
                     onClick={exportarStockExcel}
-                    className="btn btn-outline-success"
+                    className="btn btn-outline-ink"
                   >
                     <i className="bi bi-download me-2"></i>
                     Exportar Excel
@@ -4169,12 +4166,12 @@ export default function ReportesPage() {
                 <div className="mb-3">
                   <div className="row">
                     <div className="col-md-12">
-                      <div className="card border-primary">
+                      <div className="card border-oxblood">
                         <div className="card-body text-center">
-                          <div className="text-primary small mb-1">
+                          <div className="text-oxblood small mb-1">
                             Total Productos
                           </div>
-                          <div className="h3 text-primary fw-bold">
+                          <div className="h3 text-oxblood fw-bold">
                             {stockPorEstado.total_productos}
                           </div>
                         </div>
@@ -4197,7 +4194,7 @@ export default function ReportesPage() {
                     const getEstadoBadge = (estado: string) => {
                       switch (estado) {
                         case "SALON":
-                          return "bg-primary";
+                          return "bg-oxblood";
                         case "CLIENTE":
                           return "bg-info";
                         case "LAVANDERIA":
@@ -4279,7 +4276,7 @@ export default function ReportesPage() {
                         <div className="card-body">
                           <div className="table-responsive">
                             <table className="table table-sm table-hover mb-0">
-                              <thead className="table-light">
+                              <thead>
                                 <tr>
                                   <th>Código</th>
                                   <th>Descripción</th>
@@ -4450,7 +4447,7 @@ export default function ReportesPage() {
       {/* Reporte: Stock por Línea */}
       {selectedReporte === "stock_por_linea" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-clipboard-list me-2"></i>
               Stock por Línea
@@ -4467,7 +4464,7 @@ export default function ReportesPage() {
                 <button
                   onClick={obtenerStockPorLinea}
                   disabled={isLoadingStockLinea}
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingStockLinea ? (
                     <>
@@ -4487,7 +4484,7 @@ export default function ReportesPage() {
                 stockPorLinea.stock_por_linea.length > 0 && (
                   <button
                     onClick={exportarStockLineaExcel}
-                    className="btn btn-outline-success"
+                    className="btn btn-outline-ink"
                   >
                     <i className="bi bi-download me-2"></i>
                     Exportar Excel
@@ -4508,12 +4505,12 @@ export default function ReportesPage() {
                 <div className="mb-3">
                   <div className="row">
                     <div className="col-md-3">
-                      <div className="card border-primary">
+                      <div className="card border-oxblood">
                         <div className="card-body text-center">
-                          <div className="text-primary small mb-1">
+                          <div className="text-oxblood small mb-1">
                             Total Productos
                           </div>
-                          <div className="h3 text-primary fw-bold">
+                          <div className="h3 text-oxblood fw-bold">
                             {stockPorLinea.total_productos}
                           </div>
                         </div>
@@ -4580,8 +4577,8 @@ export default function ReportesPage() {
                 </div>
 
                 <div className="table-responsive">
-                  <table className="table table-hover table-striped">
-                    <thead className="table-light">
+                  <table className="table gt-table align-middle">
+                    <thead>
                       <tr>
                         <th>Línea</th>
                         <th className="text-center">Cantidad de Productos</th>
@@ -4737,7 +4734,7 @@ export default function ReportesPage() {
       {/* Reporte: Saldos a Cobrar */}
       {selectedReporte === "saldos_clientes" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-people me-2"></i>
               Saldos a Cobrar
@@ -4753,7 +4750,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha desde</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaDesdeSaldos}
                   onChange={(e) => setFechaDesdeSaldos(e.target.value)}
                 />
@@ -4762,7 +4759,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha hasta</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaHastaSaldos}
                   onChange={(e) => setFechaHastaSaldos(e.target.value)}
                 />
@@ -4773,7 +4770,7 @@ export default function ReportesPage() {
                   disabled={
                     isLoadingSaldos || !fechaDesdeSaldos || !fechaHastaSaldos
                   }
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingSaldos ? (
                     <>
@@ -4790,7 +4787,7 @@ export default function ReportesPage() {
                 {saldosACobrar.length > 0 && (
                   <button
                     onClick={exportarSaldosExcel}
-                    className="btn btn-outline-success"
+                    className="btn btn-outline-ink"
                   >
                     <i className="bi bi-download me-2"></i>
                     Excel
@@ -4810,12 +4807,12 @@ export default function ReportesPage() {
                 <div className="mb-3">
                   <div className="row">
                     <div className="col-md-6">
-                      <div className="card border-primary">
+                      <div className="card border-oxblood">
                         <div className="card-body text-center">
-                          <div className="text-primary small mb-1">
+                          <div className="text-oxblood small mb-1">
                             Total Clientes con Saldo
                           </div>
-                          <div className="h3 text-primary fw-bold">
+                          <div className="h3 text-oxblood fw-bold">
                             {saldosACobrar.length}
                           </div>
                         </div>
@@ -4846,8 +4843,8 @@ export default function ReportesPage() {
                 </div>
 
                 <div className="table-responsive">
-                  <table className="table table-hover table-striped">
-                    <thead className="table-light">
+                  <table className="table gt-table align-middle">
+                    <thead>
                       <tr>
                         <th>Cliente</th>
                         <th>DNI</th>
@@ -4940,7 +4937,7 @@ export default function ReportesPage() {
       {/* Reporte: Prendas a Armar */}
       {selectedReporte === "conjuntos_a_armar" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-clipboard-check me-2"></i>
               Prendas a Armar
@@ -4958,7 +4955,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha desde</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaDesdePrendas}
                   onChange={(e) => setFechaDesdePrendas(e.target.value)}
                 />
@@ -4967,7 +4964,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha hasta</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaHastaPrendas}
                   onChange={(e) => setFechaHastaPrendas(e.target.value)}
                 />
@@ -4996,7 +4993,7 @@ export default function ReportesPage() {
                   disabled={
                     isLoadingPrendas || !fechaDesdePrendas || !fechaHastaPrendas
                   }
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingPrendas ? (
                     <>
@@ -5014,21 +5011,21 @@ export default function ReportesPage() {
                   <>
                     <button
                       type="button"
-                      className="btn btn-outline-secondary"
+                      className="btn btn-outline-ink"
                       onClick={() => marcarTodasPrendasAArmar(true)}
                     >
                       Marcar todas
                     </button>
                     <button
                       type="button"
-                      className="btn btn-outline-secondary"
+                      className="btn btn-outline-ink"
                       onClick={() => marcarTodasPrendasAArmar(false)}
                     >
                       Desmarcar
                     </button>
                     <button
                       type="button"
-                      className="btn btn-outline-primary"
+                      className="btn btn-outline-ink"
                       disabled={
                         prendasSeleccionadas.length === 0 ||
                         imprimiendoEtiquetasPrendas
@@ -5057,12 +5054,12 @@ export default function ReportesPage() {
                 <div className="mb-3">
                   <div className="row">
                     <div className="col-md-6">
-                      <div className="card border-primary">
+                      <div className="card border-oxblood">
                         <div className="card-body text-center">
-                          <div className="text-primary small mb-1">
+                          <div className="text-oxblood small mb-1">
                             Total Órdenes
                           </div>
-                          <div className="h3 text-primary fw-bold">
+                          <div className="h3 text-oxblood fw-bold">
                             {prendasAArmar.length}
                           </div>
                         </div>
@@ -5090,7 +5087,7 @@ export default function ReportesPage() {
                     <div className="border-bottom px-3 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
                       <h2 className="h6 mb-0">Cola: etiquetas por prenda</h2>
                       {imprimiendoEtiquetasPrendas ? (
-                        <span className="badge bg-primary">En curso</span>
+                        <span className="badge bg-oxblood">En curso</span>
                       ) : (
                         <span className="badge bg-secondary">Finalizado</span>
                       )}
@@ -5113,7 +5110,7 @@ export default function ReportesPage() {
                           </div>
                           <div className="align-self-md-center flex-shrink-0">
                             {row.estado === "imprimiendo" && (
-                              <span className="text-primary small d-inline-flex align-items-center gap-2">
+                              <span className="text-oxblood small d-inline-flex align-items-center gap-2">
                                 <span
                                   className="spinner-border spinner-border-sm"
                                   role="status"
@@ -5321,7 +5318,7 @@ export default function ReportesPage() {
 
                             <div className="table-responsive">
                               <table className="table table-sm table-hover">
-                                <thead className="table-light">
+                                <thead>
                                   <tr>
                                     <th className="text-center" style={{ width: 44 }} />
                                     <th>Línea</th>
@@ -5430,7 +5427,7 @@ export default function ReportesPage() {
                                         )}
                                       </td>
                                       <td className="text-center">
-                                        <span className="badge bg-primary">
+                                        <span className="badge bg-oxblood">
                                           {producto.cantidad}
                                         </span>
                                       </td>
@@ -5465,7 +5462,7 @@ export default function ReportesPage() {
       {/* Reporte: No Devolvieron */}
       {selectedReporte === "no_devolvieron" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-exclamation-triangle me-2"></i>
               No Devolvieron
@@ -5482,7 +5479,7 @@ export default function ReportesPage() {
                 <button
                   onClick={obtenerNoDevolvieron}
                   disabled={isLoadingNoDevolvieron}
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingNoDevolvieron ? (
                     <>
@@ -5514,7 +5511,7 @@ export default function ReportesPage() {
                 <div className="col-md-6">
                   <input
                     type="text"
-                    className="form-control"
+                    className="form-control gt-select"
                     placeholder="Buscar por DNI del cliente o ID de contrato..."
                     value={filtroNoDevolvieron}
                     onChange={(e) => setFiltroNoDevolvieron(e.target.value)}
@@ -5723,7 +5720,7 @@ export default function ReportesPage() {
 
                             <div className="table-responsive">
                               <table className="table table-sm table-hover">
-                                <thead className="table-light">
+                                <thead>
                                   <tr>
                                     <th>Código</th>
                                     <th>Descripción</th>
@@ -5787,7 +5784,7 @@ export default function ReportesPage() {
       {/* Reporte: Productos Críticos para Armado */}
       {selectedReporte === "productos_criticos_armado" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-exclamation-triangle me-2"></i>
               Productos Críticos para Armado Semanal
@@ -5805,7 +5802,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha Desde</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaDesdeCriticosArmado}
                   onChange={(e) => setFechaDesdeCriticosArmado(e.target.value)}
                 />
@@ -5814,7 +5811,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha Hasta</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaHastaCriticosArmado}
                   onChange={(e) => setFechaHastaCriticosArmado(e.target.value)}
                 />
@@ -5827,7 +5824,7 @@ export default function ReportesPage() {
                 <button
                   onClick={obtenerProductosCriticosArmado}
                   disabled={isLoadingCriticosArmado}
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingCriticosArmado ? (
                     <>
@@ -5927,7 +5924,7 @@ export default function ReportesPage() {
 
                 <div className="table-responsive">
                   <table className="table table-striped table-hover">
-                    <thead className="table-light">
+                    <thead>
                       <tr>
                         <th>Código</th>
                         <th>Descripción</th>
@@ -6012,7 +6009,7 @@ export default function ReportesPage() {
       {/* Reporte: Histórico de Producto */}
       {selectedReporte === "trazabilidad_producto" && (
         <div className="card">
-          <div className="card-header">
+          <div className="card-header bg-surface border-bottom border-line">
             <h5 className="card-title mb-0">
               <i className="bi bi-clock-history me-2"></i>
               Histórico de Producto
@@ -6030,7 +6027,7 @@ export default function ReportesPage() {
                 <label className="form-label">Código de Barras</label>
                 <input
                   type="text"
-                  className="form-control"
+                  className="form-control gt-select"
                   placeholder="Ingresa el código de barras"
                   value={codigoBarraHistorico}
                   onChange={(e) => setCodigoBarraHistorico(e.target.value)}
@@ -6045,7 +6042,7 @@ export default function ReportesPage() {
                 <label className="form-label">Fecha Hasta (Opcional)</label>
                 <input
                   type="date"
-                  className="form-control"
+                  className="form-control gt-select"
                   value={fechaHastaHistorico}
                   onChange={(e) => setFechaHastaHistorico(e.target.value)}
                 />
@@ -6062,7 +6059,7 @@ export default function ReportesPage() {
                   type="button"
                   onClick={() => void obtenerHistoricoProducto(1)}
                   disabled={isLoadingHistorico}
-                  className="btn btn-primary"
+                  className="btn btn-oxblood"
                 >
                   {isLoadingHistorico ? (
                     <>
@@ -6088,8 +6085,8 @@ export default function ReportesPage() {
             ) : historicoProducto ? (
               <div>
                 {/* Información del Producto */}
-                <div className="card border-primary mb-4">
-                  <div className="card-header bg-primary text-white">
+                <div className="card border-oxblood mb-4">
+                  <div className="card-header bg-oxblood text-white">
                     <h6 className="mb-0">Información del Producto</h6>
                   </div>
                   <div className="card-body">
@@ -6155,12 +6152,12 @@ export default function ReportesPage() {
                     </div>
                   </div>
                   <div className="col-md-3">
-                    <div className="card border-primary">
+                    <div className="card border-oxblood">
                       <div className="card-body text-center">
-                        <div className="text-primary small mb-1">
+                        <div className="text-oxblood small mb-1">
                           Ingresos lavandería
                         </div>
-                        <div className="h4 text-primary fw-bold">
+                        <div className="h4 text-oxblood fw-bold">
                           {historicoProducto.resumen.total_lavanderia}
                         </div>
                       </div>
@@ -6203,7 +6200,7 @@ export default function ReportesPage() {
                       <div className="btn-group" role="group" aria-label="Paginación histórico">
                         <button
                           type="button"
-                          className="btn btn-outline-secondary btn-sm"
+                          className="btn btn-outline-ink btn-sm"
                           disabled={
                             isLoadingHistorico ||
                             !historicoProducto.paginacion.has_prev
@@ -6219,7 +6216,7 @@ export default function ReportesPage() {
                         </button>
                         <button
                           type="button"
-                          className="btn btn-outline-secondary btn-sm"
+                          className="btn btn-outline-ink btn-sm"
                           disabled={
                             isLoadingHistorico ||
                             !historicoProducto.paginacion.has_next
@@ -6447,7 +6444,7 @@ export default function ReportesPage() {
                     onChange={() => setExportIngresosFormato("excel")}
                   />
                   <label
-                    className="btn btn-outline-secondary btn-sm"
+                    className="btn btn-outline-ink btn-sm"
                     htmlFor="export-ingresos-excel"
                   >
                     <i className="bi bi-file-earmark-spreadsheet me-1"></i>
@@ -6462,7 +6459,7 @@ export default function ReportesPage() {
                     onChange={() => setExportIngresosFormato("pdf")}
                   />
                   <label
-                    className="btn btn-outline-secondary btn-sm"
+                    className="btn btn-outline-ink btn-sm"
                     htmlFor="export-ingresos-pdf"
                   >
                     <i className="bi bi-filetype-pdf me-1"></i>
@@ -6474,7 +6471,7 @@ export default function ReportesPage() {
             <div className="modal-footer py-2">
               <button
                 type="button"
-                className="btn btn-outline-secondary btn-sm"
+                className="btn btn-outline-ink btn-sm"
                 onClick={() => setShowExportIngresosModal(false)}
                 disabled={exportandoIngresos}
               >

@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import ReactPaginate from "react-paginate"
+import { Pencil, Power, PowerOff } from "lucide-react"
 import { getApiBaseUrl } from "@/lib/api-config"
 import { useAuth } from "@/context/auth-context"
 import { toast } from "sonner"
@@ -37,6 +39,8 @@ export default function MetodosPagoPage() {
   const [loading, setLoading] = useState(true)
   const [showMetodoModal, setShowMetodoModal] = useState(false)
   const [showSubmetodoModal, setShowSubmetodoModal] = useState(false)
+  const [paginaActual, setPaginaActual] = useState(0)
+  const METODOS_POR_PAGINA = 18
   const [metodoEdicion, setMetodoEdicion] = useState<MetodoPago | null>(null)
   const [metodoParaSubmetodo, setMetodoParaSubmetodo] = useState<MetodoPago | null>(null)
   const [submetodoEdicion, setSubmetodoEdicion] = useState<SubmetodoPago | null>(null)
@@ -72,11 +76,9 @@ export default function MetodosPagoPage() {
       .then((data) => {
         if (Array.isArray(data)) {
           setSucursales(data)
-          console.log("✅ Sucursales cargadas:", data)
           // Establecer sucursal seleccionada
           if (data.length > 0) {
             const primeraSucursal = data[0].id
-            console.log("🏢 Estableciendo primera sucursal:", primeraSucursal)
             setSucursalSeleccionada(primeraSucursal)
           }
         }
@@ -90,7 +92,6 @@ export default function MetodosPagoPage() {
   // Cargar métodos cuando cambia la sucursal seleccionada
   useEffect(() => {
     if (sucursalSeleccionada) {
-      console.log("🔄 Sucursal seleccionada cambió a:", sucursalSeleccionada)
       cargarMetodos()
     } else {
       setMetodos([])
@@ -108,7 +109,6 @@ export default function MetodosPagoPage() {
     try {
       // En la página de administración, NO pasamos solo_activos para ver todos los métodos (activos e inactivos)
       const url = `${API_BASE}/metodos-pago/sucursal/${sucursalSeleccionada}`
-      console.log("🔍 Cargando métodos de pago desde:", url)
       
       const response = await fetch(url, {
         headers: getAuthHeaders(),
@@ -121,11 +121,9 @@ export default function MetodosPagoPage() {
       }
       
       const data = await response.json()
-      console.log("✅ Métodos de pago recibidos:", data)
       
       if (data.success && data.data) {
         if (Array.isArray(data.data)) {
-          console.log(`✅ ${data.data.length} métodos de pago cargados`)
           setMetodos(data.data)
         } else {
           console.warn("⚠️ Data no es un array:", data.data)
@@ -225,7 +223,6 @@ export default function MetodosPagoPage() {
       }
 
       const result = await response.json()
-      console.log("📝 Resultado de guardar método:", result)
 
       // Cerrar modal primero
       setShowMetodoModal(false)
@@ -279,7 +276,6 @@ export default function MetodosPagoPage() {
       }
 
       const result = await response.json()
-      console.log("📝 Resultado de guardar submétodo:", result)
 
       // Cerrar modal primero
       setShowSubmetodoModal(false)
@@ -338,28 +334,39 @@ export default function MetodosPagoPage() {
     }
   }
 
+  const pageCount = Math.ceil(metodos.length / METODOS_POR_PAGINA)
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * METODOS_POR_PAGINA
+  const metodosPaginados = metodos.slice(
+    offsetPagina,
+    offsetPagina + METODOS_POR_PAGINA
+  )
+
+  useEffect(() => {
+    setPaginaActual(0)
+  }, [sucursalSeleccionada])
+
   return (
     <RoleGate allow={["ADMIN"]}>
-      <div className="p-6">
-        <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
           <div>
-            <h1 className="fw-bold">Métodos de Pago</h1>
-            <p className="text-muted">Gestiona los métodos de pago configurables por sucursal</p>
+            <h1 className="page-title mb-1">Métodos de Pago</h1>
+            <p className="text-muted mb-0">Gestiona los métodos de pago configurables por sucursal</p>
           </div>
         </div>
 
         {/* Selector de Sucursal */}
-        <div className="card shadow-sm mb-4">
+        <div className="card shadow-sm border-line mb-4">
           <div className="card-body">
             <div className="row align-items-end">
               <div className="col-md-4">
                 <label className="form-label fw-bold">Sucursal</label>
                 <select
-                  className="form-select"
+                  className="form-select gt-select"
                   value={sucursalSeleccionada || ""}
                   onChange={(e) => {
                     const nuevaSucursal = Number(e.target.value) || null
-                    console.log("🔄 Cambiando sucursal seleccionada a:", nuevaSucursal)
                     setSucursalSeleccionada(nuevaSucursal)
                   }}
                 >
@@ -373,9 +380,8 @@ export default function MetodosPagoPage() {
               </div>
               <div className="col-md-2">
                 <button
-                  className="btn btn-outline-secondary btn-sm"
+                  className="btn btn-outline-ink btn-sm"
                   onClick={() => {
-                    console.log("🔄 Recargando métodos de pago manualmente")
                     if (sucursalSeleccionada) {
                       cargarMetodos()
                     } else {
@@ -394,10 +400,10 @@ export default function MetodosPagoPage() {
 
         {sucursalSeleccionada && (
           <>
-            <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-3">
               <h5 className="mb-0">Métodos de Pago</h5>
               <button
-                className="btn btn-primary"
+                className="btn btn-oxblood"
                 onClick={abrirModalCrearMetodo}
               >
                 <i className="bi bi-plus-circle me-2"></i>
@@ -407,7 +413,7 @@ export default function MetodosPagoPage() {
 
             {loading ? (
               <div className="text-center py-5">
-                <div className="spinner-border text-primary" role="status">
+                <div className="spinner-border text-oxblood" role="status">
                   <span className="visually-hidden">Cargando...</span>
                 </div>
               </div>
@@ -416,18 +422,18 @@ export default function MetodosPagoPage() {
                 <div className="card-body text-center py-5">
                   <i className="bi bi-credit-card text-muted" style={{ fontSize: "3rem" }}></i>
                   <p className="text-muted mt-3">No hay métodos de pago configurados</p>
-                  <button className="btn btn-primary" onClick={abrirModalCrearMetodo}>
+                  <button className="btn btn-oxblood" onClick={abrirModalCrearMetodo}>
                     Crear primer método
                   </button>
                 </div>
               </div>
             ) : (
               <div className="row g-3">
-                {metodos.map((metodo) => (
+                {metodosPaginados.map((metodo) => (
                   <div key={metodo.id} className="col-12">
-                    <div className="card shadow-sm">
+                    <div className="card shadow-sm border-line">
                       <div className="card-body">
-                        <div className="d-flex justify-content-between align-items-start">
+                        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
                           <div className="flex-grow-1">
                             <div className="d-flex align-items-center gap-2 mb-2">
                               <h6 className="mb-0">{metodo.nombre}</h6>
@@ -435,7 +441,7 @@ export default function MetodosPagoPage() {
                                 {metodo.activo ? "Activo" : "Inactivo"}
                               </span>
                               {metodo.tiene_submetodos && (
-                                <span className="badge bg-info">Con submétodos</span>
+                                <span className="badge bg-steel">Con submétodos</span>
                               )}
                             </div>
                             <small className="text-muted">
@@ -445,10 +451,10 @@ export default function MetodosPagoPage() {
 
                             {metodo.tiene_submetodos && metodo.submétodos && metodo.submétodos.length > 0 && (
                               <div className="mt-3">
-                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                                   <small className="fw-semibold">Submétodos:</small>
                                   <button
-                                    className="btn btn-sm btn-outline-primary"
+                                    className="btn btn-sm btn-outline-ink"
                                     onClick={() => abrirModalCrearSubmetodo(metodo)}
                                   >
                                     <i className="bi bi-plus-circle me-1"></i>
@@ -469,18 +475,22 @@ export default function MetodosPagoPage() {
                                         </div>
                                         <div className="btn-group btn-group-sm">
                                           <button
-                                            className="btn btn-outline-secondary"
+                                            className="btn-action btn-action--editar"
                                             onClick={() => abrirModalEditarSubmetodo(submetodo, metodo)}
                                             title="Editar"
                                           >
-                                            <i className="bi bi-pencil"></i>
+                                            <Pencil size={15} strokeWidth={1.75} aria-hidden />
                                           </button>
                                           <button
-                                            className={`btn ${submetodo.activo ? "btn-outline-warning" : "btn-outline-success"}`}
+                                            className={`btn-action ${submetodo.activo ? "btn-action--brass" : "btn-action--loden-solid"}`}
                                             onClick={() => toggleActivarSubmetodo(submetodo, metodo)}
                                             title={submetodo.activo ? "Desactivar" : "Activar"}
                                           >
-                                            <i className={`bi ${submetodo.activo ? "bi-x-circle" : "bi-check-circle"}`}></i>
+                                            {submetodo.activo ? (
+                                              <PowerOff size={15} strokeWidth={1.75} aria-hidden />
+                                            ) : (
+                                              <Power size={15} strokeWidth={1.75} aria-hidden />
+                                            )}
                                           </button>
                                         </div>
                                       </div>
@@ -493,7 +503,7 @@ export default function MetodosPagoPage() {
                             {metodo.tiene_submetodos && (!metodo.submétodos || metodo.submétodos.length === 0) && (
                               <div className="mt-2">
                                 <button
-                                  className="btn btn-sm btn-outline-primary"
+                                  className="btn btn-sm btn-outline-ink"
                                   onClick={() => abrirModalCrearSubmetodo(metodo)}
                                 >
                                   <i className="bi bi-plus-circle me-1"></i>
@@ -504,18 +514,22 @@ export default function MetodosPagoPage() {
                           </div>
                           <div className="btn-group btn-group-sm">
                             <button
-                              className="btn btn-outline-primary"
+                              className="btn-action btn-action--editar"
                               onClick={() => abrirModalEditarMetodo(metodo)}
                               title="Editar"
                             >
-                              <i className="bi bi-pencil"></i>
+                              <Pencil size={15} strokeWidth={1.75} aria-hidden />
                             </button>
                             <button
-                              className={`btn ${metodo.activo ? "btn-outline-warning" : "btn-outline-success"}`}
+                              className={`btn-action ${metodo.activo ? "btn-action--brass" : "btn-action--loden-solid"}`}
                               onClick={() => toggleActivarMetodo(metodo)}
                               title={metodo.activo ? "Desactivar" : "Activar"}
                             >
-                              <i className={`bi ${metodo.activo ? "bi-x-circle" : "bi-check-circle"}`}></i>
+                              {metodo.activo ? (
+                                <PowerOff size={15} strokeWidth={1.75} aria-hidden />
+                              ) : (
+                                <Power size={15} strokeWidth={1.75} aria-hidden />
+                              )}
                             </button>
                           </div>
                         </div>
@@ -523,6 +537,35 @@ export default function MetodosPagoPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            {pageCount > 1 && (
+              <div className="d-flex flex-column align-items-center gap-1 mt-3">
+                <ReactPaginate
+                  previousLabel="←"
+                  nextLabel="→"
+                  breakLabel="..."
+                  pageCount={pageCount}
+                  pageRangeDisplayed={3}
+                  marginPagesDisplayed={1}
+                  onPageChange={({ selected }) => setPaginaActual(selected)}
+                  containerClassName="pagination"
+                  pageClassName="page-item"
+                  pageLinkClassName="page-link"
+                  previousClassName="page-item"
+                  previousLinkClassName="page-link"
+                  nextClassName="page-item"
+                  nextLinkClassName="page-link"
+                  breakClassName="page-item"
+                  breakLinkClassName="page-link"
+                  activeClassName="active"
+                  forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+                />
+                <span className="text-muted small">
+                  Mostrando {offsetPagina + 1}–
+                  {Math.min(offsetPagina + METODOS_POR_PAGINA, metodos.length)} de{" "}
+                  {metodos.length} métodos
+                </span>
               </div>
             )}
           </>
@@ -544,7 +587,7 @@ export default function MetodosPagoPage() {
                     <label className="form-label">Nombre *</label>
                     <input
                       type="text"
-                      className="form-control"
+                      className="form-control gt-select"
                       value={formMetodo.nombre}
                       onChange={(e) => setFormMetodo({ ...formMetodo, nombre: e.target.value })}
                       placeholder="Ej: Tarjeta, Billetera Virtual"
@@ -570,7 +613,7 @@ export default function MetodosPagoPage() {
                     <label className="form-label">Orden</label>
                     <input
                       type="number"
-                      className="form-control"
+                      className="form-control gt-select"
                       value={formMetodo.orden}
                       onChange={(e) => setFormMetodo({ ...formMetodo, orden: Number(e.target.value) })}
                       min="0"
@@ -591,7 +634,7 @@ export default function MetodosPagoPage() {
                   <button type="button" className="btn btn-secondary" onClick={() => setShowMetodoModal(false)}>
                     Cancelar
                   </button>
-                  <button type="button" className="btn btn-primary" onClick={guardarMetodo}>
+                  <button type="button" className="btn btn-oxblood" onClick={guardarMetodo}>
                     Guardar
                   </button>
                 </div>
@@ -617,7 +660,7 @@ export default function MetodosPagoPage() {
                     <label className="form-label">Nombre *</label>
                     <input
                       type="text"
-                      className="form-control"
+                      className="form-control gt-select"
                       value={formSubmetodo.nombre}
                       onChange={(e) => setFormSubmetodo({ ...formSubmetodo, nombre: e.target.value })}
                       placeholder="Ej: Visa, Mercado Pago"
@@ -627,7 +670,7 @@ export default function MetodosPagoPage() {
                     <label className="form-label">Orden</label>
                     <input
                       type="number"
-                      className="form-control"
+                      className="form-control gt-select"
                       value={formSubmetodo.orden}
                       onChange={(e) => setFormSubmetodo({ ...formSubmetodo, orden: Number(e.target.value) })}
                       min="0"
@@ -648,7 +691,7 @@ export default function MetodosPagoPage() {
                   <button type="button" className="btn btn-secondary" onClick={() => setShowSubmetodoModal(false)}>
                     Cancelar
                   </button>
-                  <button type="button" className="btn btn-primary" onClick={guardarSubmetodo}>
+                  <button type="button" className="btn btn-oxblood" onClick={guardarSubmetodo}>
                     Guardar
                   </button>
                 </div>

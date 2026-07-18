@@ -2,6 +2,8 @@
 
 import type React from "react";
 import { useState, useEffect, useMemo } from "react";
+import ReactPaginate from "react-paginate";
+import { FileText, CheckCircle2, ClipboardCheck } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -295,6 +297,13 @@ export default function DevolucionesPage() {
     setOrdenesAbiertas(abiertas);
   };
 
+  const [paginaActual, setPaginaActual] = useState(0);
+  const ORDENES_POR_PAGINA = 18;
+
+  useEffect(() => {
+    setPaginaActual(0);
+  }, [filtroBusqueda]);
+
   const ordenesAbiertasFiltradas = useMemo(() => {
     if (!filtroBusqueda.trim()) {
       return ordenesAbiertas;
@@ -303,6 +312,14 @@ export default function DevolucionesPage() {
       ordenCoincideBusquedaDevoluciones(orden, filtroBusqueda)
     );
   }, [ordenesAbiertas, filtroBusqueda]);
+
+  const pageCount = Math.ceil(ordenesAbiertasFiltradas.length / ORDENES_POR_PAGINA);
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * ORDENES_POR_PAGINA;
+  const ordenesAbiertasEnPagina = ordenesAbiertasFiltradas.slice(
+    offsetPagina,
+    offsetPagina + ORDENES_POR_PAGINA
+  );
 
   const generarContrato = async (orden: OrdenTrabajo) => {
     const esAdmin = me?.role === "ADMIN" || me?.role === "SUPER_ADMIN";
@@ -888,9 +905,9 @@ export default function DevolucionesPage() {
   };
 
   return (
-    <div className="p-3 p-md-4">
+    <div className="p-2 p-sm-3 p-md-4">
       <div className="mb-4">
-        <h1 className="fw-bold">Devoluciones</h1>
+        <h1 className="page-title">Devoluciones</h1>
       </div>
 
       {cargando ? (
@@ -907,7 +924,7 @@ export default function DevolucionesPage() {
           </p>
         </div>
       ) : (
-        <div className="card">
+        <div className="card shadow-sm">
           <div className="card-header">
             <div className="d-flex justify-content-between align-items-center">
               <h5 className="card-title mb-0">
@@ -919,7 +936,7 @@ export default function DevolucionesPage() {
           <div className="card-body">
             {/* Buscador */}
             <div className="mb-3">
-              <div className="input-group">
+              <div className="input-group gt-search">
                 <span className="input-group-text">
                   <i className="bi bi-search"></i>
                 </span>
@@ -942,8 +959,8 @@ export default function DevolucionesPage() {
               </p>
             </div>
             <div className="table-responsive">
-              <table className="table table-hover">
-                <thead className="table-light">
+              <table className="table gt-table align-middle mb-0">
+                <thead>
                   <tr>
                     <th>Orden ID</th>
                     <th>Presupuesto</th>
@@ -962,7 +979,7 @@ export default function DevolucionesPage() {
                       </td>
                     </tr>
                   ) : (
-                    ordenesAbiertasFiltradas.map((orden) => {
+                    ordenesAbiertasEnPagina.map((orden) => {
                     const fechaEventoFormateada = orden.fecha_evento
                       ? format(
                           new Date(orden.fecha_evento + "T00:00:00"),
@@ -988,32 +1005,32 @@ export default function DevolucionesPage() {
                         <td>{fechaEventoFormateada}</td>
                         <td>{fechaDevolucionFormateada}</td>
                         <td className="text-center">
-                          <div className="btn-group" role="group">
+                          <div className="d-flex justify-content-center gap-2 flex-wrap">
                             <button
-                              className="btn btn-sm btn-outline-primary"
+                              className="btn-action btn-action--wide btn-action--ver"
                               onClick={() => {
                                 setOrdenSeleccionada(orden);
                                 generarContrato(orden);
                               }}
                               title="Ver contrato"
                             >
-                              <i className="bi bi-file-text me-1"></i>
+                              <FileText size={16} strokeWidth={1.75} aria-hidden />
                               Contrato
                             </button>
                             <button
-                              className="btn btn-sm btn-success"
+                              className="btn-action btn-action--wide btn-action--credito"
                               onClick={() => abrirModalCompletada(orden)}
                               title="Marcar como completada"
                             >
-                              <i className="bi bi-check-circle me-1"></i>
+                              <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden />
                               Completada
                             </button>
                             <button
-                              className="btn btn-sm btn-warning"
+                              className="btn-action btn-action--wide btn-action--brass"
                               onClick={() => abrirModalParcial(orden)}
                               title="Devolución parcial"
                             >
-                              <i className="bi bi-clipboard-check me-1"></i>
+                              <ClipboardCheck size={16} strokeWidth={1.75} aria-hidden />
                               Parcial
                             </button>
                           </div>
@@ -1025,6 +1042,35 @@ export default function DevolucionesPage() {
                 </tbody>
               </table>
             </div>
+            {pageCount > 1 && (
+              <div className="d-flex flex-column align-items-center gap-1 pt-3">
+                <ReactPaginate
+                  previousLabel={"←"}
+                  nextLabel={"→"}
+                  breakLabel={"..."}
+                  pageCount={pageCount}
+                  pageRangeDisplayed={3}
+                  marginPagesDisplayed={1}
+                  onPageChange={({ selected }) => setPaginaActual(selected)}
+                  containerClassName={"pagination"}
+                  pageClassName={"page-item"}
+                  pageLinkClassName={"page-link"}
+                  previousClassName={"page-item"}
+                  previousLinkClassName={"page-link"}
+                  nextClassName={"page-item"}
+                  nextLinkClassName={"page-link"}
+                  breakClassName={"page-item"}
+                  breakLinkClassName={"page-link"}
+                  activeClassName={"active"}
+                  forcePage={Math.min(paginaActual, pageCount - 1)}
+                />
+                <span className="text-muted small text-center">
+                  Mostrando {offsetPagina + 1}–
+                  {Math.min(offsetPagina + ORDENES_POR_PAGINA, ordenesAbiertasFiltradas.length)} de{" "}
+                  {ordenesAbiertasFiltradas.length} órdenes
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}

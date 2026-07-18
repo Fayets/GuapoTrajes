@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import ReactPaginate from "react-paginate";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -106,6 +107,9 @@ export default function VentasPage() {
   > | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const [paginaActual, setPaginaActual] = useState(0);
+  const VENTAS_POR_PAGINA = 18;
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -789,147 +793,238 @@ export default function VentasPage() {
     return new Date(fecha);
   }
 
+  const descripcionProductoVenta = (v: Venta, p: ProductoVenta) => {
+    const prod = productos.find((pr) => pr.id === p.producto_id);
+    return (
+      p.descripcion ||
+      (prod
+        ? formatDescripcionProducto(prod.descripcion, prod.descripcion_extra)
+        : String(p.producto_id))
+    );
+  };
+
+  const ventasFiltradas = useMemo(() => {
+    const termino = busqueda.trim().toLowerCase();
+    if (!termino) return ventas;
+    return ventas.filter((v) => {
+      const cliente = String(v.cliente_nombre ?? "").toLowerCase();
+      if (cliente.includes(termino)) return true;
+      const metodo =
+        metodosPago.find((m) => m.value === v.payment_method)?.label ||
+        v.payment_method ||
+        "";
+      if (String(metodo).toLowerCase().includes(termino)) return true;
+      return (v.productos || []).some((p) =>
+        String(descripcionProductoVenta(v, p)).toLowerCase().includes(termino)
+      );
+    });
+  }, [ventas, busqueda, productos, metodosPago]);
+
+  useEffect(() => {
+    setPaginaActual(0);
+  }, [busqueda]);
+
+  const pageCount = Math.ceil(ventasFiltradas.length / VENTAS_POR_PAGINA);
+  const offset = Math.min(paginaActual, Math.max(0, pageCount - 1)) * VENTAS_POR_PAGINA;
+  const ventasPaginadas = ventasFiltradas.slice(offset, offset + VENTAS_POR_PAGINA);
+
+  const abrirNuevaVenta = () => {
+    setVentaActual({
+      fecha_hora: new Date().toISOString().split("T")[0],
+      cliente_id: undefined,
+      producto_id: undefined,
+      cantidad: 1,
+      tipo_precio: "",
+      total: 0,
+    });
+    setSearchTerm("");
+    setShowProductDropdown(false);
+    setProductoFiltro("");
+    setClienteFiltro("");
+    setMetodoPago("");
+    setMetodoPagoId(null);
+    setSubmetodoPagoId(null);
+    setCuentaDestinoId(null);
+    setNuevoItem({
+      productoId: "",
+      tipo_precio: "",
+      porcentaje: "",
+    });
+    setItems([]);
+    resetDescuentoVenta();
+    pendingVentaImportRef.current = null;
+    importedFromQueueRef.current = false;
+    setIsModalOpen(true);
+  };
+
   return (
-    <div className="p-6">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
+      <div className="gt-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
         <div>
-          <h1 className="fw-bold">Ventas</h1>
+          <h1 className="page-title mb-1">Ventas</h1>
+          <p className="text-muted mb-0">Registro de ventas de Guapo Trajes.</p>
         </div>
-        <Button
-          onClick={() => {
-            setVentaActual({
-              fecha_hora: new Date().toISOString().split("T")[0],
-              cliente_id: undefined,
-              producto_id: undefined,
-              cantidad: 1,
-              tipo_precio: "",
-              total: 0,
-            });
-            setSearchTerm("");
-            setShowProductDropdown(false);
-            setProductoFiltro("");
-            setClienteFiltro("");
-            setMetodoPago("");
-            setMetodoPagoId(null);
-            setSubmetodoPagoId(null);
-            setCuentaDestinoId(null);
-            setNuevoItem({
-              productoId: "",
-              tipo_precio: "",
-              porcentaje: "",
-            });
-            setItems([]);
-            resetDescuentoVenta();
-            pendingVentaImportRef.current = null;
-            importedFromQueueRef.current = false;
-            setIsModalOpen(true);
-          }}
+        <button
+          type="button"
+          className="btn btn-oxblood d-flex align-items-center gap-2"
+          onClick={abrirNuevaVenta}
         >
-          + Agregar Venta
-        </Button>
+          <Plus size={16} strokeWidth={1.75} aria-hidden />
+          Agregar Venta
+        </button>
       </div>
+
       {isLoading ? (
-        <div className="text-center text-gray-500 py-8">Cargando ventas...</div>
+        <div className="text-center text-muted py-5">Cargando ventas...</div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Producto</TableHead>
-              <TableHead>Tipo Precio</TableHead>
-              <TableHead>Método Pago</TableHead>
-              <TableHead>Precio Unit.</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead>Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {ventas.map((v) => (
-              <TableRow key={v.id}>
-                <TableCell>
-                  {parseFecha(v.fecha_hora).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  {clientes.find(
-                    (c) =>
-                      c.id ===
-                      (typeof v.cliente_nombre === "number"
-                        ? v.cliente_nombre
-                        : Number(v.cliente_nombre))
-                  )?.nombre || v.cliente_nombre}
-                </TableCell>
-                <TableCell>
-                  {(v.productos || []).map((p) => (
-                    <div key={`${v.id}-${p.producto_id}`}>
-                      {(() => {
-                        const prod = productos.find(
-                          (pr) => pr.id === p.producto_id
-                        );
-                        return (
-                          p.descripcion ||
-                          (prod
-                            ? formatDescripcionProducto(
-                                prod.descripcion,
-                                prod.descripcion_extra
-                              )
-                            : p.producto_id)
-                        );
-                      })()}
-                    </div>
-                  ))}
-                </TableCell>
-                <TableCell>
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                    {getTipoPrecioLabel(v.tipo_precio)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                    {metodosPago.find((m) => m.value === v.payment_method)
-                      ?.label || v.payment_method}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {(v.productos || []).map((p) => (
-                    <div key={`${v.id}-${p.producto_id}-precio`}>
-                      ${p.precio_unitario?.toLocaleString()}
-                    </div>
-                  ))}
-                </TableCell>
-                <TableCell className="font-semibold">
-                  ${(v.total ?? 0).toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      console.log("🔍 Venta seleccionada para ver:", v);
-                      console.log("📋 Cuenta destino:", {
-                        id: v.cuenta_destino_id,
-                        nombre: v.cuenta_destino_nombre
-                      });
-                      setVentaParaVer(v);
-                    }}
-                  >
-                    Ver
-                  </Button>
-                  <RoleGate allow={["ADMIN"]}>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      className="ms-2"
-                      onClick={() => setVentaAEliminar(v)}
-                    >
-                      Eliminar
-                    </Button>
-                  </RoleGate>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <div className="card shadow-sm">
+          <div className="card-body border-bottom">
+            <div className="input-group gt-search">
+              <span className="input-group-text">
+                <i className="bi bi-search"></i>
+              </span>
+              <input
+                type="search"
+                className="form-control"
+                placeholder="Buscar por cliente, producto o método de pago..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="table-responsive">
+            <Table className="gt-table align-middle mb-0">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Producto</TableHead>
+                  <TableHead>Tipo Precio</TableHead>
+                  <TableHead>Método Pago</TableHead>
+                  <TableHead>Precio Unit.</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ventasPaginadas.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-muted py-4">
+                      {ventas.length === 0
+                        ? "No hay ventas registradas."
+                        : "Ninguna venta coincide con la búsqueda."}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  ventasPaginadas.map((v) => (
+                    <TableRow key={v.id}>
+                      <TableCell className="text-nowrap">
+                        {parseFecha(v.fecha_hora).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {clientes.find(
+                          (c) =>
+                            c.id ===
+                            (typeof v.cliente_nombre === "number"
+                              ? v.cliente_nombre
+                              : Number(v.cliente_nombre))
+                        )?.nombre || v.cliente_nombre}
+                      </TableCell>
+                      <TableCell>
+                        {(v.productos || []).map((p) => (
+                          <div key={`${v.id}-${p.producto_id}`}>
+                            {descripcionProductoVenta(v, p)}
+                          </div>
+                        ))}
+                      </TableCell>
+                      <TableCell>
+                        <span className="badge bg-steel">
+                          {getTipoPrecioLabel(v.tipo_precio)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="badge bg-success">
+                          {metodosPago.find((m) => m.value === v.payment_method)
+                            ?.label || v.payment_method}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-nowrap">
+                        {(v.productos || []).map((p) => (
+                          <div key={`${v.id}-${p.producto_id}-precio`}>
+                            ${p.precio_unitario?.toLocaleString()}
+                          </div>
+                        ))}
+                      </TableCell>
+                      <TableCell className="fw-semibold text-nowrap">
+                        ${(v.total ?? 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="d-flex justify-content-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            className="btn-action btn-action--wide btn-action--ver"
+                            onClick={() => {
+                              console.log("🔍 Venta seleccionada para ver:", v);
+                              console.log("📋 Cuenta destino:", {
+                                id: v.cuenta_destino_id,
+                                nombre: v.cuenta_destino_nombre,
+                              });
+                              setVentaParaVer(v);
+                            }}
+                            title="Ver venta"
+                          >
+                            <Eye size={16} strokeWidth={1.75} aria-hidden />
+                            Ver
+                          </button>
+                          <RoleGate allow={["ADMIN"]}>
+                            <button
+                              type="button"
+                              className="btn-action btn-action--wide btn-action--borrar"
+                              onClick={() => setVentaAEliminar(v)}
+                              title="Eliminar venta"
+                            >
+                              <Trash2 size={16} strokeWidth={1.75} aria-hidden />
+                              Eliminar
+                            </button>
+                          </RoleGate>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          {pageCount > 1 && (
+            <div className="d-flex flex-column align-items-center gap-1 px-3 py-2">
+              <ReactPaginate
+                previousLabel={"←"}
+                nextLabel={"→"}
+                breakLabel={"..."}
+                pageCount={pageCount}
+                pageRangeDisplayed={3}
+                marginPagesDisplayed={1}
+                onPageChange={({ selected }) => setPaginaActual(selected)}
+                containerClassName={"pagination"}
+                pageClassName={"page-item"}
+                pageLinkClassName={"page-link"}
+                previousClassName={"page-item"}
+                previousLinkClassName={"page-link"}
+                nextClassName={"page-item"}
+                nextLinkClassName={"page-link"}
+                breakClassName={"page-item"}
+                breakLinkClassName={"page-link"}
+                activeClassName={"active"}
+                forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+              />
+              <span className="text-muted small text-center">
+                Mostrando {offset + 1}–
+                {Math.min(offset + VENTAS_POR_PAGINA, ventasFiltradas.length)} de{" "}
+                {ventasFiltradas.length} ventas
+              </span>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Modal de Método de Pago */}

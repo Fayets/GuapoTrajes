@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import ReactPaginate from "react-paginate";
 import Link from "next/link";
+import { Eye, PlusCircle, Pencil, Trash2 } from "lucide-react";
 import ClienteModal from "@/components/modales/clienteModal";
 import { RoleGate } from "@/components/RoleGate";
 import { Input } from "@/components/ui/input";
@@ -66,7 +67,7 @@ export default function ClientesPage() {
 
   // PAGINACIÓN: Estados nuevos
   const [currentPage, setCurrentPage] = useState(0);
-  const clientesPorPagina = 12;
+  const clientesPorPagina = 18;
   const offset = currentPage * clientesPorPagina;
 
   const handlePageChange = (selectedItem: { selected: number }) => {
@@ -574,13 +575,13 @@ export default function ClientesPage() {
   };
 
   return (
-    <div className="container-fluid px-4 py-3">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
+      <div className="gt-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
-          <h1 className="fw-bold mb-1">Clientes</h1>
+          <h1 className="page-title mb-1">Clientes</h1>
           <p className="text-muted mb-0">Gestión de clientes de Guapo Trajes.</p>
         </div>
-        <button className="btn btn-primary d-flex align-items-center gap-2" onClick={nuevoCliente}>
+        <button className="btn btn-oxblood d-flex align-items-center gap-2" onClick={nuevoCliente}>
           <i className="bi bi-plus-lg"></i>
           Nuevo cliente
         </button>
@@ -588,7 +589,7 @@ export default function ClientesPage() {
 
       <div className="row g-3 align-items-center mb-4">
         <div className="col-12 col-md-6 col-lg-4">
-          <div className="input-group">
+          <div className="input-group gt-search">
             <span className="input-group-text">
               <i className="bi bi-search"></i>
             </span>
@@ -611,8 +612,8 @@ export default function ClientesPage() {
       ) : (
         <div className="card shadow-sm">
           <div className="table-responsive">
-            <Table className="align-middle mb-0">
-              <TableHeader className="table-light">
+            <Table className="align-middle mb-0 gt-table">
+              <TableHeader>
                 <TableRow>
                   <TableHead>Apellido</TableHead>
                   <TableHead>Nombre</TableHead>
@@ -645,32 +646,32 @@ export default function ClientesPage() {
                         <div className="d-flex justify-content-center gap-2 flex-wrap">
                           <Link
                             href={`/clientes/${cliente.id}`}
-                            className="btn btn-sm btn-outline-secondary"
+                            className="btn-action btn-action--ver"
                             title="Ver perfil (saldo y cuenta corriente)"
                           >
-                            <i className="bi bi-person-lines-fill"></i>
+                            <Eye size={16} strokeWidth={1.75} aria-hidden />
                           </Link>
                           <RoleGate allow={["ADMIN", "SUPER_ADMIN"]}>
                             <button
                               type="button"
-                              className="btn btn-sm btn-outline-success"
+                              className="btn-action btn-action--credito"
                               title="Agregar crédito a cuenta corriente"
                               onClick={() => abrirModalCredito(cliente)}
                             >
-                              <i className="bi bi-plus-circle me-1"></i>
+                              <PlusCircle size={16} strokeWidth={1.75} aria-hidden />
                               Crédito
                             </button>
                           </RoleGate>
                           <button
-                            className="btn btn-sm btn-outline-primary"
+                            className="btn-action btn-action--editar"
                             onClick={() => editarCliente(cliente)}
                             title="Editar"
                           >
-                            <i className="bi bi-pencil"></i>
+                            <Pencil size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                           <RoleGate allow={["ADMIN"]}>
                             <button
-                              className="btn btn-sm btn-outline-danger"
+                              className="btn-action btn-action--borrar"
                               onClick={() => confirmarEliminar(cliente)}
                               title="Eliminar"
                               disabled={verificandoRelaciones}
@@ -685,7 +686,7 @@ export default function ClientesPage() {
                                   </span>
                                 </div>
                               ) : (
-                                <i className="bi bi-trash"></i>
+                                <Trash2 size={16} strokeWidth={1.75} aria-hidden />
                               )}
                             </button>
                           </RoleGate>

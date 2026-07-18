@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import ReactPaginate from "react-paginate";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -169,6 +171,21 @@ export default function CajaConcentradoraPage() {
       return texto.includes(term);
     });
   }, [movimientos, search]);
+
+  const [paginaActual, setPaginaActual] = useState(0);
+  const MOVIMIENTOS_POR_PAGINA = 18;
+
+  useEffect(() => {
+    setPaginaActual(0);
+  }, [search]);
+
+  const pageCount = Math.ceil(movimientosFiltrados.length / MOVIMIENTOS_POR_PAGINA);
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * MOVIMIENTOS_POR_PAGINA;
+  const movimientosPaginados = movimientosFiltrados.slice(
+    offsetPagina,
+    offsetPagina + MOVIMIENTOS_POR_PAGINA
+  );
 
   const totalCalculado = useMemo(() => {
     return movimientos.reduce((acc, mov) => {
@@ -413,7 +430,7 @@ export default function CajaConcentradoraPage() {
                   Solo los administradores pueden ver la Caja Concentradora.
                 </p>
                 <button
-                  className="btn btn-primary mt-3"
+                  className="btn btn-oxblood mt-3"
                   onClick={() => (window.location.href = "/dashboard")}
                 >
                   Volver al Dashboard
@@ -428,18 +445,18 @@ export default function CajaConcentradoraPage() {
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="gt-page-header d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
         <div>
-          <h1 className="fw-bold">Caja Concentradora</h1>
+          <h1 className="page-title mb-1">Caja Concentradora</h1>
           <p className="text-muted mb-0">
             Gestión de ingresos y egresos centralizados por sucursal.
           </p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex flex-wrap gap-2">
           <button
             onClick={fetchMovimientos}
             disabled={isLoading}
-            className="btn btn-outline-secondary"
+            className="btn btn-outline-ink"
           >
             {isLoading ? (
               <i className="bi bi-arrow-clockwise spin me-2"></i>
@@ -452,14 +469,14 @@ export default function CajaConcentradoraPage() {
             <>
               <button
                 onClick={() => setShowModal(true)}
-                className="btn btn-primary"
+                className="btn btn-oxblood"
               >
                 <i className="bi bi-cash-stack me-2"></i>
                 Registrar Movimiento
               </button>
               <button
                 onClick={() => setShowModalEnviarChica(true)}
-                className="btn btn-info text-white"
+                className="btn btn-outline-ink"
               >
                 <i className="bi bi-arrow-right-circle me-2"></i>
                 Enviar a Caja Chica
@@ -471,10 +488,10 @@ export default function CajaConcentradoraPage() {
 
       <div className="row mb-4">
         <div className="col-md-3">
-          <div className="card border-0 bg-primary bg-opacity-10">
+          <div className="card border-0 bg-oxblood-soft">
             <div className="card-body">
               <div className="text-muted small mb-1">Total en Caja Concentradora</div>
-              <div className="h4 text-primary mb-0">
+              <div className="h4 text-oxblood mb-0">
                 ${formatCurrency(totalVisible)}
               </div>
             </div>
@@ -492,13 +509,18 @@ export default function CajaConcentradoraPage() {
               </p>
             </div>
             <div className="d-flex gap-2 w-100 w-lg-auto">
-          <input
-            type="text"
-                className="form-control"
-                placeholder="Buscar movimientos..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+              <div className="input-group gt-search">
+                <span className="input-group-text">
+                  <i className="bi bi-search"></i>
+                </span>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Buscar movimientos..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -518,8 +540,8 @@ export default function CajaConcentradoraPage() {
             </div>
           ) : (
             <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
+              <table className="table gt-table align-middle mb-0">
+                <thead>
                   <tr>
                     <th>Fecha</th>
                     <th>Usuario</th>
@@ -533,7 +555,7 @@ export default function CajaConcentradoraPage() {
               </tr>
             </thead>
                 <tbody>
-                  {movimientosFiltrados.map((movimiento) => (
+                  {movimientosPaginados.map((movimiento) => (
                     <tr key={movimiento.id}>
                       <td className="fw-medium">
                         {format(new Date(movimiento.fecha), "dd/MM/yyyy HH:mm", { locale: es })}
@@ -556,9 +578,9 @@ export default function CajaConcentradoraPage() {
                         <span
                           className={`badge ${
                             movimiento.origen === "Caja Diaria"
-                              ? "bg-info"
+                              ? "bg-steel"
                               : movimiento.origen === "Caja Chica"
-                              ? "bg-purple"
+                              ? "bg-brass"
                               : "bg-secondary"
                           }`}
                         >
@@ -597,14 +619,14 @@ export default function CajaConcentradoraPage() {
                           {isAdmin && (
                             <>
                               <button
-                                className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                                className="btn-action btn-action--editar"
                                 onClick={() => abrirModalEditar(movimiento)}
+                                title="Editar"
                               >
-                                <i className="bi bi-pencil"></i>
-                                Editar
+                                <Pencil size={16} strokeWidth={1.75} aria-hidden />
                               </button>
                               <button
-                                className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
+                                className="btn-action btn-action--borrar"
                                 onClick={() => handleDelete(movimiento)}
                                 disabled={eliminandoId === movimiento.id}
                                 title={
@@ -617,18 +639,17 @@ export default function CajaConcentradoraPage() {
                                 {eliminandoId === movimiento.id ? (
                                   <i className="bi bi-arrow-clockwise spin"></i>
                                 ) : (
-                                  <i className="bi bi-trash"></i>
+                                  <Trash2 size={16} strokeWidth={1.75} aria-hidden />
                                 )}
-                                Eliminar
                               </button>
                             </>
                           )}
                           <button
-                            className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                            className="btn-action btn-action--ver"
                             onClick={() => abrirDetalle(movimiento)}
+                            title="Ver detalle"
                           >
-                            <i className="bi bi-eye"></i>
-                            Ver
+                            <Eye size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                         </div>
                   </td>
@@ -638,10 +659,39 @@ export default function CajaConcentradoraPage() {
               </table>
             </div>
           )}
+          {!isLoading && pageCount > 1 && (
+            <div className="d-flex flex-column align-items-center gap-1 px-3 py-2 border-top">
+              <ReactPaginate
+                previousLabel={"←"}
+                nextLabel={"→"}
+                breakLabel={"..."}
+                pageCount={pageCount}
+                pageRangeDisplayed={3}
+                marginPagesDisplayed={1}
+                onPageChange={({ selected }) => setPaginaActual(selected)}
+                containerClassName={"pagination"}
+                pageClassName={"page-item"}
+                pageLinkClassName={"page-link"}
+                previousClassName={"page-item"}
+                previousLinkClassName={"page-link"}
+                nextClassName={"page-item"}
+                nextLinkClassName={"page-link"}
+                breakClassName={"page-item"}
+                breakLinkClassName={"page-link"}
+                activeClassName={"active"}
+                forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+              />
+              <span className="text-muted small text-center">
+                Mostrando {offsetPagina + 1}–
+                {Math.min(offsetPagina + MOVIMIENTOS_POR_PAGINA, movimientosFiltrados.length)} de{" "}
+                {movimientosFiltrados.length} movimientos
+              </span>
+            </div>
+          )}
         </div>
         <div className="card-footer text-end bg-white">
           <span className="text-muted me-2 fw-semibold">Total en Caja Concentradora:</span>
-          <span className="text-primary fw-bold">${formatCurrency(totalVisible)}</span>
+          <span className="text-oxblood fw-bold">${formatCurrency(totalVisible)}</span>
         </div>
       </div>
 
@@ -656,7 +706,7 @@ export default function CajaConcentradoraPage() {
               <h5 className="modal-title">
                 <i
                   className={`bi ${
-                    isEditing ? "bi-pencil text-warning" : "bi-cash-stack text-primary"
+                    isEditing ? "bi-pencil text-warning" : "bi-cash-stack text-oxblood"
                   } me-2`}
                 ></i>
                 {isEditing ? "Editar Movimiento" : "Registrar Movimiento"}
@@ -796,7 +846,7 @@ export default function CajaConcentradoraPage() {
                   />
                   {isEditing &&
                     movimientoEditando?.origen === "Caja Diaria" && (
-                      <div className="text-primary small mt-2">
+                      <div className="text-oxblood small mt-2">
                         El monto de ingresos automáticos desde Caja Diaria no puede modificarse.
                       </div>
                     )}
@@ -827,7 +877,7 @@ export default function CajaConcentradoraPage() {
                 Cancelar
               </button>
               <button
-                className="btn btn-primary"
+                className="btn btn-oxblood"
                 onClick={handleRegistrarMovimiento}
                 disabled={
                   isSaving ||
@@ -858,7 +908,7 @@ export default function CajaConcentradoraPage() {
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">
-                <i className="bi bi-arrow-right-circle text-info me-2"></i>
+                <i className="bi bi-arrow-right-circle text-oxblood me-2"></i>
                 Enviar a Caja Chica
               </h5>
               <button
@@ -912,7 +962,7 @@ export default function CajaConcentradoraPage() {
                 Cancelar
               </button>
               <button
-                className="btn btn-info text-white"
+                className="btn btn-oxblood"
                 onClick={handleEnviarACajaChica}
                 disabled={
                   isSaving ||

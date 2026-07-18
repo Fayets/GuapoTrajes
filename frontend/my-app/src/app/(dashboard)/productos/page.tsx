@@ -1,5 +1,7 @@
 "use client";
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import ReactPaginate from "react-paginate";
+import { Eye, Code2, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -83,8 +85,8 @@ export default function ProductosPage() {
   const [busquedaDebounced, setBusquedaDebounced] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Paginación (20 ítems fijos por página)
-  const PAGE_SIZE = 20;
+  // Paginación (18 ítems fijos por página)
+  const PAGE_SIZE = 18;
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -613,25 +615,25 @@ export default function ProductosPage() {
   });
 
   return (
-    <div className="container-fluid px-4 py-3">
-      <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-3">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
+      <div className="gt-page-header d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-3">
         <div>
-          <h1 className="fw-bold fs-3 mb-1">Productos</h1>
+          <h1 className="page-title mb-1">Productos</h1>
           <p className="text-muted mb-0">Gestión de productos de Guapo Trajes</p>
         </div>
         <RoleGate allow={["ADMIN"]}>
-          <div className="d-flex gap-2 flex-wrap">
-            <Button
+          <div className="d-flex gap-2 flex-wrap w-100 w-md-auto justify-content-stretch justify-content-md-end">
+            <button
               type="button"
-              variant="outline"
-              className="d-flex align-items-center gap-2"
+              className="btn btn-outline-ink d-flex align-items-center gap-2"
               onClick={() => setIsBulkPreciosOpen(true)}
             >
               <i className="bi bi-currency-dollar"></i>
               Ajuste masivo de precios
-            </Button>
-            <Button
-              className="btn btn-primary d-flex align-items-center gap-2"
+            </button>
+            <button
+              type="button"
+              className="btn btn-oxblood d-flex align-items-center gap-2"
               onClick={() => {
                 setProductoActual(productoBase());
                 setIsDetalleOpen(false);
@@ -640,7 +642,7 @@ export default function ProductosPage() {
             >
               <i className="bi bi-plus"></i>
               Nuevo Producto
-            </Button>
+            </button>
           </div>
         </RoleGate>
       </div>
@@ -648,16 +650,21 @@ export default function ProductosPage() {
       {/* Buscador y filtros */}
       <div className="row g-2 mb-4 align-items-end">
         <div className="col-12 col-md-5 col-lg-4">
-          <input
-            type="search"
-            className="form-control w-100"
-            placeholder="Buscar por línea, código o descripción..."
-            value={busqueda}
-            onChange={(e) => {
-              setBusqueda(e.target.value);
-              setPage(1);
-            }}
-          />
+          <div className="input-group gt-search">
+            <span className="input-group-text">
+              <i className="bi bi-search"></i>
+            </span>
+            <input
+              type="search"
+              className="form-control"
+              placeholder="Buscar por línea, código o descripción..."
+              value={busqueda}
+              onChange={(e) => {
+                setBusqueda(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
         </div>
         <div className="col-auto d-flex align-items-center gap-3 flex-wrap">
           <div className="form-check mb-0 user-select-none">
@@ -675,25 +682,25 @@ export default function ProductosPage() {
               Solo reservados
             </label>
           </div>
-          <Button
+          <button
             type="button"
-            variant={
+            className={`btn ${
               filtroOpen ||
               filtroLineaId ||
               filtroTalleId ||
               filtroTelaId ||
               filtroColorId
-                ? "primary"
-                : "outline"
-            }
+                ? "btn-oxblood"
+                : "btn-outline-ink"
+            }`}
             onClick={() => setFiltroOpen(!filtroOpen)}
           >
             <i className="bi bi-funnel me-1"></i>
             Filtrar
-          </Button>
+          </button>
         </div>
         {filtroOpen && (
-          <div className="col-12 mt-2 p-3 border rounded bg-light">
+          <div className="col-12 mt-2 p-3 border rounded gt-filter-panel">
             <p className="small fw-semibold mb-2">Filtros por atributos</p>
             <div className="row g-2">
               <div className="col-6 col-md-3">
@@ -782,10 +789,10 @@ export default function ProductosPage() {
       </div>
 
       {/* Tabla */}
-      <div className="card">
+      <div className="card shadow-sm">
         <div className="table-responsive">
-          <table className="table table-striped table-hover align-middle mb-0">
-            <thead className="table-light">
+          <table className="table gt-table align-middle mb-0">
+            <thead>
               <tr>
                 <th>Línea</th>
                 <th>Talle</th>
@@ -928,8 +935,9 @@ export default function ProductosPage() {
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="d-flex flex-wrap gap-2">
-                        <Button
-                          className="btn btn-sm btn-light border"
+                        <button
+                          type="button"
+                          className="btn-action btn-action--ver"
                           title="Ver"
                           onClick={() => {
                             setProductoEtiqueta(null);
@@ -937,18 +945,20 @@ export default function ProductosPage() {
                             setIsDetalleOpen(true);
                           }}
                         >
-                          <i className="bi bi-eye text-dark"></i>
-                        </Button>
-                        <Button
+                          <Eye size={16} strokeWidth={1.75} aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-action btn-action--ver"
                           onClick={() => generarEtiqueta(producto)}
                           title="Etiquetado"
-                          className="btn btn-sm btn-light border"
                         >
-                          <i className="bi bi-code text-dark"></i>
-                        </Button>
+                          <Code2 size={16} strokeWidth={1.75} aria-hidden />
+                        </button>
                         <RoleGate allow={["ADMIN"]}>
-                          <Button
-                            className="btn btn-sm btn-warning text-dark"
+                          <button
+                            type="button"
+                            className="btn-action btn-action--editar"
                             onClick={() => {
                               setProductoActual(producto);
                               setIsDetalleOpen(false);
@@ -956,17 +966,18 @@ export default function ProductosPage() {
                             }}
                             title="Editar"
                           >
-                            <i className="bi bi-pencil"></i>
-                          </Button>
-                          <Button
-                            className="btn btn-sm btn-danger text-white"
+                            <Pencil size={16} strokeWidth={1.75} aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-action btn-action--borrar"
                             onClick={() =>
                               eliminarProducto(producto.codigo_barra)
                             }
                             title="Eliminar"
                           >
-                            <i className="bi bi-trash"></i>
-                          </Button>
+                            <Trash2 size={16} strokeWidth={1.75} aria-hidden />
+                          </button>
                         </RoleGate>
                       </div>
                     </td>
@@ -1024,28 +1035,29 @@ export default function ProductosPage() {
       </div>
 
       {/* Paginación */}
-      <div className="d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 mt-4">
-        <div className="text-muted small text-center text-md-start">
+      <div className="d-flex flex-column align-items-center gap-1 mt-4">
+        <ReactPaginate
+          previousLabel={"←"}
+          nextLabel={"→"}
+          breakLabel={"..."}
+          pageCount={totalPages}
+          pageRangeDisplayed={3}
+          marginPagesDisplayed={1}
+          onPageChange={({ selected }) => setPage(selected + 1)}
+          containerClassName={"pagination"}
+          pageClassName={"page-item"}
+          pageLinkClassName={"page-link"}
+          previousClassName={"page-item"}
+          previousLinkClassName={"page-link"}
+          nextClassName={"page-item"}
+          nextLinkClassName={"page-link"}
+          breakClassName={"page-item"}
+          breakLinkClassName={"page-link"}
+          activeClassName={"active"}
+          forcePage={Math.min(page - 1, Math.max(0, totalPages - 1))}
+        />
+        <div className="text-muted small text-center">
           Mostrando <b>{productos.length}</b> de <b>{total}</b> resultados
-        </div>
-        <div className="d-flex align-items-center gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            ◀ Anterior
-          </Button>
-          <span className="text-sm">
-            Página <b>{page}</b> / {totalPages}
-          </span>
-          <Button
-            variant="secondary"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
-            Siguiente ▶
-          </Button>
         </div>
       </div>
 

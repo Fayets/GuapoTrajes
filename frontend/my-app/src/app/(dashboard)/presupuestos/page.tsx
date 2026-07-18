@@ -151,7 +151,7 @@ export default function PresupuestosPage() {
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
-  const presupuestosPorPagina = 20;
+  const presupuestosPorPagina = 18;
   const offset = currentPage * presupuestosPorPagina;
 
   const handlePageChange = (selectedItem: { selected: number }) => {
@@ -1249,20 +1249,12 @@ export default function PresupuestosPage() {
   );
 
   const getEstadoClass = (estado: string) => {
-    switch (estado) {
-      case "aprobado":
-        return "bg-success";
-      case "rechazado":
-        return "bg-danger";
-      case "cancelada":
-        return "bg-danger";
-      case "vencido":
-        return "bg-secondary";
-      case "convertido_orden":
-        return "bg-success"; // nuevo estado
-      default:
-        return "bg-warning";
-    }
+    const e = (estado ?? "").toLowerCase().trim();
+    // startsWith tolera variantes de género/número (aprobado/aprobada, etc.)
+    if (e.startsWith("aprobad") || e === "convertido_orden") return "bg-success";
+    if (e.startsWith("rechazad") || e.startsWith("cancelad")) return "bg-danger";
+    if (e.startsWith("vencid")) return "bg-secondary";
+    return "bg-warning";
   };
 
   const convertirEnOrden = async (
@@ -1798,14 +1790,14 @@ export default function PresupuestosPage() {
   };
 
   return (
-    <div className="container py-4 p-2">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
+      <div className="gt-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
         <div>
-          <h1 className="fw-bold">Presupuestos</h1>
-          <p className="text-muted">Gestión y seguimiento de presupuestos.</p>
+          <h1 className="page-title mb-1">Presupuestos</h1>
+          <p className="text-muted mb-0">Gestión y seguimiento de presupuestos.</p>
         </div>
-        <button className="btn btn-primary" onClick={nuevoPresupuesto}>
-          <i className="bi bi-plus me-2"></i>
+        <button className="btn btn-oxblood d-flex align-items-center gap-2" onClick={nuevoPresupuesto}>
+          <i className="bi bi-plus"></i>
           Nuevo Presupuesto
         </button>
       </div>
@@ -1818,24 +1810,29 @@ export default function PresupuestosPage() {
           </div>
         </div>
       ) : (
-        <div className="card">
+        <div className="card shadow-sm">
           <div className="card-body border-bottom">
             <label htmlFor="presupuestos-busqueda" className="form-label visually-hidden">
               Buscar por DNI, apellido, nombre o apellido y nombre
             </label>
-            <input
-              id="presupuestos-busqueda"
-              type="search"
-              className="form-control"
-              placeholder="Buscar por DNI, apellido, nombre o apellido y nombre..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              aria-label="Buscar presupuestos por cliente"
-            />
+            <div className="input-group gt-search">
+              <span className="input-group-text">
+                <i className="bi bi-search"></i>
+              </span>
+              <input
+                id="presupuestos-busqueda"
+                type="search"
+                className="form-control"
+                placeholder="Buscar por DNI, apellido, nombre o apellido y nombre..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                aria-label="Buscar presupuestos por cliente"
+              />
+            </div>
           </div>
           <div className="table-responsive">
-            <table className="table table-striped table-hover">
-              <thead className="table-light">
+            <table className="table gt-table align-middle mb-0">
+              <thead>
                 <tr>
                   <th>N°</th>
                   <th>Cliente</th>
@@ -1871,17 +1868,17 @@ export default function PresupuestosPage() {
                         </span>
                       </td>
                       <td className="text-center">
-                        <div className="btn-group">
+                        <div className="d-flex justify-content-center gap-2 flex-wrap">
                           <button
-                            className="btn btn-sm btn-success"
+                            className="btn-action btn-action--wide btn-action--whatsapp"
                             title="Enviar por WhatsApp"
                             onClick={() => handleEnviarWhatsapp(p)}
                           >
-                            <i className="bi bi-whatsapp me-1"></i>
+                            <i className="bi bi-whatsapp"></i>
                             WhatsApp
                           </button>
                           <button
-                            className="btn btn-sm btn-outline-secondary"
+                            className="btn-action btn-action--wide btn-action--ver"
                             title="Ver presupuesto"
                             onClick={() => abrirPresupuestoVista(p)}
                           >
@@ -1889,7 +1886,7 @@ export default function PresupuestosPage() {
                           </button>
                           {p.estado.toLowerCase() !== "cancelada" && (
                             <button
-                              className="btn btn-sm btn-primary"
+                              className="btn-action btn-action--wide btn-action--editar"
                               type="button"
                               title="Editar fechas e ítems"
                               onClick={() => abrirPresupuestoEdicion(p)}
@@ -1903,7 +1900,7 @@ export default function PresupuestosPage() {
                             <div></div>
                           ) : (
                             <button
-                              className="btn btn-sm btn-outline-primary"
+                              className="btn-action btn-action--wide btn-action--credito"
                               title="Convertir en orden"
                               onClick={async () => {
                                 setPresupuestoAConvertir({
@@ -1955,7 +1952,8 @@ export default function PresupuestosPage() {
                             <div></div>
                           ) : (
                             <button
-                              className="btn btn-sm btn-outline-danger"
+                              className="btn-action btn-action--borrar"
+                              title="Eliminar"
                               onClick={() => eliminarPresupuesto(p.id)}
                             >
                               ✕
@@ -1970,12 +1968,7 @@ export default function PresupuestosPage() {
             </table>
           </div>
           {pageCount > 1 && (
-            <div className="d-flex justify-content-between align-items-center px-3 py-3 border-top">
-              <span className="text-muted small">
-                Mostrando {offset + 1}–
-                {Math.min(offset + presupuestosPorPagina, presupuestosFiltrados.length)} de{" "}
-                {presupuestosFiltrados.length} presupuestos
-              </span>
+            <div className="d-flex flex-column align-items-center gap-1 px-3 py-2">
               <ReactPaginate
                 previousLabel={"←"}
                 nextLabel={"→"}
@@ -1994,6 +1987,11 @@ export default function PresupuestosPage() {
                 activeClassName={"active"}
                 forcePage={currentPage}
               />
+              <span className="text-muted small text-center">
+                Mostrando {offset + 1}–
+                {Math.min(offset + presupuestosPorPagina, presupuestosFiltrados.length)} de{" "}
+                {presupuestosFiltrados.length} presupuestos
+              </span>
             </div>
           )}
         </div>

@@ -697,8 +697,10 @@ class CajaServices:
     def existe_cierre(self, fecha: date, sucursal_id: int) -> bool:
         """Indica si ya existe un cierre de caja para esa fecha y sucursal."""
         try:
-            c = select(c for c in CierreCaja if c.fecha == fecha and c.sucursal.id == sucursal_id).first()
-            return c is not None
+            sucursal = Sucursal.get(id=sucursal_id)
+            if not sucursal:
+                return False
+            return CierreCaja.get(fecha=fecha, sucursal=sucursal) is not None
         except Exception as e:
             print(f"❌ Error al verificar cierre: {e}")
             return False
@@ -712,7 +714,7 @@ class CajaServices:
         sucursal = Sucursal.get(id=sucursal_id)
         if not sucursal:
             raise HTTPException(status_code=404, detail="Sucursal no encontrada")
-        if select(c for c in CierreCaja if c.fecha == fecha and c.sucursal.id == sucursal_id).first():
+        if CierreCaja.get(fecha=fecha, sucursal=sucursal):
             raise HTTPException(status_code=400, detail="Ya existe un cierre de caja para esta fecha y sucursal")
         saldo = self.get_saldo_efectivo_dia(fecha, sucursal_id)
         if abs(saldo) > 0.01:
@@ -739,7 +741,7 @@ class CajaServices:
             sucursales = list(Sucursal.select())
             pendientes = []
             for s in sucursales:
-                if select(c for c in CierreCaja if c.fecha == ref and c.sucursal.id == s.id).first() is None:
+                if CierreCaja.get(fecha=ref, sucursal=s) is None:
                     pendientes.append({
                         "sucursal_id": s.id,
                         "sucursal_nombre": s.nombre,

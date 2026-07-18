@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ReactPaginate from "react-paginate";
+import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -45,6 +47,8 @@ export default function UsuariosPage() {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [usuarioActual, setUsuarioActual] = useState<Partial<Usuario> & { password?: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [paginaActual, setPaginaActual] = useState(0);
+  const USUARIOS_POR_PAGINA = 18;
 
   const API_BASE = getApiBaseUrl();
   const API_URL = `${API_BASE}/usuarios`;
@@ -188,9 +192,18 @@ export default function UsuariosPage() {
     }
   };
 
+  const empleados = usuarios?.filter((u) => u.rol === "EMPLEADO") ?? [];
+  const pageCount = Math.ceil(empleados.length / USUARIOS_POR_PAGINA);
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * USUARIOS_POR_PAGINA;
+  const empleadosPaginados = empleados.slice(
+    offsetPagina,
+    offsetPagina + USUARIOS_POR_PAGINA
+  );
+
   if (!canManageUsuarios) {
     return (
-      <div className="container-fluid px-4 py-3">
+      <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
         <div className="alert alert-warning">
           No tienes permisos para acceder a esta página.
         </div>
@@ -199,16 +212,16 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="container-fluid px-4 py-3">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
-          <h1 className="fw-bold mb-1">Usuarios / Empleados</h1>
+          <h1 className="page-title mb-1">Usuarios / Empleados</h1>
           <p className="text-muted mb-0">
             Gestión de usuarios tipo EMPLEADO del sistema.
           </p>
         </div>
         <Button
-          className="d-flex align-items-center gap-2"
+          className="btn-oxblood d-flex align-items-center gap-2"
           onClick={() => {
             setUsuarioActual({
               username: "",
@@ -227,10 +240,10 @@ export default function UsuariosPage() {
         </Button>
       </div>
 
-      <div className="card shadow-sm">
+      <div className="card shadow-sm border-line">
         <div className="table-responsive">
-          <Table className="align-middle mb-0">
-            <TableHeader className="table-light">
+          <Table className="gt-table align-middle mb-0">
+            <TableHeader>
               <TableRow>
                 <TableHead>Usuario</TableHead>
                 <TableHead>Email</TableHead>
@@ -242,9 +255,7 @@ export default function UsuariosPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {usuarios
-                ?.filter((u) => u.rol === "EMPLEADO")
-                .map((u) => (
+              {empleadosPaginados.map((u) => (
                   <TableRow key={u.id}>
                     <TableCell className="fw-semibold">{u.username}</TableCell>
                     <TableCell>{u.email}</TableCell>
@@ -256,23 +267,23 @@ export default function UsuariosPage() {
                     <TableCell>{u.sucursal_nombre || "N/A"}</TableCell>
                     <TableCell>
                       <div className="d-flex justify-content-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
+                        <button
+                          className="btn-action btn-action--editar"
                           onClick={() => {
                             setUsuarioActual({ ...u, password: "" });
                             setIsModalOpen(true);
                           }}
+                          title="Editar"
                         >
-                          Editar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
+                          <Pencil size={16} strokeWidth={1.75} aria-hidden />
+                        </button>
+                        <button
+                          className="btn-action btn-action--borrar"
                           onClick={() => eliminarUsuario(u.id)}
+                          title="Eliminar"
                         >
-                          Eliminar
-                        </Button>
+                          <Trash2 size={16} strokeWidth={1.75} aria-hidden />
+                        </button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -288,6 +299,35 @@ export default function UsuariosPage() {
             </TableBody>
           </Table>
         </div>
+        {pageCount > 1 && (
+          <div className="d-flex flex-column align-items-center gap-1 px-3 py-2 border-top">
+            <ReactPaginate
+              previousLabel="←"
+              nextLabel="→"
+              breakLabel="..."
+              pageCount={pageCount}
+              pageRangeDisplayed={3}
+              marginPagesDisplayed={1}
+              onPageChange={({ selected }) => setPaginaActual(selected)}
+              containerClassName="pagination"
+              pageClassName="page-item"
+              pageLinkClassName="page-link"
+              previousClassName="page-item"
+              previousLinkClassName="page-link"
+              nextClassName="page-item"
+              nextLinkClassName="page-link"
+              breakClassName="page-item"
+              breakLinkClassName="page-link"
+              activeClassName="active"
+              forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+            />
+            <span className="text-muted small text-center">
+              Mostrando {offsetPagina + 1}–
+              {Math.min(offsetPagina + USUARIOS_POR_PAGINA, empleados.length)} de{" "}
+              {empleados.length} empleados
+            </span>
+          </div>
+        )}
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -379,7 +419,7 @@ export default function UsuariosPage() {
                   <div className="col-12">
                     <label className="form-label fw-bold">Sucursal</label>
                     <select
-                      className="form-select"
+                      className="form-select gt-select"
                       value={usuarioActual?.sucursal_id || 0}
                       onChange={(e) =>
                         setUsuarioActual({
@@ -402,10 +442,10 @@ export default function UsuariosPage() {
           </div>
 
           <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+            <Button variant="outline" className="btn-outline-ink" onClick={() => setIsModalOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={() => guardarUsuario()}>
+            <Button className="btn-oxblood" onClick={() => guardarUsuario()}>
               {usuarioActual?.id ? "Actualizar" : "Guardar"}
             </Button>
           </DialogFooter>

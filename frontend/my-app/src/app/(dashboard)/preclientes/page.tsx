@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import ReactPaginate from "react-paginate";
+import { UserCog, Pencil, Trash2 } from "lucide-react";
 import ClienteModal from "@/components/modales/clienteModal";
 import { Input } from "@/components/ui/input";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -40,7 +41,7 @@ export default function PreclientesPage() {
   const [cargando, setCargando] = useState(true);
   // PAGINACIÓN: Estados nuevos
   const [currentPage, setCurrentPage] = useState(0);
-  const clientesPorPagina = 12;
+  const clientesPorPagina = 18;
   const offset = currentPage * clientesPorPagina;
   const [showClienteModal, setShowClienteModal] = useState(false);
   const [preclienteIdConvertir, setPreclienteIdConvertir] = useState<
@@ -317,13 +318,13 @@ export default function PreclientesPage() {
   };
 
   return (
-    <div className="container-fluid px-4 py-3">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
+      <div className="gt-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
-          <h1 className="fw-bold mb-1">Preclientes</h1>
+          <h1 className="page-title mb-1">Preclientes</h1>
           <p className="text-muted mb-0">Gestión de preclientes de Guapo Trajes.</p>
         </div>
-        <button className="btn btn-primary d-flex align-items-center gap-2" onClick={nuevoCliente}>
+        <button className="btn btn-oxblood d-flex align-items-center gap-2" onClick={nuevoCliente}>
           <i className="bi bi-plus-lg"></i>
           Nuevo precliente
         </button>
@@ -331,7 +332,7 @@ export default function PreclientesPage() {
 
       <div className="row g-3 align-items-center mb-4">
         <div className="col-12 col-md-6 col-lg-4">
-          <div className="input-group">
+          <div className="input-group gt-search">
             <span className="input-group-text">
               <i className="bi bi-search"></i>
             </span>
@@ -354,8 +355,8 @@ export default function PreclientesPage() {
       ) : (
         <div className="card shadow-sm">
           <div className="table-responsive">
-            <Table className="align-middle mb-0">
-              <TableHeader className="table-light">
+            <Table className="align-middle mb-0 gt-table">
+              <TableHeader>
                 <TableRow>
                   <TableHead>Apellido</TableHead>
                   <TableHead>Nombre</TableHead>
@@ -373,25 +374,25 @@ export default function PreclientesPage() {
                       <TableCell>
                         <div className="d-flex justify-content-center gap-2">
                           <button
-                            className="btn btn-sm btn-outline-success"
+                            className="btn-action btn-action--ver"
                             onClick={() => iniciarConversionPrecliente(cliente)}
                             title="Convertir en cliente"
                           >
-                            <i className="bi bi-person-plus"></i>
+                            <UserCog size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                           <button
-                            className="btn btn-sm btn-outline-primary"
+                            className="btn-action btn-action--editar"
                             onClick={() => editarCliente(cliente)}
                             title="Editar"
                           >
-                            <i className="bi bi-pencil"></i>
+                            <Pencil size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                           <button
-                            className="btn btn-sm btn-outline-danger"
+                            className="btn-action btn-action--borrar"
                             onClick={() => confirmarEliminar(cliente)}
                             title="Eliminar"
                           >
-                            <i className="bi bi-trash"></i>
+                            <Trash2 size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                         </div>
                       </TableCell>

@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import ReactPaginate from "react-paginate";
+import { Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -82,6 +84,15 @@ function SectionBlock({
   const [codigo, setCodigo] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [paginaActual, setPaginaActual] = useState(0);
+  const ITEMS_POR_PAGINA = 18;
+  const pageCount = Math.ceil(items.length / ITEMS_POR_PAGINA);
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * ITEMS_POR_PAGINA;
+  const itemsPaginados = items.slice(
+    offsetPagina,
+    offsetPagina + ITEMS_POR_PAGINA
+  );
 
   const handleCreate = async () => {
     const n = nombre.trim();
@@ -143,9 +154,9 @@ function SectionBlock({
   };
 
   return (
-    <div className="card shadow-sm">
-      <div className="card-header bg-white py-2 px-3">
-        <h6 className="mb-0 fw-semibold text-secondary">{title}</h6>
+    <div className="card shadow-sm border-line h-100">
+      <div className="card-header bg-surface border-bottom border-line py-2 px-3">
+        <h6 className="mb-0 fw-semibold text-ink">{title}</h6>
       </div>
       <div className="card-body py-3 px-3">
         <div className="d-flex gap-2 flex-wrap align-items-center mb-3">
@@ -154,7 +165,7 @@ function SectionBlock({
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            className="form-control form-control-sm w-auto"
+            className="form-control form-control-sm gt-select flex-grow-1"
             style={{ maxWidth: "200px" }}
           />
           <Input
@@ -162,7 +173,7 @@ function SectionBlock({
             value={codigo}
             onChange={(e) => setCodigo(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            className="form-control form-control-sm w-auto"
+            className="form-control form-control-sm gt-select"
             style={{ maxWidth: "100px" }}
           />
           <Button
@@ -170,7 +181,7 @@ function SectionBlock({
             size="sm"
             onClick={handleCreate}
             disabled={saving || !nombre.trim() || !codigo.trim()}
-            className="btn btn-primary btn-sm"
+            className="btn btn-oxblood btn-sm"
           >
             {saving ? "..." : "Agregar"}
           </Button>
@@ -181,7 +192,7 @@ function SectionBlock({
           <p className="text-muted small mb-0">Ninguno</p>
         ) : (
           <ul className="list-group list-group-flush">
-            {items.map((item) => (
+            {itemsPaginados.map((item) => (
               <li
                 key={item.id}
                 className="list-group-item d-flex justify-content-between align-items-center py-2 px-0 border-0"
@@ -192,14 +203,43 @@ function SectionBlock({
                 </span>
                 <button
                   type="button"
-                  className="btn btn-link btn-sm text-danger p-0 text-decoration-none"
+                  className="btn-action btn-action--borrar"
                   onClick={() => setDeleteId(item.id)}
+                  title="Eliminar"
                 >
-                  Eliminar
+                  <Trash2 size={15} strokeWidth={1.75} aria-hidden />
                 </button>
               </li>
             ))}
           </ul>
+        )}
+        {pageCount > 1 && (
+          <div className="d-flex flex-column align-items-center mt-2">
+            <ReactPaginate
+              previousLabel="←"
+              nextLabel="→"
+              breakLabel="..."
+              pageCount={pageCount}
+              pageRangeDisplayed={2}
+              marginPagesDisplayed={1}
+              onPageChange={({ selected }) => setPaginaActual(selected)}
+              containerClassName="pagination"
+              pageClassName="page-item"
+              pageLinkClassName="page-link"
+              previousClassName="page-item"
+              previousLinkClassName="page-link"
+              nextClassName="page-item"
+              nextLinkClassName="page-link"
+              breakClassName="page-item"
+              breakLinkClassName="page-link"
+              activeClassName="active"
+              forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+            />
+            <span className="text-muted small">
+              {offsetPagina + 1}–
+              {Math.min(offsetPagina + ITEMS_POR_PAGINA, items.length)} de {items.length}
+            </span>
+          </div>
         )}
       </div>
       <Dialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
@@ -211,7 +251,7 @@ function SectionBlock({
             ¿Eliminar &quot;{items.find((i) => i.id === deleteId)?.nombre}&quot;?
           </p>
           <DialogFooter className="border-0 pt-0 gap-2">
-            <Button variant="outline" size="sm" onClick={() => setDeleteId(null)} className="btn btn-outline-secondary btn-sm">
+            <Button variant="outline" size="sm" onClick={() => setDeleteId(null)} className="btn btn-outline-ink btn-sm">
               Cancelar
             </Button>
             <Button variant="danger" size="sm" onClick={() => deleteId !== null && handleDelete(deleteId)} className="btn btn-danger btn-sm">
@@ -234,9 +274,9 @@ export default function ConfigProductosPage() {
 
   return (
     <RoleGate allow={["ADMIN", "SUPER_ADMIN"]}>
-      <div className="container-fluid px-4 py-4">
+      <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
         <div className="mb-4">
-          <h1 className="h4 fw-bold mb-1">Atributos de productos</h1>
+          <h1 className="page-title mb-1">Atributos de productos</h1>
           <p className="text-muted small mb-0">
             Líneas, talles, telas y colores para productos y filtros.
           </p>

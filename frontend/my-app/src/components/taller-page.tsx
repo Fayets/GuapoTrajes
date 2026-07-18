@@ -1,6 +1,8 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
+import ReactPaginate from "react-paginate"
+import { Pencil, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import {
@@ -108,6 +110,8 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
   const [entityActual, setEntityActual] = useState<TallerEntity | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [paginaActual, setPaginaActual] = useState(0)
+  const ENTIDADES_POR_PAGINA = 18
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -435,15 +439,26 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
   const entitiesFiltrados = entities.filter((entity) =>
     `${entity.nombre} `.toLowerCase().includes(busqueda.toLowerCase())
   )
+  const pageCount = Math.ceil(entitiesFiltrados.length / ENTIDADES_POR_PAGINA)
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * ENTIDADES_POR_PAGINA
+  const entitiesPaginados = entitiesFiltrados.slice(
+    offsetPagina,
+    offsetPagina + ENTIDADES_POR_PAGINA
+  )
+
+  useEffect(() => {
+    setPaginaActual(0)
+  }, [busqueda])
 
   return (
-    <div className="container-fluid px-4 py-3">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
-          <h1 className="fw-bold mb-1">{L.title}</h1>
+          <h1 className="page-title mb-1">{L.title}</h1>
           <p className="text-muted mb-0">{L.subtitle}</p>
         </div>
-        <Button className="d-flex align-items-center gap-2" onClick={nuevoEntity}>
+        <Button className="btn-oxblood d-flex align-items-center gap-2" onClick={nuevoEntity}>
           <i className="bi bi-plus-lg"></i>
           {L.newEntity}
         </Button>
@@ -451,7 +466,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
 
       <div className="row g-3 align-items-center mb-4">
         <div className="col-12 col-md-6 col-lg-4">
-          <div className="input-group">
+          <div className="input-group gt-search">
             <span className="input-group-text">
               <i className="bi bi-search"></i>
             </span>
@@ -465,10 +480,10 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
         </div>
       </div>
 
-      <div className="card shadow-sm">
+      <div className="card shadow-sm border-line">
         <div className="table-responsive">
-          <Table className="align-middle mb-0">
-            <TableHeader className="table-light">
+          <Table className="gt-table align-middle mb-0">
+            <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Dirección</TableHead>
@@ -478,19 +493,27 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
             </TableHeader>
             <TableBody>
               {entitiesFiltrados.length > 0 ? (
-                entitiesFiltrados.map((entity) => (
+                entitiesPaginados.map((entity) => (
                   <TableRow key={entity.id}>
                     <TableCell className="fw-semibold">{entity.nombre}</TableCell>
                     <TableCell>{entity.direccion}</TableCell>
                     <TableCell className="text-nowrap">{entity.telefono}</TableCell>
                     <TableCell>
                       <div className="d-flex justify-content-center gap-2">
-                        <Button size="sm" variant="outline" onClick={() => editarEntity(entity)}>
-                          Editar
-                        </Button>
-                        <Button size="sm" variant="danger" onClick={() => confirmarEliminar(entity)}>
-                          Eliminar
-                        </Button>
+                        <button
+                          className="btn-action btn-action--editar"
+                          onClick={() => editarEntity(entity)}
+                          title="Editar"
+                        >
+                          <Pencil size={16} strokeWidth={1.75} aria-hidden />
+                        </button>
+                        <button
+                          className="btn-action btn-action--borrar"
+                          onClick={() => confirmarEliminar(entity)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} strokeWidth={1.75} aria-hidden />
+                        </button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -505,10 +528,39 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
             </TableBody>
           </Table>
         </div>
+        {pageCount > 1 && (
+          <div className="d-flex flex-column align-items-center gap-1 px-3 py-2 border-top">
+            <ReactPaginate
+              previousLabel="←"
+              nextLabel="→"
+              breakLabel="..."
+              pageCount={pageCount}
+              pageRangeDisplayed={3}
+              marginPagesDisplayed={1}
+              onPageChange={({ selected }) => setPaginaActual(selected)}
+              containerClassName="pagination"
+              pageClassName="page-item"
+              pageLinkClassName="page-link"
+              previousClassName="page-item"
+              previousLinkClassName="page-link"
+              nextClassName="page-item"
+              nextLinkClassName="page-link"
+              breakClassName="page-item"
+              breakLinkClassName="page-link"
+              activeClassName="active"
+              forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+            />
+            <span className="text-muted small text-center">
+              Mostrando {offsetPagina + 1}–
+              {Math.min(offsetPagina + ENTIDADES_POR_PAGINA, entitiesFiltrados.length)} de{" "}
+              {entitiesFiltrados.length}
+            </span>
+          </div>
+        )}
       </div>
 
-      <div className="card shadow-sm mt-4">
-        <div className="card-header py-2">
+      <div className="card shadow-sm border-line mt-4">
+        <div className="card-header bg-surface border-bottom border-line py-2">
           <h2 className="h6 mb-0 fw-semibold text-secondary">Bolsa: qué volvió</h2>
           <p className="small text-muted mb-0 mt-1">
             {L.entitySingular.charAt(0).toUpperCase() + L.entitySingular.slice(1)} → marcá lo de la bolsa → remito, salón o imprimir etiquetas. Mismo formato 50×25 mm que en Productos; las marcadas salen en un solo cuadro de impresión (una hoja por etiqueta).
@@ -519,7 +571,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
             <div className="col-12 col-md-4 col-lg-3">
               <label className="form-label small fw-semibold mb-1">{L.selectEntity}</label>
               <select
-                className="form-select form-select-sm"
+                className="form-select form-select-sm gt-select"
                 value={recepcionId}
                 onChange={(e) => setRecepcionId(e.target.value)}
               >
@@ -534,7 +586,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
             <div className="col-12 col-md-8 col-lg-9 d-flex flex-wrap gap-2">
               <button
                 type="button"
-                className="btn btn-outline-secondary btn-sm"
+                className="btn btn-outline-ink btn-sm"
                 disabled={
                   !recepcionId || productosEnTaller.length === 0
                 }
@@ -544,7 +596,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
               </button>
               <button
                 type="button"
-                className="btn btn-outline-secondary btn-sm"
+                className="btn btn-outline-ink btn-sm"
                 disabled={
                   !recepcionId || productosEnTaller.length === 0
                 }
@@ -554,7 +606,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
               </button>
               <button
                 type="button"
-                className="btn btn-outline-dark btn-sm"
+                className="btn btn-outline-ink btn-sm"
                 disabled={!recepcionId}
                 onClick={handleRemitoMarcados}
               >
@@ -572,7 +624,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
               </button>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="btn btn-oxblood btn-sm"
                 disabled={
                   !recepcionId ||
                   imprimiendoEtiquetas ||
@@ -599,7 +651,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
               <div className="border-bottom px-3 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <h2 className="h6 mb-0">Cola de impresión</h2>
                 {imprimiendoEtiquetas ? (
-                  <span className="badge bg-primary">En curso</span>
+                  <span className="badge bg-oxblood">En curso</span>
                 ) : (
                   <span className="badge bg-secondary">Finalizado</span>
                 )}
@@ -615,7 +667,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                     <li
                       key={row.key}
                       className={`list-group-item d-flex flex-column flex-md-row align-items-md-center gap-2 ${
-                        row.estado === "imprimiendo" ? "list-group-item-primary" : ""
+                        row.estado === "imprimiendo" ? "bg-oxblood-soft" : ""
                       }`}
                     >
                       <div className="flex-grow-1 min-w-0">
@@ -631,7 +683,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                           <span className="badge bg-light text-dark border">Pendiente</span>
                         )}
                         {row.estado === "imprimiendo" && (
-                          <span className="text-primary small d-inline-flex align-items-center gap-2">
+                          <span className="text-oxblood small d-inline-flex align-items-center gap-2">
                             <span
                               className="spinner-border spinner-border-sm"
                               role="status"
@@ -669,7 +721,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                 </span>
                 <button
                   type="button"
-                  className="btn btn-outline-secondary"
+                  className="btn btn-outline-ink"
                   disabled={imprimiendoEtiquetas}
                   onClick={() => {
                     if (imprimiendoEtiquetas) return
@@ -700,8 +752,8 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
             </p>
           ) : (
             <div className="table-responsive border rounded">
-              <table className="table table-sm table-hover align-middle mb-0">
-                <thead className="table-light">
+              <table className="table table-sm gt-table align-middle mb-0">
+                <thead>
                   <tr>
                     <th
                       className="text-center"
@@ -752,7 +804,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                         <td className="text-end">
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-primary"
+                            className="btn btn-sm btn-outline-ink"
                             title="Imprimir esta etiqueta (50×25 mm, mismo formato que Productos)"
                             disabled={imprimiendoEtiquetas}
                             onClick={() => void handleImprimirEtiquetaUna(p)}
@@ -803,10 +855,10 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
           </div>
 
           <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
-            <Button variant="outline" onClick={() => setShowModal(false)}>
+            <Button variant="outline" className="btn-outline-ink" onClick={() => setShowModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={guardarEntity}>Guardar</Button>
+            <Button className="btn-oxblood" onClick={guardarEntity}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

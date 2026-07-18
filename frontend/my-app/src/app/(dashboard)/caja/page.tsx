@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import ReactPaginate from "react-paginate";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth-context";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -98,6 +99,8 @@ export default function CajaPage() {
   const [isCerrando, setIsCerrando] = useState(false);
   const [cierresPendientes, setCierresPendientes] = useState<Array<{ sucursal_id: number; sucursal_nombre: string; fecha: string }>>([]);
   const [cuentaRegresiva2359, setCuentaRegresiva2359] = useState<string>("");
+  const [paginaActual, setPaginaActual] = useState(0);
+  const MOVIMIENTOS_POR_PAGINA = 18;
 
   // Estado para la conexión del backend
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
@@ -756,7 +759,7 @@ export default function CajaPage() {
       case "EFECTIVO":
         return "bg-success";
       case "DEBITO":
-        return "bg-primary";
+        return "bg-steel";
       case "CREDITO":
         return "bg-info";
       case "BILLETERA_VIRTUAL":
@@ -766,12 +769,24 @@ export default function CajaPage() {
     }
   };
 
+  useEffect(() => {
+    setPaginaActual(0);
+  }, [fecha, metodoFiltro, cuentaDestinoFiltro, movimientos.length]);
+
+  const pageCount = Math.ceil(movimientos.length / MOVIMIENTOS_POR_PAGINA);
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * MOVIMIENTOS_POR_PAGINA;
+  const movimientosPaginados = movimientos.slice(
+    offsetPagina,
+    offsetPagina + MOVIMIENTOS_POR_PAGINA
+  );
+
   return (
-    <div className="container-fluid px-3 px-md-4 py-3">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
       {/* Header */}
-      <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-2 gap-lg-3 mb-3">
+      <div className="gt-page-header d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-2 gap-lg-3 mb-3">
         <div>
-          <h1 className="fw-bold fs-3 mb-1">Caja Diaria</h1>
+          <h1 className="page-title mb-1">Caja Diaria</h1>
           <div className="d-flex flex-wrap align-items-center gap-2">
             <p className="text-muted small mb-0">
               Gestión de movimientos de caja y reportes
@@ -817,14 +832,14 @@ export default function CajaPage() {
         <div className="d-flex flex-wrap align-items-center gap-2">
           <button
             onClick={() => setShowIngresoModal(true)}
-            className="btn btn-success btn-sm"
+            className="btn btn-oxblood btn-sm d-flex align-items-center gap-1"
           >
-            <i className="bi bi-plus-lg me-1"></i>
+            <i className="bi bi-plus-lg"></i>
             Nuevo ingreso
           </button>
           <button
             onClick={() => setShowTransferModal(true)}
-            className="btn btn-primary btn-sm"
+            className="btn btn-outline-ink btn-sm"
             title="Transferir a Caja Chica"
           >
             <i className="bi bi-arrow-left-right me-1"></i>
@@ -832,7 +847,7 @@ export default function CajaPage() {
           </button>
           <button
             onClick={() => setShowTransferConcentradoraModal(true)}
-            className="btn btn-info btn-sm text-white"
+            className="btn btn-outline-ink btn-sm"
             title="Enviar a Caja Concentradora"
           >
             <i className="bi bi-bank me-1"></i>
@@ -842,7 +857,7 @@ export default function CajaPage() {
             type="button"
             onClick={abrirModalExportacion}
             disabled={exportando}
-            className="btn btn-outline-secondary btn-sm"
+            className="btn btn-outline-ink btn-sm"
           >
             <i className="bi bi-download me-1"></i>
             Exportar
@@ -881,7 +896,7 @@ export default function CajaPage() {
                   <label className="form-label small text-muted mb-1">Fecha</label>
                   <input
                     type="date"
-                    className="form-control form-control-sm"
+                    className="form-control form-control-sm gt-select"
                     value={fecha}
                     onChange={(e) => setFecha(e.target.value)}
                   />
@@ -890,7 +905,7 @@ export default function CajaPage() {
                 <div className="col-6 col-md-3">
                   <label className="form-label small text-muted mb-1">Método</label>
                   <select
-                    className="form-select form-select-sm"
+                    className="form-select form-select-sm gt-select"
                     value={metodoFiltro}
                     onChange={(e) => setMetodoFiltro(e.target.value)}
                   >
@@ -908,7 +923,7 @@ export default function CajaPage() {
                     Cuenta destino
                   </label>
                   <select
-                    className="form-select form-select-sm"
+                    className="form-select form-select-sm gt-select"
                     value={cuentaDestinoFiltro || ""}
                     onChange={(e) =>
                       setCuentaDestinoFiltro(
@@ -929,7 +944,7 @@ export default function CajaPage() {
                   <button
                     onClick={fetchCajaDiaria}
                     disabled={isLoading}
-                    className="btn btn-outline-secondary btn-sm w-100"
+                    className="btn btn-outline-ink btn-sm w-100"
                   >
                     {isLoading ? (
                       <i className="bi bi-arrow-clockwise spin"></i>
@@ -994,7 +1009,7 @@ export default function CajaPage() {
                 {!cierreRegistrado && (
                   <button
                     type="button"
-                    className="btn btn-outline-primary btn-sm flex-shrink-0"
+                    className="btn btn-outline-ink btn-sm flex-shrink-0"
                     onClick={() => setShowCierreModal(true)}
                   >
                     <i className="bi bi-lock me-1"></i>
@@ -1014,8 +1029,8 @@ export default function CajaPage() {
                       type="button"
                       className={`btn btn-sm text-start border ${
                         estaActivo
-                          ? "border-primary bg-primary bg-opacity-10"
-                          : "border-light bg-white"
+                          ? "border-oxblood bg-oxblood-soft"
+                          : "border-line bg-surface"
                       }`}
                       style={{ minWidth: "6.5rem" }}
                       onClick={() =>
@@ -1029,7 +1044,7 @@ export default function CajaPage() {
                     >
                       <div
                         className={`small lh-1 mb-1 ${
-                          estaActivo ? "text-primary fw-semibold" : "text-muted"
+                          estaActivo ? "text-oxblood fw-semibold" : "text-muted"
                         }`}
                       >
                         {metodo.label}
@@ -1039,7 +1054,7 @@ export default function CajaPage() {
                       </div>
                       <div
                         className={`fw-semibold ${
-                          estaActivo ? "text-primary" : "text-success"
+                          estaActivo ? "text-oxblood" : "text-ink"
                         }`}
                       >
                         ${total.toLocaleString("es-AR")}
@@ -1051,8 +1066,8 @@ export default function CajaPage() {
                   type="button"
                   className={`btn btn-sm text-start border ${
                     metodoFiltro
-                      ? "border-secondary bg-light"
-                      : "border-primary bg-primary bg-opacity-10"
+                      ? "border-line bg-surface"
+                      : "border-oxblood bg-oxblood-soft"
                   }`}
                   style={{ minWidth: "6.5rem" }}
                   onClick={() => setMetodoFiltro("")}
@@ -1060,7 +1075,7 @@ export default function CajaPage() {
                 >
                   <div
                     className={`small lh-1 mb-1 fw-semibold ${
-                      metodoFiltro ? "text-secondary" : "text-primary"
+                      metodoFiltro ? "text-muted" : "text-oxblood"
                     }`}
                   >
                     Total
@@ -1070,7 +1085,7 @@ export default function CajaPage() {
                   </div>
                   <div
                     className={`fw-semibold ${
-                      metodoFiltro ? "text-secondary" : "text-primary"
+                      metodoFiltro ? "text-muted" : "text-oxblood"
                     }`}
                   >
                     ${totalGeneralCalculado.toLocaleString("es-AR")}
@@ -1079,8 +1094,8 @@ export default function CajaPage() {
               </div>
 
               {/* Movimientos */}
-              <div className="border rounded">
-                <div className="px-3 py-2 border-bottom bg-light d-flex align-items-center justify-content-between">
+              <div className="border rounded overflow-hidden">
+                <div className="px-3 py-2 border-bottom gt-filter-panel d-flex align-items-center justify-content-between">
                   <span className="fw-semibold small">Movimientos del día</span>
                   <span className="text-muted small">
                     {movimientos.length} encontrado
@@ -1121,8 +1136,8 @@ export default function CajaPage() {
                   </div>
                 ) : (
                   <div className="table-responsive">
-                    <table className="table table-sm table-hover mb-0 align-middle small">
-                      <thead className="table-light">
+                    <table className="table table-sm gt-table mb-0 align-middle small">
+                      <thead>
                         <tr>
                           <th>Hora</th>
                           <th>Origen</th>
@@ -1135,7 +1150,7 @@ export default function CajaPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {movimientos.map((movimiento) => (
+                        {movimientosPaginados.map((movimiento) => (
                           <tr key={movimiento.id}>
                             <td className="fw-medium text-nowrap">
                               {movimiento.hora}
@@ -1189,6 +1204,35 @@ export default function CajaPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+                {pageCount > 1 && (
+                  <div className="d-flex flex-column align-items-center gap-1 px-3 py-2 border-top">
+                    <ReactPaginate
+                      previousLabel={"←"}
+                      nextLabel={"→"}
+                      breakLabel={"..."}
+                      pageCount={pageCount}
+                      pageRangeDisplayed={3}
+                      marginPagesDisplayed={1}
+                      onPageChange={({ selected }) => setPaginaActual(selected)}
+                      containerClassName={"pagination"}
+                      pageClassName={"page-item"}
+                      pageLinkClassName={"page-link"}
+                      previousClassName={"page-item"}
+                      previousLinkClassName={"page-link"}
+                      nextClassName={"page-item"}
+                      nextLinkClassName={"page-link"}
+                      breakClassName={"page-item"}
+                      breakLinkClassName={"page-link"}
+                      activeClassName={"active"}
+                      forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+                    />
+                    <span className="text-muted small text-center">
+                      Mostrando {offsetPagina + 1}–
+                      {Math.min(offsetPagina + MOVIMIENTOS_POR_PAGINA, movimientos.length)} de{" "}
+                      {movimientos.length} movimientos
+                    </span>
                   </div>
                 )}
               </div>
@@ -1307,7 +1351,7 @@ export default function CajaPage() {
               <button
                 onClick={registrarIngreso}
                 disabled={isSaving || !isIngresoValid(nuevoIngreso)}
-                className="btn btn-success btn-sm"
+                className="btn btn-oxblood btn-sm"
               >
                 {isSaving ? <i className="bi bi-arrow-clockwise spin me-1"></i> : null}
                 Registrar
@@ -1387,7 +1431,7 @@ export default function CajaPage() {
               <button
                 onClick={registrarEgreso}
                 disabled={isSaving || !isTransferValid(nuevaTransferencia)}
-                className="btn btn-primary btn-sm"
+                className="btn btn-oxblood btn-sm"
               >
                 {isSaving ? <i className="bi bi-arrow-clockwise spin me-1"></i> : null}
                 Transferir
@@ -1467,7 +1511,7 @@ export default function CajaPage() {
               <button
                 onClick={registrarEgresoConcentradora}
                 disabled={isSaving || !isTransferValid(nuevaTransferenciaConcentradora)}
-                className="btn btn-info btn-sm text-white"
+                className="btn btn-oxblood btn-sm text-white"
               >
                 {isSaving ? <i className="bi bi-arrow-clockwise spin me-1"></i> : null}
                 Enviar
@@ -1661,7 +1705,7 @@ export default function CajaPage() {
               </button>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="btn btn-oxblood btn-sm"
                 onClick={ejecutarExportacion}
                 disabled={exportando}
               >
@@ -1715,7 +1759,7 @@ export default function CajaPage() {
               </button>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="btn btn-oxblood btn-sm"
                 onClick={confirmarCierreCaja}
                 disabled={isCerrando || Math.abs(saldoParaCierre) >= 0.01}
               >

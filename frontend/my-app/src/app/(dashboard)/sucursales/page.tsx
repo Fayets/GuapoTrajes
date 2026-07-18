@@ -1,6 +1,8 @@
 // Componente de gestión de sucursales (frontend React)
 "use client"
 import { useEffect, useState } from "react"
+import ReactPaginate from "react-paginate"
+import { Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -17,10 +19,12 @@ interface Sucursal {
 }
 
 export default function SucursalesPage() {
-  const { isSuperAdmin, isAdmin } = useAuth()
+  const { isSuperAdmin } = useAuth()
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [sucursalActual, setSucursalActual] = useState<Partial<Sucursal> | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [paginaActual, setPaginaActual] = useState(0)
+  const SUCURSALES_POR_PAGINA = 18
   
   // Solo SUPER_ADMIN puede administrar sucursales (crear, editar y eliminar)
   const canManageSucursales = isSuperAdmin
@@ -132,20 +136,27 @@ export default function SucursalesPage() {
     }
   }
 
-  console.log("Sucursales renderizadas:", sucursales)
+  const sucursalesVisibles = sucursales.filter((s) => !!s?.nombre)
+  const pageCount = Math.ceil(sucursalesVisibles.length / SUCURSALES_POR_PAGINA)
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * SUCURSALES_POR_PAGINA
+  const sucursalesPaginadas = sucursalesVisibles.slice(
+    offsetPagina,
+    offsetPagina + SUCURSALES_POR_PAGINA
+  )
 
   return (
-    <div className="container-fluid px-4 py-3">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
-          <h1 className="fw-bold mb-1">Sucursales</h1>
+          <h1 className="page-title mb-1">Sucursales</h1>
           <p className="text-muted mb-0">
             Gestión de las sucursales registradas en Guapo Trajes.
           </p>
         </div>
         {isSuperAdmin && (
           <Button
-            className="d-flex align-items-center gap-2"
+            className="btn-oxblood d-flex align-items-center gap-2"
             onClick={() => {
               setSucursalActual({ nombre: "", direccion: "", provincia: "" })
               setIsModalOpen(true)
@@ -157,10 +168,10 @@ export default function SucursalesPage() {
         )}
       </div>
 
-      <div className="card shadow-sm">
+      <div className="card shadow-sm border-line">
         <div className="table-responsive">
-          <Table className="align-middle mb-0">
-            <TableHeader className="table-light">
+          <Table className="gt-table align-middle mb-0">
+            <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Dirección</TableHead>
@@ -169,7 +180,7 @@ export default function SucursalesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sucursales?.filter((s) => !!s?.nombre).map((s) => (
+              {sucursalesPaginadas.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="fw-semibold">{s.nombre}</TableCell>
                   <TableCell>{s.direccion}</TableCell>
@@ -177,23 +188,23 @@ export default function SucursalesPage() {
                   <TableCell>
                     {canManageSucursales && (
                       <div className="d-flex justify-content-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
+                        <button
+                          className="btn-action btn-action--editar"
                           onClick={() => {
                             setSucursalActual(s)
                             setIsModalOpen(true)
                           }}
+                          title="Editar"
                         >
-                          Editar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
+                          <Pencil size={16} strokeWidth={1.75} aria-hidden />
+                        </button>
+                        <button
+                          className="btn-action btn-action--borrar"
                           onClick={() => eliminarSucursal(s.id)}
+                          title="Eliminar"
                         >
-                          Eliminar
-                        </Button>
+                          <Trash2 size={16} strokeWidth={1.75} aria-hidden />
+                        </button>
                       </div>
                     )}
                     {!canManageSucursales && (
@@ -214,6 +225,35 @@ export default function SucursalesPage() {
             </TableBody>
           </Table>
         </div>
+        {pageCount > 1 && (
+          <div className="d-flex flex-column align-items-center gap-1 px-3 py-2 border-top">
+            <ReactPaginate
+              previousLabel="←"
+              nextLabel="→"
+              breakLabel="..."
+              pageCount={pageCount}
+              pageRangeDisplayed={3}
+              marginPagesDisplayed={1}
+              onPageChange={({ selected }) => setPaginaActual(selected)}
+              containerClassName="pagination"
+              pageClassName="page-item"
+              pageLinkClassName="page-link"
+              previousClassName="page-item"
+              previousLinkClassName="page-link"
+              nextClassName="page-item"
+              nextLinkClassName="page-link"
+              breakClassName="page-item"
+              breakLinkClassName="page-link"
+              activeClassName="active"
+              forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+            />
+            <span className="text-muted small text-center">
+              Mostrando {offsetPagina + 1}–
+              {Math.min(offsetPagina + SUCURSALES_POR_PAGINA, sucursalesVisibles.length)} de{" "}
+              {sucursalesVisibles.length} sucursales
+            </span>
+          </div>
+        )}
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -249,10 +289,10 @@ export default function SucursalesPage() {
           </div>
 
           <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2 px-3 px-md-4 pb-2">
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+            <Button variant="outline" className="btn-outline-ink" onClick={() => setIsModalOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={() => guardarSucursal()}>
+            <Button className="btn-oxblood" onClick={() => guardarSucursal()}>
               {sucursalActual?.id ? "Actualizar" : "Guardar"}
             </Button>
           </DialogFooter>

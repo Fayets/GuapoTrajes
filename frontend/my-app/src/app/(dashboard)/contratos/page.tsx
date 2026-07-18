@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import ReactPaginate from "react-paginate";
+import { FileText } from "lucide-react";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { formatDateTimeArgentina } from "@/lib/fecha-calendario";
 
@@ -26,6 +28,8 @@ export default function ContratosPage() {
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
+  const [paginaActual, setPaginaActual] = useState(0);
+  const CONTRATOS_POR_PAGINA = 18;
 
   useEffect(() => {
     fetchContratos();
@@ -76,17 +80,31 @@ export default function ContratosPage() {
     });
   }, [contratos, busqueda]);
 
+  useEffect(() => {
+    setPaginaActual(0);
+  }, [busqueda]);
+
+  const pageCount = Math.ceil(contratosFiltrados.length / CONTRATOS_POR_PAGINA);
+  const offset = Math.min(paginaActual, Math.max(0, pageCount - 1)) * CONTRATOS_POR_PAGINA;
+  const contratosPaginados = contratosFiltrados.slice(
+    offset,
+    offset + CONTRATOS_POR_PAGINA
+  );
+
   return (
-    <div className="container py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
+      <div className="gt-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
         <div>
-          <h1 className="fw-bold">Contratos</h1>
+          <h1 className="page-title mb-1">Contratos</h1>
           <p className="text-muted mb-0">
             Contratos de alquiler generados desde órdenes de trabajo.
           </p>
         </div>
-        <button className="btn btn-outline-primary" onClick={fetchContratos}>
-          <i className="bi bi-arrow-clockwise me-2"></i>
+        <button
+          className="btn btn-outline-ink d-flex align-items-center gap-2"
+          onClick={fetchContratos}
+        >
+          <i className="bi bi-arrow-clockwise"></i>
           Actualizar
         </button>
       </div>
@@ -99,8 +117,11 @@ export default function ContratosPage() {
         </div>
       ) : (
         <div className="card shadow-sm">
-          <div className="card-body">
-            <div className="mb-3">
+          <div className="card-body border-bottom">
+            <div className="input-group gt-search">
+              <span className="input-group-text">
+                <i className="bi bi-search"></i>
+              </span>
               <input
                 type="text"
                 className="form-control"
@@ -112,8 +133,8 @@ export default function ContratosPage() {
             </div>
           </div>
           <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead className="table-light">
+            <table className="table gt-table align-middle mb-0">
+              <thead>
                 <tr>
                   <th>Orden N°</th>
                   <th>Presupuesto</th>
@@ -132,7 +153,7 @@ export default function ContratosPage() {
                     </td>
                   </tr>
                 ) : (
-                  contratosFiltrados.map((c) => (
+                  contratosPaginados.map((c) => (
                     <tr key={c.orden_id}>
                       <td className="fw-semibold">{c.orden_id}</td>
                       <td className="text-uppercase text-muted">
@@ -147,11 +168,11 @@ export default function ContratosPage() {
                       <td className="text-center">
                         <button
                           type="button"
-                          className="btn btn-sm btn-outline-primary"
+                          className="btn-action btn-action--wide btn-action--ver mx-auto"
                           onClick={() => verContrato(c.orden_id)}
                           title="Ver contrato"
                         >
-                          <i className="bi bi-file-earmark-text me-1"></i>
+                          <FileText size={16} strokeWidth={1.75} aria-hidden />
                           Ver
                         </button>
                       </td>
@@ -161,6 +182,35 @@ export default function ContratosPage() {
               </tbody>
             </table>
           </div>
+          {pageCount > 1 && (
+            <div className="d-flex flex-column align-items-center gap-1 px-3 py-2">
+              <ReactPaginate
+                previousLabel={"←"}
+                nextLabel={"→"}
+                breakLabel={"..."}
+                pageCount={pageCount}
+                pageRangeDisplayed={3}
+                marginPagesDisplayed={1}
+                onPageChange={({ selected }) => setPaginaActual(selected)}
+                containerClassName={"pagination"}
+                pageClassName={"page-item"}
+                pageLinkClassName={"page-link"}
+                previousClassName={"page-item"}
+                previousLinkClassName={"page-link"}
+                nextClassName={"page-item"}
+                nextLinkClassName={"page-link"}
+                breakClassName={"page-item"}
+                breakLinkClassName={"page-link"}
+                activeClassName={"active"}
+                forcePage={Math.min(paginaActual, pageCount - 1)}
+              />
+              <span className="text-muted small text-center">
+                Mostrando {offset + 1}–
+                {Math.min(offset + CONTRATOS_POR_PAGINA, contratosFiltrados.length)} de{" "}
+                {contratosFiltrados.length} contratos
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

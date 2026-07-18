@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import ReactPaginate from "react-paginate";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +26,8 @@ export default function EventoPage() {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [paginaActual, setPaginaActual] = useState(0);
+  const EVENTOS_POR_PAGINA = 18;
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -42,7 +46,6 @@ export default function EventoPage() {
 
   useEffect(() => {
     if (token) {
-      console.log("Token disponible, obteniendo eventos...");
       fetchEventos();
     }
   }, [token]);
@@ -62,7 +65,6 @@ export default function EventoPage() {
       }
 
       const data = await res.json();
-      console.log("Datos recibidos del servidor:", data);
 
       // Asegurarse de que cada cliente tenga un ID único
       const eventosConId = data.map((evento: Evento, index: number) => {
@@ -141,7 +143,6 @@ export default function EventoPage() {
     };
 
     try {
-      console.log("Enviando datos:", datosFormateados);
 
       const res = await fetch(url, {
         method: metodo,
@@ -185,15 +186,26 @@ export default function EventoPage() {
   const eventosFiltrados = evento.filter((evento) =>
     `${evento.nombre} `.toLowerCase().includes(busqueda.toLowerCase())
   );
+  const pageCount = Math.ceil(eventosFiltrados.length / EVENTOS_POR_PAGINA);
+  const offsetPagina =
+    Math.min(paginaActual, Math.max(0, pageCount - 1)) * EVENTOS_POR_PAGINA;
+  const eventosPaginados = eventosFiltrados.slice(
+    offsetPagina,
+    offsetPagina + EVENTOS_POR_PAGINA
+  );
+
+  useEffect(() => {
+    setPaginaActual(0);
+  }, [busqueda]);
 
   return (
-    <div className="container-fluid px-4 py-3">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
-          <h1 className="fw-bold mb-1">Eventos</h1>
+          <h1 className="page-title mb-1">Eventos</h1>
           <p className="text-muted mb-0">Gestión de eventos de Guapo Trajes.</p>
         </div>
-        <button className="btn btn-primary d-flex align-items-center gap-2" onClick={nuevoEvento}>
+        <button className="btn btn-oxblood d-flex align-items-center gap-2" onClick={nuevoEvento}>
           <i className="bi bi-plus-lg"></i>
           Nuevo Evento
         </button>
@@ -201,7 +213,7 @@ export default function EventoPage() {
 
       <div className="row g-3 align-items-center mb-4">
         <div className="col-12 col-md-6 col-lg-4">
-          <div className="input-group">
+          <div className="input-group gt-search">
             <span className="input-group-text">
               <i className="bi bi-search"></i>
             </span>
@@ -217,15 +229,15 @@ export default function EventoPage() {
       {/* Tabla */}
       {cargando ? (
         <div className="d-flex justify-content-center my-5">
-          <div className="spinner-border text-primary" role="status">
+          <div className="spinner-border text-oxblood" role="status">
             <span className="visually-hidden">Cargando...</span>
           </div>
         </div>
       ) : (
-        <div className="card shadow-sm">
+        <div className="card shadow-sm border-line">
           <div className="table-responsive">
-            <table className="table table-striped table-hover align-middle mb-0">
-              <thead className="table-light">
+            <table className="table gt-table align-middle mb-0">
+              <thead>
                 <tr>
                   <th>Nombre</th>
                   <th className="text-center">Acciones</th>
@@ -233,25 +245,25 @@ export default function EventoPage() {
               </thead>
               <tbody>
                 {eventosFiltrados.length > 0 ? (
-                  eventosFiltrados.map((evento, index) => (
+                  eventosPaginados.map((evento, index) => (
                     // Usar una combinación del índice y el ID para garantizar unicidad
                     <tr key={evento.id || `lavanderia-${index}`}>
                       <td className="fw-medium">{evento.nombre}</td>
                       <td className="text-center">
                         <div className="d-flex justify-content-center gap-2">
                           <button
-                            className="btn btn-sm btn-outline-primary"
+                            className="btn-action btn-action--editar"
                             onClick={() => editarEvento(evento)}
                             title="Editar"
                           >
-                            <i className="bi bi-pencil"></i>
+                            <Pencil size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                           <button
-                            className="btn btn-sm btn-outline-danger"
+                            className="btn-action btn-action--borrar"
                             onClick={() => confirmarEliminar(evento)}
                             title="Eliminar"
                           >
-                            <i className="bi bi-trash"></i>
+                            <Trash2 size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                         </div>
                       </td>
@@ -267,6 +279,35 @@ export default function EventoPage() {
               </tbody>
             </table>
           </div>
+          {pageCount > 1 && (
+            <div className="d-flex flex-column align-items-center gap-1 px-3 py-2 border-top">
+              <ReactPaginate
+                previousLabel="←"
+                nextLabel="→"
+                breakLabel="..."
+                pageCount={pageCount}
+                pageRangeDisplayed={3}
+                marginPagesDisplayed={1}
+                onPageChange={({ selected }) => setPaginaActual(selected)}
+                containerClassName="pagination"
+                pageClassName="page-item"
+                pageLinkClassName="page-link"
+                previousClassName="page-item"
+                previousLinkClassName="page-link"
+                nextClassName="page-item"
+                nextLinkClassName="page-link"
+                breakClassName="page-item"
+                breakLinkClassName="page-link"
+                activeClassName="active"
+                forcePage={Math.min(paginaActual, Math.max(0, pageCount - 1))}
+              />
+              <span className="text-muted small text-center">
+                Mostrando {offsetPagina + 1}–
+                {Math.min(offsetPagina + EVENTOS_POR_PAGINA, eventosFiltrados.length)} de{" "}
+                {eventosFiltrados.length} eventos
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -309,7 +350,7 @@ export default function EventoPage() {
             >
               Cancelar
             </button>
-            <button className="btn btn-primary" onClick={guardarEvento}>
+            <button className="btn btn-oxblood" onClick={guardarEvento}>
               Guardar
             </button>
           </DialogFooter>

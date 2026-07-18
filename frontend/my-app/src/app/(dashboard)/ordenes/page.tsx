@@ -2,6 +2,8 @@
 
 import type React from "react";
 import { useState, useEffect, useRef, Suspense } from "react";
+import ReactPaginate from "react-paginate";
+import { Printer, FileText, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -97,9 +99,18 @@ type OrdenTrabajo = {
   cliente_id?: number | null;
 };
 
+const ESTADOS_FILTRO = [
+  { value: "en proceso", label: "En proceso" },
+  { value: "pagada", label: "Pagada" },
+  { value: "completada", label: "Completada" },
+  { value: "entregada", label: "Entregada" },
+  { value: "cancelada", label: "Cancelada" },
+] as const;
+
 function OrdenesTrabajoContent() {
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
   const [busqueda, setBusqueda] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState("");
   const [ordenSeleccionada, setOrdenSeleccionada] =
     useState<OrdenTrabajo | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -151,7 +162,7 @@ function OrdenesTrabajoContent() {
   const [modistaNotasDraft, setModistaNotasDraft] = useState("");
   const [guardandoModista, setGuardandoModista] = useState(false);
 
-  const ORDENES_POR_PAGINA = 20;
+  const ORDENES_POR_PAGINA = 18;
   const verContratoAbiertoRef = useRef<number | null>(null);
 
   const { me } = useAuth();
@@ -175,16 +186,16 @@ function OrdenesTrabajoContent() {
   const getEstadoClass = (estado: string) => {
     switch (estado.toLowerCase()) {
       case "en proceso":
-        return "bg-primary";
+        return "bg-warning";
       case "completada":
-        return "bg-success";
+        return "bg-steel";
       case "cancelada":
         return "bg-danger";
       case "entregada":
         return "bg-info";
       case "pagada":
       case "pagado": // legado (algunos pagos viejos guardaban "Pagado")
-        return "bg-warning";
+        return "bg-success";
       default:
         return "bg-secondary";
     }
@@ -236,7 +247,7 @@ function OrdenesTrabajoContent() {
 
   useEffect(() => {
     setPaginaActual(1);
-  }, [busqueda]);
+  }, [busqueda, filtroEstado]);
 
   useEffect(() => {
     if (!showPagoModal || ordenSeleccionada?.cliente_id == null) {
@@ -1502,6 +1513,14 @@ function OrdenesTrabajoContent() {
   };
 
   const ordenesFiltradas = ordenes.filter((orden) => {
+    if (filtroEstado) {
+      const e = (orden.estado || "").toLowerCase().trim();
+      if (filtroEstado === "pagada") {
+        if (e !== "pagada" && e !== "pagado") return false;
+      } else if (e !== filtroEstado) {
+        return false;
+      }
+    }
     if (!busqueda.trim()) return true;
     const filtro = busqueda.trim().toLowerCase();
     const nombreCliente = (orden.cliente_nombre || "").toLowerCase();
@@ -1523,16 +1542,16 @@ function OrdenesTrabajoContent() {
   }, [totalPaginas, paginaActual]);
 
   return (
-    <div className="container-fluid px-4 py-3">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
+    <div className="container-fluid px-2 px-sm-3 px-md-4 py-3">
+      <div className="gt-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
         <div>
-          <h1 className="fw-bold mb-1">Órdenes de Trabajo</h1>
+          <h1 className="page-title mb-1">Órdenes de Trabajo</h1>
           <p className="text-muted mb-0">
             Gestión y seguimiento de órdenes de trabajo de Guapo Trajes.
           </p>
         </div>
         <button
-          className="btn btn-primary d-flex align-items-center gap-2"
+          className="btn btn-outline-ink d-flex align-items-center gap-2"
           type="button"
           onClick={fetchOrdenes}
         >
@@ -1542,8 +1561,8 @@ function OrdenesTrabajoContent() {
       </div>
 
       <div className="row g-3 align-items-center mb-4">
-        <div className="col-12 col-md-8 col-lg-6">
-          <div className="input-group">
+        <div className="col-12 col-md-6 col-lg-5">
+          <div className="input-group gt-search">
             <span className="input-group-text">
               <i className="bi bi-search"></i>
             </span>
@@ -1556,6 +1575,21 @@ function OrdenesTrabajoContent() {
             />
           </div>
         </div>
+        <div className="col-12 col-sm-6 col-md-4 col-lg-3">
+          <select
+            className="form-select gt-select"
+            value={filtroEstado}
+            onChange={(e) => setFiltroEstado(e.target.value)}
+            aria-label="Filtrar por estado"
+          >
+            <option value="">Todos los estados</option>
+            {ESTADOS_FILTRO.map((op) => (
+              <option key={op.value} value={op.value}>
+                {op.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       {/* Tabla */}
       {cargando ? (
@@ -1567,8 +1601,8 @@ function OrdenesTrabajoContent() {
       ) : (
         <div className="card shadow-sm">
           <div className="table-responsive">
-            <table className="table table-striped table-hover align-middle mb-0">
-              <thead className="table-light">
+            <table className="table gt-table align-middle mb-0">
+              <thead>
                 <tr>
                   <th className="text-nowrap">Orden N°</th>
                   <th className="text-nowrap">Presupuesto</th>
@@ -1610,7 +1644,7 @@ function OrdenesTrabajoContent() {
                       <td>
                         <div className="d-flex justify-content-center gap-2 flex-wrap">
                           <button
-                            className="btn btn-sm btn-outline-primary"
+                            className="btn-action btn-action--wide btn-action--ver"
                             onClick={async () => {
                               try {
                                 // Obtener los datos completos de la orden desde el backend
@@ -1652,7 +1686,7 @@ function OrdenesTrabajoContent() {
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-success"
+                            className="btn-action btn-action--wide btn-action--credito"
                             disabled={orden.saldo_pendiente <= 0}
                             title={
                               orden.saldo_pendiente <= 0
@@ -1670,11 +1704,7 @@ function OrdenesTrabajoContent() {
                           </button>
                           <button
                             type="button"
-                            className={`btn btn-sm ${
-                              orden.etiquetas_armado_impresas_at
-                                ? "btn-secondary"
-                                : "btn-outline-primary"
-                            }`}
+                            className={`btn-action ${orden.etiquetas_armado_impresas_at ? "btn-action--loden-solid" : "btn-action--ver"}`}
                             onClick={() => void abrirModalEtiquetasArmado(orden)}
                             disabled={!!orden.etiquetas_armado_impresas_at}
                             title={
@@ -1683,10 +1713,10 @@ function OrdenesTrabajoContent() {
                                 : "Imprimir etiquetas 100×50 para armar"
                             }
                           >
-                            <i className="bi bi-printer"></i>
+                            <Printer size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                           <button
-                            className={`btn btn-sm ${orden.contrato_generado_at ? "btn-success" : "btn-outline-secondary"}`}
+                            className={`btn-action ${orden.contrato_generado_at ? "btn-action--loden-solid" : "btn-action--ver"}`}
                             onClick={() => generarContratoDesdeFila(orden)}
                             title={
                               orden.contrato_generado_at
@@ -1696,15 +1726,15 @@ function OrdenesTrabajoContent() {
                                   : "Generar contrato (solo cliente con saldo cero)"
                             }
                           >
-                            <i className="bi bi-file-earmark-text"></i>
+                            <FileText size={16} strokeWidth={1.75} aria-hidden />
                           </button>
                           <RoleGate allow={["ADMIN"]}>
                             <button
-                              className="btn btn-sm btn-outline-danger"
+                              className="btn-action btn-action--borrar"
                               onClick={() => eliminarOrden(orden)}
                               title="Eliminar orden"
                             >
-                              <i className="bi bi-trash"></i>
+                              <Trash2 size={16} strokeWidth={1.75} aria-hidden />
                             </button>
                           </RoleGate>
                         </div>
@@ -1722,31 +1752,30 @@ function OrdenesTrabajoContent() {
             </table>
           </div>
           {ordenesFiltradas.length > ORDENES_POR_PAGINA && (
-            <div className="card-footer d-flex flex-wrap align-items-center justify-content-between gap-2 py-3">
-              <span className="text-muted small">
+            <div className="d-flex flex-column align-items-center gap-1 px-3 py-2">
+              <ReactPaginate
+                previousLabel={"←"}
+                nextLabel={"→"}
+                breakLabel={"..."}
+                pageCount={totalPaginas}
+                pageRangeDisplayed={3}
+                marginPagesDisplayed={1}
+                onPageChange={({ selected }) => setPaginaActual(selected + 1)}
+                containerClassName={"pagination"}
+                pageClassName={"page-item"}
+                pageLinkClassName={"page-link"}
+                previousClassName={"page-item"}
+                previousLinkClassName={"page-link"}
+                nextClassName={"page-item"}
+                nextLinkClassName={"page-link"}
+                breakClassName={"page-item"}
+                breakLinkClassName={"page-link"}
+                activeClassName={"active"}
+                forcePage={paginaSegura - 1}
+              />
+              <span className="text-muted small text-center">
                 Mostrando {indiceInicio + 1}–{Math.min(indiceInicio + ORDENES_POR_PAGINA, ordenesFiltradas.length)} de {ordenesFiltradas.length} órdenes
               </span>
-              <div className="d-flex align-items-center gap-2">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-secondary"
-                  onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
-                  disabled={paginaSegura <= 1}
-                >
-                  Anterior
-                </button>
-                <span className="small text-muted">
-                  Página {paginaSegura} de {totalPaginas}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-secondary"
-                  onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
-                  disabled={paginaSegura >= totalPaginas}
-                >
-                  Siguiente
-                </button>
-              </div>
             </div>
           )}
         </div>
