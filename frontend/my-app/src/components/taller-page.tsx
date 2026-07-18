@@ -31,6 +31,7 @@ type TallerEntity = {
 
 type ProductoEnTaller = {
   id: number
+  ingreso_id?: number
   codigo_barra: string
   descripcion: string
   precio_alquiler_efectivo: number
@@ -198,7 +199,15 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
         }
         const data = (json.data || []) as ProductoEnTaller[]
         if (!cancelled) {
-          setProductosEnTaller(Array.isArray(data) ? data : [])
+          // Una fila por producto (evita checkboxes sincronizados si hay ingresos duplicados).
+          const porId = new Map<number, ProductoEnTaller>()
+          for (const p of Array.isArray(data) ? data : []) {
+            const prev = porId.get(p.id)
+            if (!prev || (p.ingreso_id ?? 0) >= (prev.ingreso_id ?? 0)) {
+              porId.set(p.id, p)
+            }
+          }
+          setProductosEnTaller(Array.from(porId.values()))
           setVolvioPorId({})
           setColaVisualEtiquetas([])
         }
@@ -246,7 +255,8 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
   }
 
   const handleRegistrarSalonMarcados = async () => {
-    const ids = productosMarcadosVolvieron.map((p) => p.id)
+    // IDs únicos: si por algún motivo hay filas duplicadas, no mandamos el mismo id dos veces.
+    const ids = Array.from(new Set(productosMarcadosVolvieron.map((p) => p.id)))
     if (ids.length === 0) {
       toast.error("Marcá al menos una prenda que haya vuelto")
       return
@@ -271,7 +281,14 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
       const errList = json.data?.errores as { producto_id: number; detail: string }[] | undefined
       const regresados = (json.data?.regresados as number[] | undefined) ?? []
       if (errList?.length) {
-        toast.warning(`${json.message || "Listo"} (${errList.length} con aviso)`)
+        const detalle = errList
+          .map((e) => e.detail)
+          .filter(Boolean)
+          .slice(0, 3)
+          .join(" · ")
+        toast.warning(
+          `${json.message || "Listo"}${detalle ? ` — ${detalle}` : ""}`
+        )
       } else {
         toast.success(json.message || "Prendas registradas en salón")
       }
@@ -783,7 +800,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                   {productosEnTaller.map((p) => {
                     const notas = (p.notas || "").trim()
                     return (
-                      <tr key={p.id}>
+                      <tr key={p.ingreso_id ?? p.id}>
                         <td className="text-center">
                           <input
                             type="checkbox"

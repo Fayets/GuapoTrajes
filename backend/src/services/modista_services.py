@@ -114,26 +114,25 @@ class ModistaServices:
             if not producto:
                 raise HTTPException(status_code=404, detail="Producto no encontrado")
 
-            producto_modista = models.ProductoModista.get(
-                producto=producto,
-                fecha_salida=None,
-            )
-
-            if not producto_modista:
+            abiertos = self._ingresos_abiertos_producto(producto)
+            if not abiertos:
                 raise HTTPException(
                     status_code=400,
                     detail="El producto no está en modista o ya fue regresado",
                 )
 
-            producto_modista.fecha_salida = hoy_ar()
+            hoy = hoy_ar()
+            for pm in abiertos:
+                pm.fecha_salida = hoy
             producto.estado = models.EstadoProducto.SALON
             producto.inmovilizado = False
 
+            principal = max(abiertos, key=lambda x: x.id or 0)
             est = producto.estado
             est_str = est.value if hasattr(est, "value") else str(est)
             return schemas.RegresoProductoModistaResponse(
-                fecha_ingreso=producto_modista.fecha_ingreso,
-                fecha_salida=producto_modista.fecha_salida,
+                fecha_ingreso=principal.fecha_ingreso,
+                fecha_salida=principal.fecha_salida,
                 estado=est_str,
             )
 
@@ -144,6 +143,7 @@ class ModistaServices:
         est_val = est.value if hasattr(est, "value") else str(est)
         return {
             "id": producto.id,
+            "ingreso_id": pm.id,
             "codigo_barra": producto.codigo_barra or "",
             "descripcion": format_descripcion_producto(
                 producto.descripcion, producto.descripcion_extra
@@ -162,6 +162,10 @@ class ModistaServices:
             "cliente_celular": (pm.cliente_celular or "") or "",
         }
 
+    @staticmethod
+    def _ingresos_abiertos_producto(producto) -> list:
+        return [pm for pm in list(producto.productos_modistas) if pm.fecha_salida is None]
+
     def get_productos_modista(self, modista_id: Optional[int] = None):
         """Productos con ingreso activo a modista. Opcional: filtrar por modista."""
         with db_session:
@@ -176,21 +180,24 @@ class ModistaServices:
             if modista_id is not None:
                 candidatos = [pm for pm in candidatos if pm.modista.id == modista_id]
 
-            resultado = []
+            por_producto: dict = {}
             for pm in candidatos:
                 if pm.producto.estado != models.EstadoProducto.MODISTA:
                     continue
-                resultado.append(self._producto_en_modista_dict(pm))
+                prev = por_producto.get(pm.producto.id)
+                if prev is None or (pm.id or 0) > (prev.id or 0):
+                    por_producto[pm.producto.id] = pm
 
-            return resultado
+            return [self._producto_en_modista_dict(pm) for pm in por_producto.values()]
 
     def regresar_varios_de_modista(self, productos_ids: List[int]) -> dict:
         """Marca salida de modista y estado SALON para cada producto válido."""
         regresados: List[int] = []
         errores: List[dict] = []
         hoy = hoy_ar()
+        ids_unicos = list(dict.fromkeys(productos_ids))
         with db_session:
-            for pid in productos_ids:
+            for pid in ids_unicos:
                 try:
                     producto = models.Producto.get(id=pid)
                     if not producto:
@@ -198,8 +205,8 @@ class ModistaServices:
                             {"producto_id": pid, "detail": "Producto no encontrado"}
                         )
                         continue
-                    pm = models.ProductoModista.get(producto=producto, fecha_salida=None)
-                    if not pm:
+                    abiertos = self._ingresos_abiertos_producto(producto)
+                    if not abiertos:
                         errores.append(
                             {
                                 "producto_id": pid,
@@ -207,7 +214,8 @@ class ModistaServices:
                             }
                         )
                         continue
-                    pm.fecha_salida = hoy
+                    for pm in abiertos:
+                        pm.fecha_salida = hoy
                     producto.estado = models.EstadoProducto.SALON
                     producto.inmovilizado = False
                     regresados.append(pid)

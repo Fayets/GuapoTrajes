@@ -105,38 +105,6 @@ class LavanderiaServices:
         
 
 
-    def regresar_producto_de_lavanderia(self, producto_id: int):
-        with db_session:
-            # Verificamos si el producto existe
-            producto = models.Producto.get(id=producto_id)
-
-            if not producto:
-                raise HTTPException(status_code=404, detail="Producto no encontrado")
-
-            # Verificamos si el producto está en lavandería
-            producto_lavanderia = models.ProductoLavanderia.get(
-                producto=producto,
-                fecha_salida=None
-            )
-
-            if not producto_lavanderia:
-                raise HTTPException(status_code=400, detail="El producto no está en lavandería o ya fue regresado")
-
-            # Actualizamos la fecha de salida
-            producto_lavanderia.fecha_salida = hoy_ar()
-
-            # Cambiamos el estado del producto a SALON (o el estado que corresponda)
-            producto.estado = models.EstadoProducto.SALON
-            # Cambiamos inmovilizado a False
-            producto.inmovilizado = False
-
-            # Devuelve el formato esperado por el esquema
-            return schemas.RegresoProductoLavanderiaResponse(
-                fecha_ingreso=producto_lavanderia.fecha_ingreso,
-                fecha_salida=producto_lavanderia.fecha_salida,
-                estado=producto.estado
-            )
-
     def _producto_en_lavanderia_dict(self, pl) -> dict:
         producto = pl.producto
         lav = pl.lavanderia
@@ -144,6 +112,7 @@ class LavanderiaServices:
         est_val = est.value if hasattr(est, "value") else str(est)
         return {
             "id": producto.id,
+            "ingreso_id": pl.id,
             "codigo_barra": producto.codigo_barra or "",
             "descripcion": format_descripcion_producto(
                 producto.descripcion, producto.descripcion_extra
@@ -162,6 +131,11 @@ class LavanderiaServices:
             "cliente_celular": (pl.cliente_celular or "") or "",
         }
 
+    @staticmethod
+    def _ingresos_abiertos_producto(producto) -> list:
+        """Todos los ProductoLavanderia abiertos del producto (sin .get(), que falla si hay duplicados)."""
+        return [pl for pl in list(producto.productos_lavanderias) if pl.fecha_salida is None]
+
     def get_productos_lavanderia(self, lavanderia_id: Optional[int] = None):
         """Productos con ingreso activo a lavandería (fecha_salida nula). Opcional: filtrar por lavandería."""
         with db_session:
@@ -176,29 +150,66 @@ class LavanderiaServices:
             if lavanderia_id is not None:
                 candidatos = [pl for pl in candidatos if pl.lavanderia.id == lavanderia_id]
 
-            resultado = []
+            # Un producto físico = una fila. Si hay ingresos abiertos duplicados (bug histórico),
+            # nos quedamos con el más reciente y al regresar se cierran todos.
+            por_producto: dict = {}
             for pl in candidatos:
                 producto = pl.producto
                 if producto.estado != models.EstadoProducto.LAVANDERIA:
                     continue
-                resultado.append(self._producto_en_lavanderia_dict(pl))
+                prev = por_producto.get(producto.id)
+                if prev is None or (pl.id or 0) > (prev.id or 0):
+                    por_producto[producto.id] = pl
 
-            return resultado
+            return [self._producto_en_lavanderia_dict(pl) for pl in por_producto.values()]
+
+    def regresar_producto_de_lavanderia(self, producto_id: int):
+        with db_session:
+            producto = models.Producto.get(id=producto_id)
+
+            if not producto:
+                raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+            abiertos = self._ingresos_abiertos_producto(producto)
+            if not abiertos:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El producto no está en lavandería o ya fue regresado",
+                )
+
+            hoy = hoy_ar()
+            for pl in abiertos:
+                pl.fecha_salida = hoy
+
+            producto.estado = models.EstadoProducto.SALON
+            producto.inmovilizado = False
+
+            principal = max(abiertos, key=lambda x: x.id or 0)
+            return schemas.RegresoProductoLavanderiaResponse(
+                fecha_ingreso=principal.fecha_ingreso,
+                fecha_salida=principal.fecha_salida,
+                estado=producto.estado,
+            )
 
     def regresar_varios_de_lavanderia(self, productos_ids: List[int]) -> dict:
-        """Marca salida de lavandería y estado SALON para cada producto válido."""
+        """Marca salida de lavandería y estado SALON para cada producto válido.
+
+        Tolera ingresos abiertos duplicados del mismo producto (cierra todos).
+        Deduplica IDs en el pedido para no reportar el mismo aviso dos veces.
+        """
         regresados: List[int] = []
         errores: List[dict] = []
         hoy = hoy_ar()
+        ids_unicos = list(dict.fromkeys(productos_ids))
         with db_session:
-            for pid in productos_ids:
+            for pid in ids_unicos:
                 try:
                     producto = models.Producto.get(id=pid)
                     if not producto:
                         errores.append({"producto_id": pid, "detail": "Producto no encontrado"})
                         continue
-                    pl = models.ProductoLavanderia.get(producto=producto, fecha_salida=None)
-                    if not pl:
+                    abiertos = self._ingresos_abiertos_producto(producto)
+                    if not abiertos:
                         errores.append(
                             {
                                 "producto_id": pid,
@@ -206,7 +217,8 @@ class LavanderiaServices:
                             }
                         )
                         continue
-                    pl.fecha_salida = hoy
+                    for pl in abiertos:
+                        pl.fecha_salida = hoy
                     producto.estado = models.EstadoProducto.SALON
                     producto.inmovilizado = False
                     regresados.append(pid)

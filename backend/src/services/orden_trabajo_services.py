@@ -1522,8 +1522,21 @@ class OrdenTrabajoServices:
             prod.estado = estado_enum
             prod.inmovilizado = False
             if destino == "LAVANDERIA" and lavanderia:
+                # Cerrar ingresos abiertos previos para no duplicar filas en bolsa.
+                for pl in list(prod.productos_lavanderias):
+                    if pl.fecha_salida is None:
+                        pl.fecha_salida = hoy
+                for pm in list(prod.productos_modistas):
+                    if pm.fecha_salida is None:
+                        pm.fecha_salida = hoy
                 ProductoLavanderia(producto=prod, lavanderia=lavanderia, fecha_ingreso=hoy, notas=notas, cliente_nombre=cli_nombre, cliente_celular=cli_celular)
             elif destino == "MODISTA" and modista:
+                for pl in list(prod.productos_lavanderias):
+                    if pl.fecha_salida is None:
+                        pl.fecha_salida = hoy
+                for pm in list(prod.productos_modistas):
+                    if pm.fecha_salida is None:
+                        pm.fecha_salida = hoy
                 ProductoModista(producto=prod, modista=modista, fecha_ingreso=hoy, notas=notas, cliente_nombre=cli_nombre, cliente_celular=cli_celular)
 
     def completar_devolucion(
