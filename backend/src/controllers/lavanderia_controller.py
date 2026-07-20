@@ -94,6 +94,7 @@ def asignar_producto_a_lavanderia(
             notas=body.notas,
             cliente_nombre=body.cliente_nombre,
             cliente_celular=body.cliente_celular,
+            usuario_id=current_user.id,
         )
     except HTTPException as e:
         return {"message": e.detail, "success": False, "data": None}
@@ -111,7 +112,7 @@ def asignar_producto_a_lavanderia(
 @router.post("/regresar-producto/{producto_id}", response_model=schemas.RegresoProductoLavanderiaResponse)
 def regresar_producto_lavanderia(producto_id: int, current_user=Depends(get_current_user)):
     try:
-        return servicio.regresar_producto_de_lavanderia(producto_id)
+        return servicio.regresar_producto_de_lavanderia(producto_id, usuario_id=current_user.id)
     except HTTPException as e:
         return {"message": e.detail, "success": False, "data": None}
     except Exception as e:
@@ -150,7 +151,7 @@ def regresar_varios_lavanderia(
 ):
     """Varios productos vuelven al salón (cierra ingreso en lavandería)."""
     try:
-        return servicio.regresar_varios_de_lavanderia(body.productos_ids)
+        return servicio.regresar_varios_de_lavanderia(body.productos_ids, usuario_id=current_user.id)
     except HTTPException as e:
         raise e
     except Exception as e:

@@ -406,7 +406,11 @@ class LavanderiaResponse(BaseModel):
 class RegresoProductoLavanderiaResponse(BaseModel):
     fecha_ingreso: Optional[date] = None 
     fecha_salida: Optional[date] = None
-    estado: Optional[str] = None  
+    estado: Optional[str] = None
+    requiere_cuidado_especial: bool = False
+    mensaje_revision: Optional[str] = None
+    orden_id: Optional[int] = None
+    producto_id: Optional[int] = None
 
 
 class RegresarVariosLavanderiaBody(BaseModel):
@@ -444,6 +448,10 @@ class RegresoProductoModistaResponse(BaseModel):
     fecha_ingreso: Optional[date] = None
     fecha_salida: Optional[date] = None
     estado: Optional[str] = None
+    requiere_cuidado_especial: bool = False
+    mensaje_revision: Optional[str] = None
+    orden_id: Optional[int] = None
+    producto_id: Optional[int] = None
 
 
 # --- PRESUPUESTOS ---
@@ -539,6 +547,11 @@ class PresupuestoResponse(BaseModel):
     extra_discount_applied_by_nombre: Optional[str] = None
     extra_discount_created_at: Optional[str] = None
     orden_id: Optional[int] = None
+    creado_por_id: Optional[int] = None
+    creado_por_nombre: Optional[str] = None
+    actualizado_por_id: Optional[int] = None
+    actualizado_por_nombre: Optional[str] = None
+    actualizado_at: Optional[str] = None
 
 
 class ConjuntoMismaFechaCategoriaOut(BaseModel):
@@ -578,6 +591,11 @@ class ProductoReservadoModistaUpdateSchema(BaseModel):
             return None
         s = str(v).strip()
         return s or None
+
+
+class EnviarModistaDesdeOrdenSchema(BaseModel):
+    modista_id: int = Field(..., description="ID de la modista destino")
+
 
 class OrdenTrabajoCreateSchema(BaseModel):
     presupuesto_id: int
@@ -635,6 +653,28 @@ class OrdenTrabajoResponseSchema(BaseModel):
     message: str
     success: bool
     data: dict
+
+
+class FirmanteContratoSchema(BaseModel):
+    """Datos del firmante anexado (quien retira / responde). No crea Cliente."""
+
+    nombre: str = Field(..., min_length=1, description="Nombre completo del firmante")
+    dni: str = Field(..., min_length=1, description="DNI del firmante")
+    direccion: str = Field(..., min_length=1, description="Domicilio del firmante")
+    celular: Optional[str] = Field(None, description="Celular del firmante (pagaré)")
+
+
+class RegistrarContratoSchema(BaseModel):
+    """Body opcional al registrar/reimprimir contrato."""
+
+    firmante: Optional[FirmanteContratoSchema] = Field(
+        None,
+        description=(
+            "Si se envía, el LOCATARIO/pagaré usan estos datos. "
+            "Si es null/omitido, se usa el cliente titular de la orden."
+        ),
+    )
+
 
 class OrdenTrabajoCreateSchemaTest(BaseModel):
     """Schema de prueba para diagnosticar problemas"""
@@ -756,6 +796,18 @@ class DevolucionParcialSchema(BaseModel):
             }
         }
     )
+
+
+class ResolverRevisionDevolucionSchema(BaseModel):
+    revision_id: Optional[int] = Field(None, description="ID de RevisionDevolucion")
+    producto_id: Optional[int] = Field(None, description="ID de producto con revisión abierta")
+
+    @model_validator(mode="after")
+    def validar_id(self) -> "ResolverRevisionDevolucionSchema":
+        if self.revision_id is None and self.producto_id is None:
+            raise ValueError("Indique revision_id o producto_id")
+        return self
+
 
 class VentaDetalleCreate(BaseModel):
     producto_id: int

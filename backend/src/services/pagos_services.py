@@ -31,6 +31,7 @@ class PagosServices:
         referencia_orden: Optional[int] = None,
         metodo_pago_configurable=None,
         submetodo_pago=None,
+        usuario=None,
     ) -> CuentaCorriente:
         """
         Registra un movimiento y recalcula saldo_post en base al último movimiento.
@@ -63,6 +64,7 @@ class PagosServices:
             fecha=ahora_ar(),
             metodo_pago_configurable=metodo_pago_configurable,
             submetodo_pago=submetodo_pago,
+            usuario=usuario,
         )
 
     def registrar_credito_manual(self, data: CreditoManualRequest, usuario_id: int) -> dict:
@@ -143,6 +145,20 @@ class PagosServices:
                     None,
                     metodo_pago_configurable,
                     submetodo_pago,
+                    usuario=usuario,
+                )
+                from pony.orm import flush as pony_flush
+                pony_flush()
+
+                from src.services.auditoria_services import registrar_auditoria
+                from src.models import AccionAuditoria
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.COBRO,
+                    "cuenta_corriente",
+                    mov.id,
+                    f"Crédito manual ${monto:.2f} — cliente {cliente.id}",
+                    {"monto": monto, "en_caja": bool(data.registrar_en_caja)},
                 )
 
                 recibo = None
@@ -295,6 +311,7 @@ class PagosServices:
                         orden.id,
                         None,
                         None,
+                        usuario=usuario,
                     )
 
                 if monto_efectivo > 1e-9:
@@ -311,6 +328,17 @@ class PagosServices:
                         "cuenta_destino_id": cuenta_destino_id,
                     }
                     caja_service.create_movimiento(movimiento_caja_data, usuario_id)
+
+                from src.services.auditoria_services import registrar_auditoria
+                from src.models import AccionAuditoria
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.COBRO,
+                    "orden",
+                    orden.id,
+                    f"Pago adicional — orden #{orden.id}",
+                    {"monto_efectivo": monto_efectivo, "credito": credito_aplicado},
+                )
 
                 saldo_cc = self.saldo_actual_para_cliente_objeto(cliente) if cliente else 0.0
 

@@ -29,6 +29,7 @@ import {
 import { IconoPercha } from "@/components/icono-percha";
 import { ConfigImpresionEtiquetas } from "@/components/config-impresion-etiquetas";
 import type { ResultadoImpresionEtiqueta } from "@/lib/imprimir-etiqueta-routing";
+import { resolverLocatarioContrato } from "@/lib/contrato-locatario";
 
 interface AlquilerPorPrenda {
   producto_id: number;
@@ -1004,16 +1005,11 @@ export default function ReportesPage() {
 
       // Preparar datos para el contrato (igual que en la página de órdenes)
       const numeroContrato = contrato.numero.padStart(6, "0");
-      const clienteNombre =
-        ordenCompleta.cliente_nombre || contrato.cliente_nombre || "";
-      const clienteDNI =
-        ordenCompleta.cliente_dni ||
-        contrato.cliente_dni ||
-        "____________________";
-      const clienteDireccion =
-        ordenCompleta.cliente_direccion || "__________________________";
-      const clienteCelular =
-        ordenCompleta.cliente_celular || "___________________________";
+      const locatario = resolverLocatarioContrato(ordenCompleta);
+      const clienteNombre = locatario.nombre || contrato.cliente_nombre || "";
+      const clienteDNI = locatario.dni;
+      const clienteDireccion = locatario.direccion;
+      const clienteCelular = locatario.celular;
 
       const fechaEvento =
         ordenCompleta.fecha_evento || contrato.fecha_evento
@@ -1105,10 +1101,10 @@ export default function ReportesPage() {
 
       // Fechas del pagaré: en blanco para rellenar manualmente (evitar vencimiento y ejecución)
 
-      // Datos del firmante - deben quedar vacíos
-      const firmante = "";
-      const aclaracion = "";
-      const celular = "";
+      // Locatario del contrato = firmante del pagaré (titular o anexado)
+      const firmante = locatario.nombre;
+      const aclaracion = locatario.nombre;
+      const celular = locatario.celular || clienteCelular;
 
       // Generar HTML del contrato
       const contenidoContrato = `

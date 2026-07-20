@@ -1,4 +1,4 @@
-from pony.orm import db_session
+from pony.orm import db_session, flush
 from fastapi import HTTPException
 from typing import Optional
 import bcrypt
@@ -28,9 +28,12 @@ class UsuariosServices:
                     rol=usuario.role,
                     sucursal=sucursal  # Asignamos la instancia de Sucursal
                 )
+                flush()  # asegura id antes de serializar la respuesta
                 return usuario_db
             except TransactionIntegrityError:
                 raise HTTPException(status_code=400, detail="El usuario o email ya existen")
+            except HTTPException:
+                raise
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Error al crear el usuario: {str(e)}")
 
@@ -85,6 +88,12 @@ class UsuariosServices:
             if not usuario:
                 raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+            if usuario.rol == models.Roles.SUPER_ADMIN:
+                raise HTTPException(
+                    status_code=403,
+                    detail="No se puede modificar un usuario SUPER_ADMIN",
+                )
+
             # Actualizar campos si se proporcionan
             if usuario_update.username is not None:
                 # Verificar que el username no esté en uso por otro usuario
@@ -111,7 +120,18 @@ class UsuariosServices:
                 usuario.password = hashed_password
 
             if usuario_update.role is not None:
-                usuario.rol = usuario_update.role
+                nuevo_rol = usuario_update.role
+                if isinstance(nuevo_rol, str):
+                    try:
+                        nuevo_rol = models.Roles(nuevo_rol)
+                    except ValueError:
+                        raise HTTPException(status_code=400, detail="Rol inválido")
+                if nuevo_rol not in (models.Roles.EMPLEADO, models.Roles.ADMIN):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Solo se pueden asignar roles EMPLEADO o ADMIN",
+                    )
+                usuario.rol = nuevo_rol
 
             if usuario_update.sucursal is not None:
                 sucursal = models.Sucursal.get(id=usuario_update.sucursal)

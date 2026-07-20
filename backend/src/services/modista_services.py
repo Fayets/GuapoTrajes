@@ -7,6 +7,11 @@ from src.services.productos_services import _producto_to_response_dict
 from typing import List, Optional
 
 from src.fechas_ar import hoy_ar
+from src.revision_devolucion import (
+    MENSAJE_CUIDADO_ESPECIAL,
+    cuidado_especial_desde_ingresos,
+    notas_indican_revision,
+)
 
 
 class ModistaServices:
@@ -62,6 +67,7 @@ class ModistaServices:
         notas: Optional[str] = None,
         cliente_nombre: Optional[str] = None,
         cliente_celular: Optional[str] = None,
+        usuario_id: Optional[int] = None,
     ) -> dict:
         with db_session:
             modista = models.Modista.get(id=modista_id)
@@ -83,6 +89,7 @@ class ModistaServices:
             notas_val = (notas or "").strip() or None
             cli_n = (cliente_nombre or "").strip() or None
             cli_c = (cliente_celular or "").strip() or None
+            usuario = models.Usuario.get(id=usuario_id) if usuario_id else None
 
             pm_kwargs = {
                 "producto": producto,
@@ -95,11 +102,24 @@ class ModistaServices:
                 pm_kwargs["cliente_nombre"] = cli_n
             if cli_c is not None:
                 pm_kwargs["cliente_celular"] = cli_c
+            if usuario is not None:
+                pm_kwargs["enviado_por"] = usuario
             models.ProductoModista(**pm_kwargs)
 
             producto.estado = models.EstadoProducto.MODISTA
             producto.inmovilizado = False
             flush()
+
+            from src.services.auditoria_services import registrar_auditoria
+            from src.models import AccionAuditoria
+            registrar_auditoria(
+                usuario,
+                AccionAuditoria.MODISTA_ENVIO,
+                "producto",
+                producto.id,
+                f"Producto {producto.codigo_barra} enviado a modista",
+                {"modista_id": modista.id},
+            )
 
             return {
                 "message": "Producto asignado a modista exitosamente",
@@ -107,7 +127,7 @@ class ModistaServices:
                 "data": _producto_to_response_dict(producto),
             }
 
-    def regresar_producto_de_modista(self, producto_id: int):
+    def regresar_producto_de_modista(self, producto_id: int, usuario_id: Optional[int] = None):
         with db_session:
             producto = models.Producto.get(id=producto_id)
 
@@ -122,18 +142,37 @@ class ModistaServices:
                 )
 
             hoy = hoy_ar()
+            usuario = models.Usuario.get(id=usuario_id) if usuario_id else None
             for pm in abiertos:
                 pm.fecha_salida = hoy
+                if usuario is not None:
+                    pm.recibido_por = usuario
             producto.estado = models.EstadoProducto.SALON
             producto.inmovilizado = False
+
+            from src.services.auditoria_services import registrar_auditoria
+            from src.models import AccionAuditoria
+            registrar_auditoria(
+                usuario,
+                AccionAuditoria.MODISTA_RECEPCION,
+                "producto",
+                producto.id,
+                f"Recepción desde modista — {producto.codigo_barra}",
+                None,
+            )
 
             principal = max(abiertos, key=lambda x: x.id or 0)
             est = producto.estado
             est_str = est.value if hasattr(est, "value") else str(est)
+            cuidado, orden_rev = cuidado_especial_desde_ingresos(producto, abiertos)
             return schemas.RegresoProductoModistaResponse(
                 fecha_ingreso=principal.fecha_ingreso,
                 fecha_salida=principal.fecha_salida,
                 estado=est_str,
+                requiere_cuidado_especial=cuidado,
+                mensaje_revision=MENSAJE_CUIDADO_ESPECIAL if cuidado else None,
+                orden_id=orden_rev,
+                producto_id=producto.id,
             )
 
     def _producto_en_modista_dict(self, pm) -> dict:
@@ -160,6 +199,20 @@ class ModistaServices:
             "notas": (pm.notas or "") or "",
             "cliente_nombre": (pm.cliente_nombre or "") or "",
             "cliente_celular": (pm.cliente_celular or "") or "",
+            "enviado_por_id": pm.enviado_por.id if getattr(pm, "enviado_por", None) else None,
+            "enviado_por_nombre": (
+                f"{pm.enviado_por.nombre} {pm.enviado_por.apellido}".strip()
+                if getattr(pm, "enviado_por", None)
+                else None
+            ),
+            "recibido_por_id": pm.recibido_por.id if getattr(pm, "recibido_por", None) else None,
+            "recibido_por_nombre": (
+                f"{pm.recibido_por.nombre} {pm.recibido_por.apellido}".strip()
+                if getattr(pm, "recibido_por", None)
+                else None
+            ),
+            "requiere_cuidado_especial": notas_indican_revision(pm.notas)
+            or cuidado_especial_desde_ingresos(pm.producto, [pm])[0],
         }
 
     @staticmethod
@@ -174,9 +227,9 @@ class ModistaServices:
                 if not mod:
                     raise HTTPException(status_code=404, detail="Modista no encontrada")
 
-            candidatos = list(
-                models.ProductoModista.select(lambda pm: pm.fecha_salida is None)
-            )
+            candidatos = [
+                pm for pm in list(models.ProductoModista.select()) if pm.fecha_salida is None
+            ]
             if modista_id is not None:
                 candidatos = [pm for pm in candidatos if pm.modista.id == modista_id]
 
@@ -190,13 +243,17 @@ class ModistaServices:
 
             return [self._producto_en_modista_dict(pm) for pm in por_producto.values()]
 
-    def regresar_varios_de_modista(self, productos_ids: List[int]) -> dict:
+    def regresar_varios_de_modista(
+        self, productos_ids: List[int], usuario_id: Optional[int] = None
+    ) -> dict:
         """Marca salida de modista y estado SALON para cada producto válido."""
         regresados: List[int] = []
         errores: List[dict] = []
+        cuidado_especial: List[dict] = []
         hoy = hoy_ar()
         ids_unicos = list(dict.fromkeys(productos_ids))
         with db_session:
+            usuario = models.Usuario.get(id=usuario_id) if usuario_id else None
             for pid in ids_unicos:
                 try:
                     producto = models.Producto.get(id=pid)
@@ -214,18 +271,51 @@ class ModistaServices:
                             }
                         )
                         continue
+                    cuidado, orden_rev = cuidado_especial_desde_ingresos(producto, abiertos)
                     for pm in abiertos:
                         pm.fecha_salida = hoy
+                        if usuario is not None:
+                            pm.recibido_por = usuario
                     producto.estado = models.EstadoProducto.SALON
                     producto.inmovilizado = False
                     regresados.append(pid)
+                    if cuidado:
+                        cuidado_especial.append(
+                            {
+                                "producto_id": pid,
+                                "orden_id": orden_rev,
+                                "mensaje": MENSAJE_CUIDADO_ESPECIAL,
+                            }
+                        )
                 except Exception as e:
                     errores.append({"producto_id": pid, "detail": str(e)})
             flush()
+            if regresados:
+                from src.services.auditoria_services import registrar_auditoria
+                from src.models import AccionAuditoria
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.MODISTA_RECEPCION,
+                    "producto",
+                    regresados[0],
+                    f"Recepción desde modista — {len(regresados)} prenda(s)",
+                    {"productos": regresados},
+                )
+
+        msg = f"Regresaron {len(regresados)} producto(s) al salón."
+        if errores:
+            msg += f" {len(errores)} con aviso."
+        if cuidado_especial:
+            msg += f" {len(cuidado_especial)} con revisión pendiente (cuidado especial)."
 
         return {
-            "message": f"Regresaron {len(regresados)} producto(s) al salón."
-            + (f" {len(errores)} con aviso." if errores else ""),
+            "message": msg,
             "success": True,
-            "data": {"regresados": regresados, "errores": errores},
+            "data": {
+                "regresados": regresados,
+                "errores": errores,
+                "requiere_cuidado_especial": len(cuidado_especial) > 0,
+                "cuidado_especial": cuidado_especial,
+                "mensaje_revision": MENSAJE_CUIDADO_ESPECIAL if cuidado_especial else None,
+            },
         }

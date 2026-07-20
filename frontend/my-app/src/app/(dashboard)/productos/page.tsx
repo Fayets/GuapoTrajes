@@ -19,6 +19,9 @@ import { getApiBaseUrl } from "@/lib/api-config";
 import { fetchProductosPage } from "@/lib/fetch-productos";
 import { formatDescripcionProducto } from "@/lib/descripcion-producto";
 import { formatMoneyAr } from "@/lib/money";
+import { ConfirmDeleteDialog } from "@/components/modales/confirm-delete-dialog";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
 type ItemConfig = { id: number; nombre: string; codigo: string };
 
@@ -74,7 +77,11 @@ export default function ProductosPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoActual, setProductoActual] =
     useState<Partial<Producto> | null>(null);
+  const [productoAEliminar, setProductoAEliminar] = useState<Producto | null>(
+    null
+  );
   const [isFormularioOpen, setIsFormularioOpen] = useState(false);
+  useFlushUndoableDeletesOnLeave();
   const [isDetalleOpen, setIsDetalleOpen] = useState(false);
   const [productoEtiqueta, setProductoEtiqueta] = useState<Producto | null>(
     null
@@ -456,29 +463,46 @@ export default function ProductosPage() {
     }
   };
 
-  const eliminarProducto = async (codigo_barra: string) => {
-    if (!token) return;
-    try {
-      const response = await fetch(`${API_URL}/${codigo_barra}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+  const solicitarEliminarProducto = (producto: Producto) => {
+    setProductoAEliminar(producto);
+  };
 
-      if (!response.ok) throw new Error("Error al eliminar el producto");
-
-      toast.success("Producto eliminado");
-      // Si borramos el último de una página, retrocedemos de página si corresponde
-      const quedaUno = productos.length === 1 && page > 1;
-      if (quedaUno) setPage((p) => p - 1);
-      else loadProductos();
-
-    } catch (error) {
-      toast.error("Error al eliminar el producto");
-      console.error(error);
-    }
+  const confirmarEliminarProducto = () => {
+    const producto = productoAEliminar;
+    if (!producto || !token) return;
+    setProductoAEliminar(null);
+    const snapshot = producto;
+    const codigo = snapshot.codigo_barra;
+    scheduleUndoableDelete({
+      id: `producto-${codigo}`,
+      message: `Producto «${codigo}» eliminado`,
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setProductos((prev) => prev.filter((p) => p.codigo_barra !== codigo));
+        setTotal((t) => Math.max(0, t - 1));
+      },
+      onRestore: () => {
+        setProductos((prev) => {
+          if (prev.some((p) => p.codigo_barra === codigo)) return prev;
+          return [snapshot, ...prev];
+        });
+        setTotal((t) => t + 1);
+      },
+      executeDelete: async () => {
+        const response = await fetch(`${API_URL}/${codigo}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (!response.ok) throw new Error("Error al eliminar el producto");
+        toast.success("Producto eliminado");
+        const quedaUno = productos.length === 1 && page > 1;
+        if (quedaUno) setPage((p) => p - 1);
+        else loadProductos();
+      },
+    });
   };
 
   const generarEtiqueta = (producto: Producto) => {
@@ -978,9 +1002,7 @@ export default function ProductosPage() {
                           <button
                             type="button"
                             className="btn-action btn-action--borrar"
-                            onClick={() =>
-                              eliminarProducto(producto.codigo_barra)
-                            }
+                            onClick={() => solicitarEliminarProducto(producto)}
                             title="Eliminar"
                           >
                             <Trash2 size={16} strokeWidth={1.75} aria-hidden />
@@ -2088,6 +2110,22 @@ export default function ProductosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={productoAEliminar != null}
+        onOpenChange={(open) => {
+          if (!open) setProductoAEliminar(null);
+        }}
+        itemLabel={
+          productoAEliminar
+            ? `el producto «${formatDescripcionProducto(
+                productoAEliminar.descripcion,
+                productoAEliminar.descripcion_extra
+              )}» (${productoAEliminar.codigo_barra})`
+            : "este producto"
+        }
+        onConfirm={confirmarEliminarProducto}
+      />
     </div>
   );
 }

@@ -27,12 +27,21 @@ import {
   type MetodoPagoComplemento,
 } from "@/components/metodo-pago-selector";
 import { ConfirmarGenerarContratoModal } from "@/components/modales/confirmar-generar-contrato-modal";
+import { ConfirmDeleteDialog } from "@/components/modales/confirm-delete-dialog";
 import { imprimirEtiquetas100x50Lote } from "@/lib/imprimir-etiqueta-100x50";
+import { imprimirEtiquetasModistaLote } from "@/lib/imprimir-etiqueta-modista";
+import {
+  resolverLocatarioContrato,
+  type FirmanteContratoPayload,
+} from "@/lib/contrato-locatario";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 import { formatPesosAr, formatMoneyAr, parseMontoInput, roundPesos } from "@/lib/money";
 import {
   ahoraArgentinaPartes,
   formatDateTimeArgentina,
   parseDateTimeArgentina,
+  formatDdMmYyyyDesdeIso,
 } from "@/lib/fecha-calendario";
 import { abrirWhatsAppEnvio, normalizarTelefonoWhatsapp } from "@/lib/whatsapp";
 
@@ -77,6 +86,7 @@ type OrdenTrabajo = {
   es_precliente?: boolean;
   fecha_evento: string;
   fecha_creacion: string;
+  fecha_retiro?: string | null;
   seña_pagada: number;
   saldo_pendiente: number;
   estado: string;
@@ -97,6 +107,15 @@ type OrdenTrabajo = {
   etiquetas_armado_impresas_at?: string | null;
   precliente_id?: number | null;
   cliente_id?: number | null;
+  creado_por_nombre?: string | null;
+  contrato_generado_por_nombre?: string | null;
+  devolucion_recibida_por_nombre?: string | null;
+  devolucion_recibida_at?: string | null;
+  firmante_nombre?: string | null;
+  firmante_dni?: string | null;
+  firmante_direccion?: string | null;
+  firmante_celular?: string | null;
+  tiene_firmante_anexo?: boolean;
 };
 
 const ESTADOS_FILTRO = [
@@ -109,7 +128,11 @@ const ESTADOS_FILTRO = [
 
 function OrdenesTrabajoContent() {
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
+  const [ordenAEliminar, setOrdenAEliminar] = useState<OrdenTrabajo | null>(
+    null
+  );
   const [busqueda, setBusqueda] = useState("");
+  useFlushUndoableDeletesOnLeave();
   const [filtroEstado, setFiltroEstado] = useState("");
   const [ordenSeleccionada, setOrdenSeleccionada] =
     useState<OrdenTrabajo | null>(null);
@@ -161,6 +184,15 @@ function OrdenesTrabajoContent() {
   );
   const [modistaNotasDraft, setModistaNotasDraft] = useState("");
   const [guardandoModista, setGuardandoModista] = useState(false);
+  const [modistasCatalogo, setModistasCatalogo] = useState<
+    Array<{ id: number; nombre: string }>
+  >([]);
+  const [enviarModistaProducto, setEnviarModistaProducto] =
+    useState<ProductoReservado | null>(null);
+  const [enviarModistaId, setEnviarModistaId] = useState<number | null>(null);
+  const [enviandoModista, setEnviandoModista] = useState(false);
+  const [imprimiendoEtiquetaModista, setImprimiendoEtiquetaModista] =
+    useState(false);
 
   const ORDENES_POR_PAGINA = 18;
   const verContratoAbiertoRef = useRef<number | null>(null);
@@ -441,46 +473,53 @@ function OrdenesTrabajoContent() {
     }
   };
 
-  const eliminarOrden = async (orden: OrdenTrabajo) => {
-    const confirmacion = window.confirm(
-      `¿Estás seguro de que querés eliminar la orden #${orden.id}?\n\n` +
-        `Se anularán en caja la seña y los pagos asociados (y se devolverá saldo de cuenta corriente si se usó).\n` +
-        `Los productos reservados se liberan. Esta acción no se puede deshacer.`
-    );
-    if (!confirmacion) return;
+  const solicitarEliminarOrden = (orden: OrdenTrabajo) => {
+    setOrdenAEliminar(orden);
+  };
 
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        toast.error("No se pudo obtener el token de autenticación");
-        return;
-      }
-
-      const res = await fetch(`${getApiBaseUrl()}/ordenes/${orden.id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
-        throw new Error(
-          error.detail || error.message || "Error al eliminar la orden"
-        );
-      }
-
-      const result = await res.json();
-      if (result.success) {
+  const confirmarEliminarOrden = () => {
+    const orden = ordenAEliminar;
+    if (!orden) return;
+    setOrdenAEliminar(null);
+    const snapshot = orden;
+    scheduleUndoableDelete({
+      id: `orden-${snapshot.id}`,
+      message: `Orden #${snapshot.id} eliminada`,
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setOrdenes((prev) => prev.filter((o) => o.id !== snapshot.id));
+        if (ordenSeleccionada?.id === snapshot.id) {
+          setOrdenSeleccionada(null);
+          setShowViewModal(false);
+        }
+      },
+      onRestore: () => {
+        setOrdenes((prev) => {
+          if (prev.some((o) => o.id === snapshot.id)) return prev;
+          return [snapshot, ...prev];
+        });
+      },
+      executeDelete: async () => {
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("No se pudo obtener el token de autenticación");
+        const res = await fetch(`${getApiBaseUrl()}/ordenes/${snapshot.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          const error = await res.json().catch(() => ({}));
+          throw new Error(
+            error.detail || error.message || "Error al eliminar la orden"
+          );
+        }
+        const result = await res.json();
+        if (!result.success) {
+          throw new Error(result.message || "Error al eliminar la orden");
+        }
         toast.success(result.message || "Orden eliminada correctamente");
         fetchOrdenes();
-      } else {
-        throw new Error(result.message || "Error al eliminar la orden");
-      }
-    } catch (error: any) {
-      console.error("Error al eliminar orden:", error);
-      toast.error(error.message || "Error al eliminar la orden");
-    }
+      },
+    });
   };
 
   const fetchHistorialSeñas = async (ordenId: number) => {
@@ -588,10 +627,10 @@ function OrdenesTrabajoContent() {
     try {
       // Obtener información de la orden
       const idContrato = orden.id.toString().padStart(6, "0");
-      const clienteNombre = orden.cliente_nombre || "";
-      const clienteDNI = orden.cliente_dni || "____________________";
-      const clienteDireccion =
-        orden.cliente_direccion || "__________________________";
+      const locatario = resolverLocatarioContrato(orden);
+      const clienteNombre = locatario.nombre;
+      const clienteDNI = locatario.dni;
+      const clienteDireccion = locatario.direccion;
       const fechaEvento = orden.fecha_evento
         ? format(
             new Date(orden.fecha_evento + "T00:00:00"),
@@ -679,10 +718,10 @@ function OrdenesTrabajoContent() {
       // Fechas del pagaré: en blanco para rellenar manualmente (evitar vencimiento y ejecución)
       // No se calculan diaVencimiento/mesVencimiento/añoVencimiento; se dejan vacíos en el HTML.
 
-      // Datos del firmante - deben quedar vacíos
-      const firmante = "";
-      const aclaracion = "";
-      const celular = "";
+      // Locatario del contrato = firmante del pagaré (titular o anexado)
+      const firmante = locatario.nombre;
+      const aclaracion = locatario.nombre;
+      const celular = locatario.celular;
 
     const contenidoContrato = `
 <!DOCTYPE html>
@@ -973,13 +1012,34 @@ function OrdenesTrabajoContent() {
     setShowConfirmGenerarContrato(true);
   };
 
-  const ejecutarGeneracionContrato = async () => {
+  const ejecutarGeneracionContrato = async (
+    firmanteAnexo: FirmanteContratoPayload | null
+  ) => {
     const orden = ordenConfirmarContrato;
     if (!orden) return;
 
     const yaGenerado = reimpresionContrato;
     setGenerandoContrato(true);
     try {
+      const reg = await fetch(
+        `${getApiBaseUrl()}/ordenes/${orden.id}/registrar-contrato`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            firmante: firmanteAnexo,
+          }),
+        }
+      );
+      if (!reg.ok) {
+        const err = await reg.json().catch(() => ({}));
+        toast.error(err.detail || "No se pudo registrar el contrato.");
+        return;
+      }
+
       const res = await fetch(`${getApiBaseUrl()}/ordenes/${orden.id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
@@ -989,33 +1049,17 @@ function OrdenesTrabajoContent() {
       }
       const ordenCompleta = await res.json();
       abrirVentanaContrato(ordenCompleta);
+
       if (yaGenerado) {
         toast.success("Contrato abierto para imprimir.");
-        setShowConfirmGenerarContrato(false);
-        setOrdenConfirmarContrato(null);
-        return;
-      }
-      const reg = await fetch(
-        `${getApiBaseUrl()}/ordenes/${orden.id}/registrar-contrato`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-      if (reg.ok) {
+      } else {
         toast.success(
           "Contrato generado. Ya está disponible en la vista Contratos."
         );
         fetchOrdenes();
-        setShowConfirmGenerarContrato(false);
-        setOrdenConfirmarContrato(null);
-      } else {
-        const err = await reg.json().catch(() => ({}));
-        toast.error(err.detail || "No se pudo registrar el contrato.");
       }
+      setShowConfirmGenerarContrato(false);
+      setOrdenConfirmarContrato(null);
     } catch (e) {
       console.error(e);
       toast.error("Error al generar el contrato.");
@@ -1175,6 +1219,130 @@ function OrdenesTrabajoContent() {
       );
     } finally {
       setGuardandoModista(false);
+    }
+  };
+
+  const fechaRetiroEtiqueta = (orden: OrdenTrabajo) => {
+    if (!orden.fecha_retiro) return "—";
+    try {
+      return formatDdMmYyyyDesdeIso(orden.fecha_retiro);
+    } catch {
+      return orden.fecha_retiro;
+    }
+  };
+
+  const imprimirEtiquetaTrabajoModista = async (prod: ProductoReservado) => {
+    if (!ordenSeleccionada) return;
+    const notas = (prod.notas_modista || modistaNotasDraft || "").trim();
+    if (!prod.requiere_modista && !notas) {
+      toast.error("Guardá el trabajo de modista antes de imprimir la etiqueta");
+      return;
+    }
+    setImprimiendoEtiquetaModista(true);
+    try {
+      const result = await imprimirEtiquetasModistaLote([
+        {
+          codigoBarra: prod.codigo_barra || "0",
+          clienteNombre: ordenSeleccionada.cliente_nombre || "Cliente",
+          fechaRetiro: fechaRetiroEtiqueta(ordenSeleccionada),
+          prendaDescripcion: prod.producto_descripcion || "Prenda",
+          notasTrabajo: notas || prod.notas_modista || "",
+        },
+      ]);
+      if (result.porIndice[0] !== "ok") {
+        throw new Error(
+          result.mensajeAyuda || "No se pudo generar la etiqueta de modista"
+        );
+      }
+      toast.success("Etiqueta de modista enviada a impresión");
+    } catch (e: unknown) {
+      toast.error(
+        e instanceof Error ? e.message : "Error al imprimir etiqueta de modista"
+      );
+    } finally {
+      setImprimiendoEtiquetaModista(false);
+    }
+  };
+
+  const abrirModalEnviarModista = async (prod: ProductoReservado) => {
+    if (!prod.requiere_modista) {
+      toast.error("Marcá primero el trabajo de modista");
+      return;
+    }
+    if ((prod.estado || "").toUpperCase() === "MODISTA") {
+      toast.info("La prenda ya está enviada a modista");
+      return;
+    }
+    setEnviarModistaProducto(prod);
+    setEnviarModistaId(null);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/modistas/all`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setModistasCatalogo(
+          Array.isArray(data)
+            ? data.map((m: any) => ({ id: m.id, nombre: m.nombre || String(m.id) }))
+            : []
+        );
+      }
+    } catch {
+      setModistasCatalogo([]);
+    }
+  };
+
+  const confirmarEnviarModista = async () => {
+    if (!ordenSeleccionada || !enviarModistaProducto || !enviarModistaId) {
+      toast.error("Seleccioná una modista");
+      return;
+    }
+    setEnviandoModista(true);
+    try {
+      const res = await fetch(
+        `${getApiBaseUrl()}/ordenes/${ordenSeleccionada.id}/productos-reservados/${enviarModistaProducto.producto_id}/enviar-modista`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({ modista_id: enviarModistaId }),
+        }
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof body.detail === "string"
+            ? body.detail
+            : body.message || "No se pudo enviar a modista"
+        );
+      }
+      actualizarProductoModistaEnOrden(enviarModistaProducto.producto_id, {
+        estado: "MODISTA",
+      });
+      toast.success(body.message || "Prenda enviada a modista");
+      const prodEnviado = enviarModistaProducto;
+      setEnviarModistaProducto(null);
+      setEnviarModistaId(null);
+      // Ofrecer reimprimir etiqueta
+      const reimprimir = window.confirm(
+        "¿Querés imprimir la etiqueta de trabajo para la modista?"
+      );
+      if (reimprimir) {
+        await imprimirEtiquetaTrabajoModista({
+          ...prodEnviado,
+          estado: "MODISTA",
+        });
+      }
+    } catch (e: unknown) {
+      toast.error(
+        e instanceof Error ? e.message : "Error al enviar a modista"
+      );
+    } finally {
+      setEnviandoModista(false);
     }
   };
 
@@ -1737,7 +1905,7 @@ function OrdenesTrabajoContent() {
                           <RoleGate allow={["ADMIN"]}>
                             <button
                               className="btn-action btn-action--borrar"
-                              onClick={() => eliminarOrden(orden)}
+                              onClick={() => solicitarEliminarOrden(orden)}
                               title="Eliminar orden"
                             >
                               <Trash2 size={16} strokeWidth={1.75} aria-hidden />
@@ -2123,6 +2291,93 @@ function OrdenesTrabajoContent() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={!!enviarModistaProducto}
+        onOpenChange={(open) => {
+          if (!open && !enviandoModista) {
+            setEnviarModistaProducto(null);
+            setEnviarModistaId(null);
+          }
+        }}
+      >
+        <DialogContent
+          className="w-full border-0"
+          dialogClassName="modal-dialog-centered"
+          dialogStyle={{ maxWidth: "480px", width: "95%" }}
+        >
+          <DialogHeader className="border-bottom pb-3">
+            <DialogTitle>Enviar a modista</DialogTitle>
+            <DialogDescription className="mb-0">
+              {enviarModistaProducto?.producto_descripcion}
+              <br />
+              <span className="small">
+                Se usa el cliente y las notas de trabajo de la orden. La prenda
+                aparecerá en el taller de modista.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="modal-body py-3">
+            {enviarModistaProducto?.notas_modista && (
+              <div className="alert alert-warning py-2 small mb-3">
+                <strong>Trabajo:</strong> {enviarModistaProducto.notas_modista}
+              </div>
+            )}
+            <label className="form-label fw-semibold" htmlFor="enviar-modista-select">
+              Modista
+            </label>
+            <select
+              id="enviar-modista-select"
+              className="form-select"
+              value={enviarModistaId ?? ""}
+              onChange={(e) =>
+                setEnviarModistaId(
+                  e.target.value ? Number(e.target.value) : null
+                )
+              }
+              disabled={enviandoModista}
+            >
+              <option value="">Seleccionar modista...</option>
+              {modistasCatalogo.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2">
+            <button
+              type="button"
+              className="btn btn-light border"
+              onClick={() => {
+                setEnviarModistaProducto(null);
+                setEnviarModistaId(null);
+              }}
+              disabled={enviandoModista}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void confirmarEnviarModista()}
+              disabled={enviandoModista || !enviarModistaId}
+            >
+              {enviandoModista ? (
+                <>
+                  <i className="bi bi-arrow-clockwise spin me-2"></i>
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-send me-2"></i>
+                  Confirmar envío
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmarGenerarContratoModal
         open={showConfirmGenerarContrato}
         onOpenChange={(open) => {
@@ -2133,11 +2388,36 @@ function OrdenesTrabajoContent() {
         }}
         ordenId={ordenConfirmarContrato?.id}
         clienteNombre={ordenConfirmarContrato?.cliente_nombre}
+        firmanteInicial={
+          ordenConfirmarContrato?.tiene_firmante_anexo ||
+          ordenConfirmarContrato?.firmante_nombre
+            ? {
+                nombre: ordenConfirmarContrato.firmante_nombre || "",
+                dni: ordenConfirmarContrato.firmante_dni || "",
+                direccion: ordenConfirmarContrato.firmante_direccion || "",
+                celular: ordenConfirmarContrato.firmante_celular || "",
+              }
+            : null
+        }
         esReimpresion={reimpresionContrato}
         saldoPendiente={ordenConfirmarContrato?.saldo_pendiente ?? 0}
         esAdmin={esAdmin}
         onConfirm={ejecutarGeneracionContrato}
         loading={generandoContrato}
+      />
+
+      <ConfirmDeleteDialog
+        open={ordenAEliminar != null}
+        onOpenChange={(open) => {
+          if (!open) setOrdenAEliminar(null);
+        }}
+        itemLabel={
+          ordenAEliminar
+            ? `la orden #${ordenAEliminar.id} (${ordenAEliminar.cliente_nombre})`
+            : "esta orden"
+        }
+        description="Se anularán en caja la seña y los pagos asociados (y se devolverá saldo de cuenta corriente si se usó). Los productos reservados se liberan."
+        onConfirm={confirmarEliminarOrden}
       />
 
       {/* Modal: Completar DNI y dirección para generar contrato (precliente o cliente sin datos) */}
@@ -2330,6 +2610,26 @@ function OrdenesTrabajoContent() {
                           "-"}
                       </span>
                     </div>
+                    <div className="col-12 col-md-6">
+                      <span className="text-muted small d-block">Orden creada por</span>
+                      <span className="fw-semibold">
+                        {ordenSeleccionada.creado_por_nombre || "—"}
+                      </span>
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <span className="text-muted small d-block">Contrato generado por</span>
+                      <span className="fw-semibold">
+                        {ordenSeleccionada.contrato_generado_por_nombre || "—"}
+                      </span>
+                    </div>
+                    {ordenSeleccionada.devolucion_recibida_por_nombre && (
+                      <div className="col-12 col-md-6">
+                        <span className="text-muted small d-block">Devolución recibida por</span>
+                        <span className="fw-semibold">
+                          {ordenSeleccionada.devolucion_recibida_por_nombre}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2407,6 +2707,11 @@ function OrdenesTrabajoContent() {
                                   Modista
                                 </span>
                                 <span className="small">{prod.notas_modista}</span>
+                                {(prod.estado || "").toUpperCase() === "MODISTA" && (
+                                  <span className="badge bg-info text-dark ms-2">
+                                    Enviada a modista
+                                  </span>
+                                )}
                               </div>
                             )}
                             {!esHistorico && (
@@ -2422,8 +2727,36 @@ function OrdenesTrabajoContent() {
                                 disabled={guardandoModista}
                               >
                                 <i className="bi bi-scissors me-1" />
-                                {prod.requiere_modista ? "Editar modista" : "Ir a modista"}
+                                {prod.requiere_modista ? "Editar trabajo" : "Trabajo modista"}
                               </button>
+                              {prod.requiere_modista && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-dark"
+                                    disabled={imprimiendoEtiquetaModista}
+                                    onClick={() =>
+                                      void imprimirEtiquetaTrabajoModista(prod)
+                                    }
+                                  >
+                                    <i className="bi bi-printer me-1" />
+                                    Imprimir etiqueta
+                                  </button>
+                                  {(prod.estado || "").toUpperCase() !== "MODISTA" && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-primary"
+                                      disabled={enviandoModista}
+                                      onClick={() =>
+                                        void abrirModalEnviarModista(prod)
+                                      }
+                                    >
+                                      <i className="bi bi-send me-1" />
+                                      Enviar a modista
+                                    </button>
+                                  )}
+                                </>
+                              )}
                             </div>
                             )}
                             {!esHistorico && modistaProductoId === prod.producto_id && (

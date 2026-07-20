@@ -8,6 +8,9 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useAuth } from "@/context/auth-context";
 import { useSucursal } from "@/context/sucursal-context";
+import { ConfirmDeleteDialog } from "@/components/modales/confirm-delete-dialog";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
 type MovimientoConcentradora = {
   id: number;
@@ -54,9 +57,12 @@ export default function CajaConcentradoraPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [movimientoEditando, setMovimientoEditando] =
     useState<MovimientoConcentradora | null>(null);
-  const [eliminandoId, setEliminandoId] = useState<number | null>(null);
+  const [movimientoAEliminar, setMovimientoAEliminar] =
+    useState<MovimientoConcentradora | null>(null);
   const [detalleSeleccionado, setDetalleSeleccionado] =
     useState<MovimientoConcentradora | null>(null);
+
+  useFlushUndoableDeletesOnLeave();
   const [form, setForm] = useState({
     tipo_movimiento: "EGRESO" as "INGRESO" | "EGRESO",
     destino: "OTRO",
@@ -311,61 +317,62 @@ export default function CajaConcentradoraPage() {
     setShowModal(true);
   };
 
-  const handleDelete = async (movimiento: MovimientoConcentradora) => {
+  const solicitarEliminarMovimiento = (movimiento: MovimientoConcentradora) => {
     if (!isAdmin) {
       toast.error("No tenés permisos para eliminar este movimiento.");
       return;
     }
-
-    // Mensaje de confirmación según el tipo de movimiento
-    let mensajeConfirmacion = "¿Seguro que querés eliminar este movimiento de caja concentradora?";
-    if (
-      movimiento.tipo_movimiento === "INGRESO" &&
-      movimiento.origen === "Caja Diaria"
-    ) {
-      mensajeConfirmacion += "\n\n⚠️ También se eliminará el egreso correspondiente en Caja Diaria.";
-    }
-
-    const confirmacion = window.confirm(mensajeConfirmacion);
-    if (!confirmacion) return;
 
     if (!token) {
       toast.error("No se pudo determinar el usuario actual.");
       return;
     }
 
-    setEliminandoId(movimiento.id);
-    try {
-      const response = await fetch(
-        `${API_BASE}/caja_concentradora/movimientos/${movimiento.id}`,
-        {
-          method: "DELETE",
-          headers: headersAutenticacion(),
-        }
-      );
+    setMovimientoAEliminar(movimiento);
+  };
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "No se pudo eliminar el movimiento");
-      }
-
-      // Mostrar mensaje según si se eliminó también el movimiento de Caja Diaria
-      if (data.data?.movimiento_caja_diaria_eliminado) {
-        toast.success(
-          "Movimiento eliminado correctamente. También se eliminó el egreso correspondiente en Caja Diaria.",
-          { duration: 5000 }
+  const confirmarEliminarMovimiento = () => {
+    const movimiento = movimientoAEliminar;
+    if (!movimiento) return;
+    setMovimientoAEliminar(null);
+    const snapshot = movimiento;
+    scheduleUndoableDelete({
+      id: `caja-concentradora-movimiento-${snapshot.id}`,
+      message: "Movimiento de caja concentradora eliminado",
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setMovimientos((prev) => prev.filter((x) => x.id !== snapshot.id));
+      },
+      onRestore: () => {
+        setMovimientos((prev) => {
+          if (prev.some((x) => x.id === snapshot.id)) return prev;
+          return [...prev, snapshot];
+        });
+      },
+      executeDelete: async () => {
+        const response = await fetch(
+          `${API_BASE}/caja_concentradora/movimientos/${snapshot.id}`,
+          {
+            method: "DELETE",
+            headers: headersAutenticacion(),
+          }
         );
-      } else {
-        toast.success("Movimiento eliminado correctamente");
-      }
-      
-      await fetchMovimientos();
-    } catch (error: any) {
-      console.error("Error al eliminar movimiento:", error);
-      toast.error(error.message || "No se pudo eliminar el movimiento");
-    } finally {
-      setEliminandoId(null);
-    }
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "No se pudo eliminar el movimiento");
+        }
+
+        if (data.data?.movimiento_caja_diaria_eliminado) {
+          toast.success(
+            "Movimiento eliminado correctamente. También se eliminó el egreso correspondiente en Caja Diaria.",
+            { duration: 5000 }
+          );
+        } else {
+          toast.success("Movimiento eliminado correctamente");
+        }
+      },
+    });
   };
 
   const handleEnviarACajaChica = async () => {
@@ -629,8 +636,7 @@ export default function CajaConcentradoraPage() {
                               </button>
                               <button
                                 className="btn-action btn-action--borrar"
-                                onClick={() => handleDelete(movimiento)}
-                                disabled={eliminandoId === movimiento.id}
+                                onClick={() => solicitarEliminarMovimiento(movimiento)}
                                 title={
                                   movimiento.tipo_movimiento === "INGRESO" &&
                                   movimiento.origen === "Caja Diaria"
@@ -638,11 +644,7 @@ export default function CajaConcentradoraPage() {
                                     : "Eliminar movimiento"
                                 }
                               >
-                                {eliminandoId === movimiento.id ? (
-                                  <i className="bi bi-arrow-clockwise spin"></i>
-                                ) : (
-                                  <Trash2 size={16} strokeWidth={1.75} aria-hidden />
-                                )}
+                                <Trash2 size={16} strokeWidth={1.75} aria-hidden />
                               </button>
                             </>
                           )}
@@ -1062,6 +1064,21 @@ export default function CajaConcentradoraPage() {
       {(showModal || showModalEnviarChica || showDetalle) && (
         <div className="modal-backdrop fade show" style={{ display: "block" }}></div>
       )}
+
+      <ConfirmDeleteDialog
+        open={movimientoAEliminar != null}
+        onOpenChange={(open) => {
+          if (!open) setMovimientoAEliminar(null);
+        }}
+        itemLabel="este movimiento"
+        description={
+          movimientoAEliminar?.tipo_movimiento === "INGRESO" &&
+          movimientoAEliminar?.origen === "Caja Diaria"
+            ? "También se eliminará el egreso correspondiente en Caja Diaria."
+            : null
+        }
+        onConfirm={confirmarEliminarMovimiento}
+      />
     </div>
   );
 }

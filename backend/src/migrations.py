@@ -143,6 +143,40 @@ def ensure_contrato_generado_at_column() -> None:
     logger.debug("No se pudo añadir contrato_generado_at (probados: %s, %s)", table_name, table_name.lower())
 
 
+def ensure_firmante_contrato_columns() -> None:
+    """Snapshot opcional del firmante del contrato/pagaré en órdenes de trabajo."""
+    if not _is_postgres():
+        return
+    from src.models import OrdenTrabajo
+
+    table_name = getattr(OrdenTrabajo, "_table_", "OrdenesTrabajo")
+    columns = (
+        "firmante_nombre",
+        "firmante_dni",
+        "firmante_direccion",
+        "firmante_celular",
+    )
+    for name in (table_name, table_name.lower()):
+        try:
+            with db_session:
+                for col in columns:
+                    db.execute(
+                        f'ALTER TABLE "{name}" ADD COLUMN IF NOT EXISTS "{col}" TEXT'
+                    )
+            logger.debug("Columnas firmante contrato OK en tabla '%s'", name)
+            return
+        except Exception as e:
+            err = str(e).lower()
+            if "does not exist" in err or "no existe" in err:
+                continue
+            logger.debug("Error añadiendo columnas firmante en '%s': %s", name, e)
+    logger.debug(
+        "No se pudieron añadir columnas firmante (probados: %s, %s)",
+        table_name,
+        table_name.lower(),
+    )
+
+
 def ensure_notas_productos_lavanderias() -> None:
     """Asegura que la tabla de productos en lavandería tenga columna notas (motivo de devolución)."""
     if not _is_postgres():
@@ -426,6 +460,10 @@ def apply_schema_migrations() -> None:
                 'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_applied_by" INTEGER',
                 'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "extra_discount_created_at" TIMESTAMP',
                 'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "contrato_generado_at" TIMESTAMP',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "firmante_nombre" TEXT',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "firmante_dni" TEXT',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "firmante_direccion" TEXT',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "firmante_celular" TEXT',
                 'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "etiquetas_armado_impresas_at" TIMESTAMP',
                 'ALTER TABLE "Productos" ADD COLUMN IF NOT EXISTS "etiqueta_inventario_impresa_at" TIMESTAMP',
                 'ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS "extra_discount_percentage" DOUBLE PRECISION',
@@ -500,6 +538,46 @@ def apply_schema_migrations() -> None:
                 'ALTER TABLE "ProductosModistas" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT',
                 'ALTER TABLE "productosmodistas" ADD COLUMN IF NOT EXISTS "cliente_nombre" TEXT',
                 'ALTER TABLE "productosmodistas" ADD COLUMN IF NOT EXISTS "cliente_celular" TEXT',
+                # Trazabilidad por usuario (INTEGER sin FK inline; ensure_* refuerza antes del mapping)
+                'ALTER TABLE "Presupuesto" ADD COLUMN IF NOT EXISTS "creado_por_id" INTEGER',
+                'ALTER TABLE "Presupuesto" ADD COLUMN IF NOT EXISTS "actualizado_por_id" INTEGER',
+                'ALTER TABLE "Presupuesto" ADD COLUMN IF NOT EXISTS "actualizado_at" TIMESTAMP',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "creado_por_id" INTEGER',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "contrato_generado_por_id" INTEGER',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "devolucion_recibida_por_id" INTEGER',
+                'ALTER TABLE "OrdenesTrabajo" ADD COLUMN IF NOT EXISTS "devolucion_recibida_at" TIMESTAMP',
+                'ALTER TABLE "RecibosOrden" ADD COLUMN IF NOT EXISTS "usuario_id" INTEGER',
+                'ALTER TABLE "CuentaCorriente" ADD COLUMN IF NOT EXISTS "usuario_id" INTEGER',
+                'ALTER TABLE "ProductosLavanderias" ADD COLUMN IF NOT EXISTS "enviado_por_id" INTEGER',
+                'ALTER TABLE "ProductosLavanderias" ADD COLUMN IF NOT EXISTS "recibido_por_id" INTEGER',
+                'ALTER TABLE "ProductosModistas" ADD COLUMN IF NOT EXISTS "enviado_por_id" INTEGER',
+                'ALTER TABLE "ProductosModistas" ADD COLUMN IF NOT EXISTS "recibido_por_id" INTEGER',
+                (
+                    'CREATE TABLE IF NOT EXISTS "RevisionesDevolucion" ('
+                    '    "id" SERIAL PRIMARY KEY,'
+                    '    "orden_id" INTEGER NOT NULL REFERENCES "OrdenesTrabajo"("id"),'
+                    '    "producto_id" INTEGER NOT NULL REFERENCES "Productos"("id"),'
+                    '    "motivo" TEXT NOT NULL,'
+                    '    "destino" VARCHAR(32) NOT NULL,'
+                    '    "estado" VARCHAR(32) NOT NULL DEFAULT \'ABIERTA\','
+                    '    "creada_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,'
+                    '    "resuelta_at" TIMESTAMP,'
+                    '    "resuelta_por_id" INTEGER'
+                    ')'
+                ),
+                (
+                    'CREATE TABLE IF NOT EXISTS "AuditoriaEventos" ('
+                    '    "id" SERIAL PRIMARY KEY,'
+                    '    "fecha_hora" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,'
+                    '    "usuario_id" INTEGER NOT NULL,'
+                    '    "sucursal_id" INTEGER NOT NULL,'
+                    '    "accion" TEXT NOT NULL,'
+                    '    "entidad_tipo" TEXT NOT NULL,'
+                    '    "entidad_id" INTEGER NOT NULL,'
+                    '    "resumen" TEXT NOT NULL,'
+                    '    "detalle" TEXT'
+                    ')'
+                ),
                 # Cierre de caja diaria (efectivo en cero)
                 'CREATE TABLE IF NOT EXISTS "CierresCaja" ('
                 '    "id" SERIAL PRIMARY KEY,'
@@ -587,6 +665,95 @@ def apply_schema_migrations() -> None:
     except Exception as e:
         # Si hay un error crítico, lo registramos pero no detenemos la aplicación
         logger.warning(f"Error en migraciones (continuando): {e}")
+
+
+def ensure_trazabilidad_usuario_columns() -> None:
+    """Columnas FK de responsable + tabla AuditoriaEventos.
+
+    Debe ejecutarse ANTES de db.generate_mapping: Pony crea índices sobre
+    estas columnas al mapear y falla si aún no existen.
+    Las columnas se agregan como INTEGER (sin REFERENCES en el mismo ALTER)
+    para evitar que un fallo de FK deje la columna sin crear.
+    Cada statement va en su propia db_session para que un error no aborte el resto.
+    """
+    if not _is_postgres():
+        return
+
+    def _exec(sql: str, label: str) -> None:
+        try:
+            with db_session:
+                db.execute(sql)
+        except Exception as e:
+            logger.debug("Trazabilidad %s: %s", label, e)
+
+    # Solo ADD COLUMN sin FK inline (más tolerante en PG / tablas existentes).
+    alter_columns = [
+        ('"Presupuesto"', '"creado_por_id"', "INTEGER"),
+        ('"Presupuesto"', '"actualizado_por_id"', "INTEGER"),
+        ('"Presupuesto"', '"actualizado_at"', "TIMESTAMP"),
+        ('"presupuesto"', '"creado_por_id"', "INTEGER"),
+        ('"presupuesto"', '"actualizado_por_id"', "INTEGER"),
+        ('"presupuesto"', '"actualizado_at"', "TIMESTAMP"),
+        ('"OrdenesTrabajo"', '"creado_por_id"', "INTEGER"),
+        ('"OrdenesTrabajo"', '"contrato_generado_por_id"', "INTEGER"),
+        ('"OrdenesTrabajo"', '"devolucion_recibida_por_id"', "INTEGER"),
+        ('"OrdenesTrabajo"', '"devolucion_recibida_at"', "TIMESTAMP"),
+        ('"ordenestrabajo"', '"creado_por_id"', "INTEGER"),
+        ('"ordenestrabajo"', '"contrato_generado_por_id"', "INTEGER"),
+        ('"ordenestrabajo"', '"devolucion_recibida_por_id"', "INTEGER"),
+        ('"ordenestrabajo"', '"devolucion_recibida_at"', "TIMESTAMP"),
+        ('"RecibosOrden"', '"usuario_id"', "INTEGER"),
+        ('"recibosorden"', '"usuario_id"', "INTEGER"),
+        ('"CuentaCorriente"', '"usuario_id"', "INTEGER"),
+        ('"cuentacorriente"', '"usuario_id"', "INTEGER"),
+        ('"ProductosLavanderias"', '"enviado_por_id"', "INTEGER"),
+        ('"ProductosLavanderias"', '"recibido_por_id"', "INTEGER"),
+        ('"productoslavanderias"', '"enviado_por_id"', "INTEGER"),
+        ('"productoslavanderias"', '"recibido_por_id"', "INTEGER"),
+        ('"ProductosModistas"', '"enviado_por_id"', "INTEGER"),
+        ('"ProductosModistas"', '"recibido_por_id"', "INTEGER"),
+        ('"productosmodistas"', '"enviado_por_id"', "INTEGER"),
+        ('"productosmodistas"', '"recibido_por_id"', "INTEGER"),
+    ]
+
+    for table, col, typ in alter_columns:
+        _exec(
+            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}",
+            f"ALTER {table}.{col}",
+        )
+
+    _exec(
+        'CREATE TABLE IF NOT EXISTS "AuditoriaEventos" ('
+        '    "id" SERIAL PRIMARY KEY,'
+        '    "fecha_hora" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,'
+        '    "usuario_id" INTEGER NOT NULL,'
+        '    "sucursal_id" INTEGER NOT NULL,'
+        '    "accion" TEXT NOT NULL,'
+        '    "entidad_tipo" TEXT NOT NULL,'
+        '    "entidad_id" INTEGER NOT NULL,'
+        '    "resumen" TEXT NOT NULL,'
+        '    "detalle" TEXT'
+        ')',
+        "CREATE AuditoriaEventos",
+    )
+
+    for idx_sql, label in (
+        (
+            'CREATE INDEX IF NOT EXISTS "AuditoriaEventos_usuario_idx" ON "AuditoriaEventos"("usuario_id")',
+            "idx usuario",
+        ),
+        (
+            'CREATE INDEX IF NOT EXISTS "AuditoriaEventos_fecha_idx" ON "AuditoriaEventos"("fecha_hora")',
+            "idx fecha",
+        ),
+        (
+            'CREATE INDEX IF NOT EXISTS "AuditoriaEventos_accion_idx" ON "AuditoriaEventos"("accion")',
+            "idx accion",
+        ),
+    ):
+        _exec(idx_sql, label)
+
+    logger.info("Migración de trazabilidad por usuario aplicada (columnas + AuditoriaEventos)")
 
 
 def reparar_presupuestos_huerfanos_al_inicio() -> None:

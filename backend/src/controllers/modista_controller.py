@@ -102,6 +102,7 @@ def asignar_producto_a_modista(
             notas=body.notas,
             cliente_nombre=body.cliente_nombre,
             cliente_celular=body.cliente_celular,
+            usuario_id=current_user.id,
         )
     except HTTPException as e:
         return {"message": e.detail, "success": False, "data": None}
@@ -119,7 +120,7 @@ def asignar_producto_a_modista(
 @router.post("/regresar-producto/{producto_id}", response_model=schemas.RegresoProductoModistaResponse)
 def regresar_producto_modista(producto_id: int, current_user=Depends(get_current_user)):
     try:
-        return servicio.regresar_producto_de_modista(producto_id)
+        return servicio.regresar_producto_de_modista(producto_id, usuario_id=current_user.id)
     except HTTPException as e:
         return {"message": e.detail, "success": False, "data": None}
     except Exception as e:
@@ -160,7 +161,7 @@ def regresar_varios_modista(
 ):
     """Varios productos vuelven al salón (cierra ingreso en modista)."""
     try:
-        return servicio.regresar_varios_de_modista(body.productos_ids)
+        return servicio.regresar_varios_de_modista(body.productos_ids, usuario_id=current_user.id)
     except HTTPException as e:
         raise e
     except Exception as e:

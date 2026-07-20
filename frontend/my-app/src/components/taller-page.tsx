@@ -21,6 +21,8 @@ import { useAuth } from "@/context/auth-context"
 import type { TallerConfig } from "@/lib/taller-config"
 import { imprimirEtiquetas50x25Lote } from "@/lib/imprimir-etiqueta-50x25"
 import { toast } from "sonner"
+import { scheduleUndoableDelete } from "@/lib/undoable-delete"
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes"
 
 type TallerEntity = {
   id: number
@@ -39,6 +41,9 @@ type ProductoEnTaller = {
   notas?: string
   cliente_nombre?: string
   cliente_celular?: string
+  enviado_por_nombre?: string | null
+  recibido_por_nombre?: string | null
+  requiere_cuidado_especial?: boolean
 }
 
 type EstadoColaEtiqueta = "pendiente" | "imprimiendo" | "ok" | "error"
@@ -113,6 +118,8 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [paginaActual, setPaginaActual] = useState(0)
   const ENTIDADES_POR_PAGINA = 18
+
+  useFlushUndoableDeletesOnLeave()
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -280,7 +287,12 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
       }
       const errList = json.data?.errores as { producto_id: number; detail: string }[] | undefined
       const regresados = (json.data?.regresados as number[] | undefined) ?? []
-      if (errList?.length) {
+      if (json.data?.requiere_cuidado_especial || json.data?.mensaje_revision) {
+        toast.warning(
+          json.data?.mensaje_revision ||
+            "Revisión pendiente: revisar la prenda con especial cuidado antes de cerrar el contrato. No romper el pagaré."
+        )
+      } else if (errList?.length) {
         const detalle = errList
           .map((e) => e.detail)
           .filter(Boolean)
@@ -390,20 +402,39 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
     setShowDeleteModal(true)
   }
 
-  const eliminarEntity = async () => {
-    if (!entityActual) return
-    try {
-      await fetch(`${API_BASE}${config.apiPrefix}/delete/${entityActual.id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      setEntities(entities.filter((c) => c.id !== entityActual.id))
-      setShowDeleteModal(false)
-      setEntityActual(null)
-    } catch (err) {
-    }
+  const eliminarEntity = () => {
+    const entity = entityActual
+    if (!entity) return
+    setShowDeleteModal(false)
+    setEntityActual(null)
+    const snapshot = entity
+    scheduleUndoableDelete({
+      id: `${config.apiPrefix}-entity-${snapshot.id}`,
+      message: `«${snapshot.nombre}» eliminado`,
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setEntities((prev) => prev.filter((c) => c.id !== snapshot.id))
+      },
+      onRestore: () => {
+        setEntities((prev) => {
+          if (prev.some((c) => c.id === snapshot.id)) return prev
+          return [...prev, snapshot]
+        })
+      },
+      executeDelete: async () => {
+        const res = await fetch(
+          `${API_BASE}${config.apiPrefix}/delete/${snapshot.id}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        )
+        if (!res.ok) throw new Error("No se pudo eliminar")
+        toast.success("Eliminado correctamente")
+      },
+    })
   }
 
   const guardarEntity = async () => {
@@ -791,6 +822,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                     <th>Código</th>
                     <th>Descripción</th>
                     <th>Cliente (envío)</th>
+                    <th>Enviado por</th>
                     <th>Ingreso</th>
                     <th>Notas</th>
                     <th className="text-end">Etiquetas</th>
@@ -799,6 +831,9 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                 <tbody>
                   {productosEnTaller.map((p) => {
                     const notas = (p.notas || "").trim()
+                    const esRevision =
+                      !!p.requiere_cuidado_especial ||
+                      notas.startsWith("[REVISIÓN]")
                     return (
                       <tr key={p.ingreso_id ?? p.id}>
                         <td className="text-center">
@@ -812,10 +847,18 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
                         </td>
                         <td className="text-nowrap small font-monospace">
                           {p.codigo_barra}
+                          {esRevision && (
+                            <span className="badge bg-warning text-dark ms-1">
+                              Revisión
+                            </span>
+                          )}
                         </td>
                         <td>{p.descripcion}</td>
                         <td className="small">
                           {(p.cliente_nombre || "").trim() || "—"}
+                        </td>
+                        <td className="small text-muted">
+                          {p.enviado_por_nombre || "—"}
                         </td>
                         <td className="small text-nowrap">
                           {p.fecha_ingreso

@@ -52,6 +52,9 @@ import {
   isPlausibleProductBarcode,
   shouldIgnoreBarcodeTarget,
 } from "@/lib/barcode-scan";
+import { ConfirmDeleteDialog } from "@/components/modales/confirm-delete-dialog";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
 // Tipos
 
@@ -61,6 +64,7 @@ type Cliente = {
   apellido: string;
   celular?: string;
   telefono?: string;
+  notas?: string;
 };
 
 type Precliente = {
@@ -126,6 +130,10 @@ type Presupuesto = {
   seña_pagada?: number;
   payment_method?: string; // Cambiado de metodo_pago
   orden_id?: number | null;
+  creado_por_id?: number | null;
+  creado_por_nombre?: string | null;
+  actualizado_por_id?: number | null;
+  actualizado_por_nombre?: string | null;
 };
 
 type PresupuestoResponse = {
@@ -148,6 +156,8 @@ type PresupuestoResponse = {
   seña_pagada?: number;
   payment_method?: string; // Cambiado de metodo_pago
   orden_id?: number | null;
+  creado_por_nombre?: string | null;
+  actualizado_por_nombre?: string | null;
 };
 
 export default function PresupuestosPage() {
@@ -164,6 +174,10 @@ export default function PresupuestosPage() {
     useState<Presupuesto | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [presupuestoAEliminar, setPresupuestoAEliminar] =
+    useState<Presupuesto | null>(null);
+
+  useFlushUndoableDeletesOnLeave();
   const [showViewModal, setShowViewModal] = useState(false);
   const [clienteFiltro, setClienteFiltro] = useState("");
   const [productoFiltro, setProductoFiltro] = useState("");
@@ -1634,31 +1648,42 @@ export default function PresupuestosPage() {
     }
   };
 
-  const eliminarPresupuesto = async (id: number) => {
-    const confirmar = confirm(
-      "¿Estás seguro que querés eliminar este presupuesto?"
-    );
-    if (!confirmar) return;
+  const solicitarEliminarPresupuesto = (p: Presupuesto) => {
+    setPresupuestoAEliminar(p);
+  };
 
-    try {
-      const res = await fetch(`${API_BASE}/presupuestos/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-
-      if (res.ok) {
-        alert("Presupuesto eliminado.");
-        fetchPresupuestos(); // Recargar tabla
-      } else {
-        const error = await res.json();
-        alert(`Error al eliminar: ${error.detail}`);
-      }
-    } catch (err) {
-      console.error("Error al eliminar presupuesto:", err);
-      alert("Error inesperado al eliminar presupuesto.");
-    }
+  const confirmarEliminarPresupuesto = () => {
+    const p = presupuestoAEliminar;
+    if (!p) return;
+    setPresupuestoAEliminar(null);
+    const snapshot = p;
+    scheduleUndoableDelete({
+      id: `presupuesto-${snapshot.id}`,
+      message: `Presupuesto #${snapshot.numero} eliminado`,
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setPresupuestos((prev) => prev.filter((x) => x.id !== snapshot.id));
+      },
+      onRestore: () => {
+        setPresupuestos((prev) => {
+          if (prev.some((x) => x.id === snapshot.id)) return prev;
+          return [...prev, snapshot];
+        });
+      },
+      executeDelete: async () => {
+        const res = await fetch(`${API_BASE}/presupuestos/${snapshot.id}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        if (!res.ok) {
+          const error = await res.json().catch(() => ({}));
+          throw new Error(error.detail || "No se pudo eliminar el presupuesto");
+        }
+        toast.success("Presupuesto eliminado");
+      },
+    });
   };
 
   const normalizarTelefono = (telefono?: string): string | null =>
@@ -1859,6 +1884,7 @@ export default function PresupuestosPage() {
                   <th>Fecha Evento</th>
                   <th>Total</th>
                   <th>Estado</th>
+                  <th>Creado por</th>
                   <th className="text-center">Acciones</th>
                 </tr>
               </thead>
@@ -1866,7 +1892,7 @@ export default function PresupuestosPage() {
               <tbody>
                 {presupuestosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-muted py-4">
+                    <td colSpan={7} className="text-center text-muted py-4">
                       {presupuestos.length === 0
                         ? "No hay presupuestos cargados."
                         : "Ningún presupuesto coincide con la búsqueda."}
@@ -1887,6 +1913,7 @@ export default function PresupuestosPage() {
                           {p.estado.charAt(0).toUpperCase() + p.estado.slice(1)}
                         </span>
                       </td>
+                      <td className="text-muted small">{p.creado_por_nombre || "—"}</td>
                       <td className="text-center">
                         <div className="d-flex justify-content-center gap-2 flex-wrap">
                           <button
@@ -1974,7 +2001,7 @@ export default function PresupuestosPage() {
                             <button
                               className="btn-action btn-action--borrar"
                               title="Eliminar"
-                              onClick={() => eliminarPresupuesto(p.id)}
+                              onClick={() => solicitarEliminarPresupuesto(p)}
                             >
                               ✕
                             </button>
@@ -2417,6 +2444,19 @@ export default function PresupuestosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={presupuestoAEliminar != null}
+        onOpenChange={(open) => {
+          if (!open) setPresupuestoAEliminar(null);
+        }}
+        itemLabel={
+          presupuestoAEliminar
+            ? `el presupuesto #${presupuestoAEliminar.numero} (${presupuestoAEliminar.cliente_nombre})`
+            : "este presupuesto"
+        }
+        onConfirm={confirmarEliminarPresupuesto}
+      />
     </div>
   );
 }

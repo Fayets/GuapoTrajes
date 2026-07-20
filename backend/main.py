@@ -22,10 +22,11 @@ from src.controllers.reportes_controller import router as reportes_router
 from src.controllers.cuenta_destino_controller import router as cuenta_destino_router
 from src.controllers.metodos_pago_controller import router as metodos_pago_router
 from src.controllers.logs_controller import router as logs_router
+from src.controllers.auditoria_controller import router as auditoria_router
 from src.controllers.usuario_controller import router as usuario_router
 from src.controllers.health_controller import router as health_router
 from src.controllers.config_productos_controller import router as config_productos_router
-from src.migrations import apply_schema_migrations, ensure_contrato_generado_at_column, ensure_etiquetas_armado_impresas_at_column, ensure_etiqueta_inventario_impresa_at_column, ensure_conjunto_separado_column, ensure_producto_reservado_modista_columns, ensure_notas_productos_lavanderias, ensure_cliente_columnas_lavanderia_modista, ensure_descripcion_extra_productos, ensure_caja_movimientos_fecha_hora_ar, ensure_timestamps_negocio_hora_ar, ensure_contratos_generado_at_hora_ar, reparar_presupuestos_huerfanos_al_inicio
+from src.migrations import apply_schema_migrations, ensure_contrato_generado_at_column, ensure_firmante_contrato_columns, ensure_etiquetas_armado_impresas_at_column, ensure_etiqueta_inventario_impresa_at_column, ensure_conjunto_separado_column, ensure_producto_reservado_modista_columns, ensure_notas_productos_lavanderias, ensure_cliente_columnas_lavanderia_modista, ensure_descripcion_extra_productos, ensure_caja_movimientos_fecha_hora_ar, ensure_timestamps_negocio_hora_ar, ensure_contratos_generado_at_hora_ar, ensure_trazabilidad_usuario_columns, reparar_presupuestos_huerfanos_al_inicio
 from src import schemas, models
 from src.services.usuario_services import UsuariosServices
 from pony.orm import db_session
@@ -135,6 +136,8 @@ app = FastAPI()
 # Aplicar migraciones primero, luego mapear entidades
 # Las migraciones agregan las columnas necesarias antes de que Pony ORM verifique la estructura
 apply_schema_migrations()
+# Trazabilidad: columnas e índices ANTES del mapping (Pony indexa FKs nuevas al crear tablas)
+ensure_trazabilidad_usuario_columns()
 
 
 # Generar mapeo - las migraciones ya agregaron las columnas necesarias
@@ -143,6 +146,7 @@ if db.schema is None:
 
 # Asegurar columna contrato_generado_at (necesaria para presupuestos/órdenes/contratos)
 ensure_contrato_generado_at_column()
+ensure_firmante_contrato_columns()
 ensure_etiquetas_armado_impresas_at_column()
 ensure_etiqueta_inventario_impresa_at_column()
 ensure_conjunto_separado_column()
@@ -231,6 +235,9 @@ app.include_router(config_productos_router, prefix="/config", tags=["Config Prod
 
 # Logs del sistema
 app.include_router(logs_router, prefix="/logs", tags=["Logs"])
+
+# Auditoría / trazabilidad por usuario
+app.include_router(auditoria_router, prefix="/auditoria", tags=["Auditoría"])
 
 # Usuarios
 app.include_router(usuario_router, prefix="/usuarios", tags=["Usuarios"])

@@ -10,6 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner"
 import { getApiBaseUrl } from "@/lib/api-config"
 import { useAuth } from "@/context/auth-context"
+import { ConfirmDeleteDialog } from "@/components/modales/confirm-delete-dialog"
+import { scheduleUndoableDelete } from "@/lib/undoable-delete"
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes"
 
 interface Sucursal {
   id: number
@@ -24,7 +27,9 @@ export default function SucursalesPage() {
   const [sucursalActual, setSucursalActual] = useState<Partial<Sucursal> | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [paginaActual, setPaginaActual] = useState(0)
+  const [sucursalAEliminar, setSucursalAEliminar] = useState<Sucursal | null>(null)
   const SUCURSALES_POR_PAGINA = 18
+  useFlushUndoableDeletesOnLeave()
   
   // Solo SUPER_ADMIN puede administrar sucursales (crear, editar y eliminar)
   const canManageSucursales = isSuperAdmin
@@ -122,18 +127,37 @@ export default function SucursalesPage() {
     }
   }
 
-  const eliminarSucursal = async (id: number) => {
-    try {
-      const res = await fetch(`${API_URL}/delete/${id}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-      })
-      if (!res.ok) throw new Error("Error al eliminar")
-      setSucursales((prev) => prev.filter((s) => s.id !== id))
-      toast.success("Sucursal eliminada")
-    } catch (err) {
-      toast.error("No se pudo eliminar la sucursal")
-    }
+  const solicitarEliminarSucursal = (s: Sucursal) => {
+    setSucursalAEliminar(s)
+  }
+
+  const confirmarEliminarSucursal = () => {
+    const s = sucursalAEliminar
+    if (!s) return
+    setSucursalAEliminar(null)
+    const snapshot = s
+    scheduleUndoableDelete({
+      id: `sucursal-${snapshot.id}`,
+      message: `Sucursal «${snapshot.nombre}» eliminada`,
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setSucursales((prev) => prev.filter((x) => x.id !== snapshot.id))
+      },
+      onRestore: () => {
+        setSucursales((prev) => {
+          if (prev.some((x) => x.id === snapshot.id)) return prev
+          return [...prev, snapshot].sort((a, b) => a.id - b.id)
+        })
+      },
+      executeDelete: async () => {
+        const res = await fetch(`${API_URL}/delete/${snapshot.id}`, {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+        })
+        if (!res.ok) throw new Error("No se pudo eliminar la sucursal")
+        toast.success("Sucursal eliminada")
+      },
+    })
   }
 
   const sucursalesVisibles = sucursales.filter((s) => !!s?.nombre)
@@ -200,7 +224,7 @@ export default function SucursalesPage() {
                         </button>
                         <button
                           className="btn-action btn-action--borrar"
-                          onClick={() => eliminarSucursal(s.id)}
+                          onClick={() => solicitarEliminarSucursal(s)}
                           title="Eliminar"
                         >
                           <Trash2 size={16} strokeWidth={1.75} aria-hidden />
@@ -298,6 +322,19 @@ export default function SucursalesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={sucursalAEliminar != null}
+        onOpenChange={(open) => {
+          if (!open) setSucursalAEliminar(null)
+        }}
+        itemLabel={
+          sucursalAEliminar
+            ? `la sucursal «${sucursalAEliminar.nombre}»`
+            : "esta sucursal"
+        }
+        onConfirm={confirmarEliminarSucursal}
+      />
     </div>
   )
 }

@@ -23,6 +23,8 @@ import { useAuth } from "@/context/auth-context";
 import { MetodoPagoSelector } from "@/components/metodo-pago-selector";
 import { formatMoneyAr, parseMontoInput } from "@/lib/money";
 import { abrirWhatsAppEnvio, normalizarTelefonoWhatsapp } from "@/lib/whatsapp";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
 type Cliente = {
   id: number;
@@ -66,6 +68,8 @@ export default function ClientesPage() {
   >(null);
   const [relacionesCliente, setRelacionesCliente] = useState<string[]>([]);
   const [verificandoRelaciones, setVerificandoRelaciones] = useState(false);
+
+  useFlushUndoableDeletesOnLeave();
 
   // PAGINACIÓN: Estados nuevos
   const [currentPage, setCurrentPage] = useState(0);
@@ -358,51 +362,55 @@ export default function ClientesPage() {
     return null;
   };
 
-  const eliminarCliente = async () => {
-    if (!clienteActual) return;
-    try {
-      const response = await fetch(
-        `${API_BASE}/clientes/delete/${clienteActual.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error del servidor:", errorData);
-        alert(
-          `Error al eliminar cliente: ${
-            errorData.detail || "No se pudo eliminar el cliente"
-          }`
+  const eliminarCliente = () => {
+    const cliente = clienteActual;
+    if (!cliente) return;
+    setShowDeleteModal(false);
+    setClienteActual(null);
+    setRelacionesCliente([]);
+    const snapshot = cliente;
+    scheduleUndoableDelete({
+      id: `cliente-${snapshot.id}`,
+      message: `Cliente «${snapshot.apellido}, ${snapshot.nombre}» eliminado`,
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setClientes((prev) => prev.filter((c) => c.id !== snapshot.id));
+      },
+      onRestore: () => {
+        setClientes((prev) => {
+          if (prev.some((c) => c.id === snapshot.id)) return prev;
+          return [...prev, snapshot];
+        });
+      },
+      executeDelete: async () => {
+        const response = await fetch(
+          `${API_BASE}/clientes/delete/${snapshot.id}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
-        return;
-      }
 
-      const result = await response.json();
-      if (result.success) {
-        setClientes(clientes.filter((c) => c.id !== clienteActual.id));
-        setShowDeleteModal(false);
-        setClienteActual(null);
-
-        // Mostrar mensaje de éxito con advertencias si las hay
-        let mensaje = "Cliente eliminado exitosamente";
-        if (result.advertencias && result.advertencias.length > 0) {
-          mensaje += "\n\nAdvertencias:\n" + result.advertencias.join("\n");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.detail || "No se pudo eliminar el cliente"
+          );
         }
-        alert(mensaje);
-      } else {
-        alert(`Error al eliminar cliente: ${result.message}`);
-      }
-    } catch (err) {
-      console.error("Error al eliminar cliente", err);
-      alert(
-        "Error de conexión al eliminar cliente. Por favor, intente nuevamente."
-      );
-    }
+
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.message || "No se pudo eliminar el cliente");
+        }
+
+        toast.success("Cliente eliminado");
+        if (result.advertencias && result.advertencias.length > 0) {
+          toast.warning(result.advertencias.join(" · "));
+        }
+      },
+    });
   };
 
   const guardarCliente = async () => {

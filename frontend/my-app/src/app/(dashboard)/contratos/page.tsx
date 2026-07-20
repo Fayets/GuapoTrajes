@@ -12,6 +12,7 @@ type Contrato = {
   cliente_nombre: string;
   cliente_dni?: string | null;
   contrato_generado_at: string;
+  contrato_generado_por_nombre?: string | null;
   fecha_evento: string;
   total: number;
 };
@@ -140,13 +141,14 @@ export default function ContratosPage() {
                   <th>Presupuesto</th>
                   <th>Cliente</th>
                   <th>Fecha del contrato</th>
+                  <th>Generado por</th>
                   <th className="text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {contratosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center text-muted py-4">
+                    <td colSpan={6} className="text-center text-muted py-4">
                       {contratos.length === 0
                         ? "No hay contratos generados."
                         : "Ningún contrato coincide con la búsqueda."}
@@ -164,6 +166,9 @@ export default function ContratosPage() {
                         {c.contrato_generado_at
                           ? formatDateTimeArgentina(c.contrato_generado_at)
                           : "-"}
+                      </td>
+                      <td className="text-muted small">
+                        {c.contrato_generado_por_nombre || "—"}
                       </td>
                       <td className="text-center">
                         <button

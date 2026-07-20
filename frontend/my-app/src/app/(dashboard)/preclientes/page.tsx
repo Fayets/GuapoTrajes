@@ -22,6 +22,9 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
 type Precliente = {
   id: string;
@@ -39,6 +42,8 @@ export default function PreclientesPage() {
   const [preclienteSeleccionado, setPreclienteSeleccionado] =
     useState<Precliente | null>(null);
   const [cargando, setCargando] = useState(true);
+
+  useFlushUndoableDeletesOnLeave();
   // PAGINACIÓN: Estados nuevos
   const [currentPage, setCurrentPage] = useState(0);
   const clientesPorPagina = 18;
@@ -147,34 +152,46 @@ export default function PreclientesPage() {
     setShowDeleteModal(true);
   };
 
-  const eliminarCliente = async () => {
-    if (!clienteActual) return;
-    try {
-      const res = await fetch(
-        `${API_BASE}/preclientes/delete/${clienteActual.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(
-          typeof data.detail === "string"
-            ? data.detail
-            : data.message || "No se pudo eliminar el precliente."
+  const eliminarCliente = () => {
+    const cliente = clienteActual;
+    if (!cliente) return;
+    setShowDeleteModal(false);
+    setClienteActual(null);
+    const snapshot = cliente;
+    scheduleUndoableDelete({
+      id: `precliente-${snapshot.id}`,
+      message: `Precliente «${snapshot.apellido}, ${snapshot.nombre}» eliminado`,
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setPreclientes((prev) => prev.filter((c) => c.id !== snapshot.id));
+      },
+      onRestore: () => {
+        setPreclientes((prev) => {
+          if (prev.some((c) => c.id === snapshot.id)) return prev;
+          return [...prev, snapshot];
+        });
+      },
+      executeDelete: async () => {
+        const res = await fetch(
+          `${API_BASE}/preclientes/delete/${snapshot.id}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
-        return;
-      }
-      setPreclientes(preclientes.filter((c) => c.id !== clienteActual.id));
-      setShowDeleteModal(false);
-      setClienteActual(null);
-    } catch (err) {
-      console.error("Error al eliminar cliente", err);
-      alert("Error inesperado al eliminar el precliente.");
-    }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(
+            typeof data.detail === "string"
+              ? data.detail
+              : data.message || "No se pudo eliminar el precliente."
+          );
+        }
+        toast.success("Precliente eliminado");
+      },
+    });
   };
   const iniciarConversionPrecliente = (precliente: Precliente) => {
     setFormDataCliente({

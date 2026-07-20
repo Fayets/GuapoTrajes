@@ -8,6 +8,9 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useAuth } from "@/context/auth-context";
 import { useSucursal } from "@/context/sucursal-context";
+import { ConfirmDeleteDialog } from "@/components/modales/confirm-delete-dialog";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
 type MovimientoCajaChica = {
   id: number;
@@ -76,8 +79,11 @@ export default function CajaChicaPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [movimientoEditando, setMovimientoEditando] =
     useState<MovimientoCajaChica | null>(null);
-  const [eliminandoId, setEliminandoId] = useState<number | null>(null);
+  const [movimientoAEliminar, setMovimientoAEliminar] =
+    useState<MovimientoCajaChica | null>(null);
   const [search, setSearch] = useState("");
+
+  useFlushUndoableDeletesOnLeave();
   const [showModal, setShowModal] = useState(false);
   const [showDetalle, setShowDetalle] = useState(false);
   const [detalleSeleccionado, setDetalleSeleccionado] =
@@ -415,7 +421,7 @@ export default function CajaChicaPage() {
     setShowModal(true);
   };
 
-  const handleDelete = async (movimiento: MovimientoCajaChica) => {
+  const solicitarEliminarMovimiento = (movimiento: MovimientoCajaChica) => {
     if (movimiento.tipo_movimiento !== "EGRESO") {
       toast.info("Los ingresos automáticos no pueden eliminarse desde aquí.");
       return;
@@ -426,43 +432,51 @@ export default function CajaChicaPage() {
       return;
     }
 
-    const confirmacion = window.confirm(
-      "¿Seguro que querés eliminar este movimiento de caja chica?"
-    );
-    if (!confirmacion) return;
-
     if (!token) {
       toast.error("No se pudo determinar el usuario actual.");
       return;
     }
 
-    setEliminandoId(movimiento.id);
-    try {
-      const response = await fetch(
-        `${API_BASE}/caja_chica/movimientos/${movimiento.id}`,
-        {
-          method: "DELETE",
-          headers: headersAutenticacion(),
+    setMovimientoAEliminar(movimiento);
+  };
+
+  const confirmarEliminarMovimiento = () => {
+    const movimiento = movimientoAEliminar;
+    if (!movimiento) return;
+    setMovimientoAEliminar(null);
+    const snapshot = movimiento;
+    scheduleUndoableDelete({
+      id: `caja-chica-movimiento-${snapshot.id}`,
+      message: "Movimiento de caja chica eliminado",
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setMovimientos((prev) => prev.filter((x) => x.id !== snapshot.id));
+      },
+      onRestore: () => {
+        setMovimientos((prev) => {
+          if (prev.some((x) => x.id === snapshot.id)) return prev;
+          return [...prev, snapshot];
+        });
+      },
+      executeDelete: async () => {
+        const response = await fetch(
+          `${API_BASE}/caja_chica/movimientos/${snapshot.id}`,
+          {
+            method: "DELETE",
+            headers: headersAutenticacion(),
+          }
+        );
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result?.success === false) {
+          const message =
+            result?.message ||
+            result?.detail ||
+            "No se pudo eliminar el movimiento";
+          throw new Error(message);
         }
-      );
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || result?.success === false) {
-        const message =
-          result?.message ||
-          result?.detail ||
-          "No se pudo eliminar el movimiento";
-        throw new Error(message);
-      }
-
-      toast.success("Movimiento eliminado correctamente");
-      await fetchMovimientos();
-    } catch (error: any) {
-      console.error("Error al eliminar movimiento de caja chica:", error);
-      toast.error(error.message || "No se pudo eliminar el movimiento");
-    } finally {
-      setEliminandoId(null);
-    }
+        toast.success("Movimiento eliminado correctamente");
+      },
+    });
   };
 
   return (
@@ -645,15 +659,10 @@ export default function CajaChicaPage() {
                               {movimiento.tipo_movimiento === "EGRESO" && (
                                 <button
                                   className="btn-action btn-action--borrar"
-                                  onClick={() => handleDelete(movimiento)}
-                                  disabled={eliminandoId === movimiento.id}
+                                  onClick={() => solicitarEliminarMovimiento(movimiento)}
                                   title="Eliminar"
                                 >
-                                  {eliminandoId === movimiento.id ? (
-                                    <i className="bi bi-arrow-clockwise spin"></i>
-                                  ) : (
-                                    <Trash2 size={16} strokeWidth={1.75} aria-hidden />
-                                  )}
+                                  <Trash2 size={16} strokeWidth={1.75} aria-hidden />
                                 </button>
                               )}
                             </>
@@ -938,6 +947,15 @@ export default function CajaChicaPage() {
       {(showModal || showDetalle) && (
         <div className="modal-backdrop fade show" style={{ display: "block" }}></div>
       )}
+
+      <ConfirmDeleteDialog
+        open={movimientoAEliminar != null}
+        onOpenChange={(open) => {
+          if (!open) setMovimientoAEliminar(null);
+        }}
+        itemLabel="este movimiento"
+        onConfirm={confirmarEliminarMovimiento}
+      />
     </div>
   );
 }

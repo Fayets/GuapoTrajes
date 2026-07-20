@@ -36,6 +36,8 @@ import {
   clearVentaImport,
   type ScanQueueRow,
 } from "@/lib/scan-queue";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
 interface ProductoVenta {
   producto_id: number;
@@ -119,6 +121,8 @@ export default function VentasPage() {
   const [ventaParaVer, setVentaParaVer] = useState<Venta | null>(null);
   const [ventaAEliminar, setVentaAEliminar] = useState<Venta | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  useFlushUndoableDeletesOnLeave();
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [productoFiltro, setProductoFiltro] = useState("");
   const [clienteFiltro, setClienteFiltro] = useState("");
@@ -546,18 +550,33 @@ export default function VentasPage() {
     }
   };
 
-  const eliminarVenta = async (id: number) => {
-    try {
-      const res = await fetch(`${API_URL}/${id}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) throw new Error("Error al eliminar venta");
-      setVentas((prev) => prev.filter((v) => v.id !== id));
-      toast.success("Venta eliminada");
-    } catch (err) {
-      toast.error("No se pudo eliminar la venta");
-    }
+  const confirmarEliminarVenta = () => {
+    const v = ventaAEliminar;
+    if (!v) return;
+    setVentaAEliminar(null);
+    const snapshot = v;
+    scheduleUndoableDelete({
+      id: `venta-${snapshot.id}`,
+      message: "Venta eliminada",
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setVentas((prev) => prev.filter((x) => x.id !== snapshot.id));
+      },
+      onRestore: () => {
+        setVentas((prev) => {
+          if (prev.some((x) => x.id === snapshot.id)) return prev;
+          return [...prev, snapshot];
+        });
+      },
+      executeDelete: async () => {
+        const res = await fetch(`${API_URL}/${snapshot.id}`, {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+        });
+        if (!res.ok) throw new Error("No se pudo eliminar la venta");
+        toast.success("Venta eliminada");
+      },
+    });
   };
 
   const getPrecioUnitario = (producto_id?: number, tipo_precio?: string) => {
@@ -1734,12 +1753,7 @@ export default function VentasPage() {
             </Button>
             <Button
               variant="danger"
-              onClick={() => {
-                if (ventaAEliminar) {
-                  eliminarVenta(ventaAEliminar.id);
-                  setVentaAEliminar(null);
-                }
-              }}
+              onClick={confirmarEliminarVenta}
             >
               Eliminar
             </Button>

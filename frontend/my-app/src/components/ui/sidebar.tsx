@@ -166,6 +166,12 @@ export function Sidebar({ collapsed, toggleSidebar, mobileOpen = false, onMobile
       ],
     },
     {
+      title: "Auditoría",
+      icon: "bi-person-lines-fill",
+      href: "/auditoria",
+      allow: ["ADMIN", "SUPER_ADMIN"],
+    },
+    {
       title: "Logs del sistema",
       icon: "bi-file-text",
       href: "/logs",

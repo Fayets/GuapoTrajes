@@ -11,6 +11,25 @@ router = APIRouter()
 servicio = UsuariosServices()
 logger = logging.getLogger("guapotrajes")
 
+# Roles gestionables desde la UI de usuarios (nunca SUPER_ADMIN).
+ROLES_GESTIONABLES = {Roles.EMPLEADO, Roles.ADMIN}
+
+
+def _rol_as_enum(rol) -> Roles:
+    if isinstance(rol, Roles):
+        return rol
+    return Roles(str(rol))
+
+
+def _assert_rol_gestionable(rol) -> Roles:
+    rol_enum = _rol_as_enum(rol)
+    if rol_enum not in ROLES_GESTIONABLES:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo se pueden crear o asignar roles EMPLEADO o ADMIN",
+        )
+    return rol_enum
+
 
 @router.get("/all", response_model=List[schemas.UserResponse])
 @db_session
@@ -18,20 +37,23 @@ def listar_usuarios(
     current_user=Depends(require_role(Roles.ADMIN, Roles.SUPER_ADMIN)),
 ):
     """
-    Lista todos los usuarios.
+    Lista usuarios gestionables (EMPLEADO y ADMIN).
+    Excluye SUPER_ADMIN de la respuesta de gestión.
     Solo ADMIN y SUPER_ADMIN pueden acceder.
     """
     try:
         usuarios = servicio.listar_usuarios()
         result = []
         for usuario in usuarios:
+            if _rol_as_enum(usuario.rol) == Roles.SUPER_ADMIN:
+                continue
             # Extraer todos los datos dentro del db_session
             sucursal_id = None
             sucursal_nombre = None
             if usuario.sucursal:
                 sucursal_id = usuario.sucursal.id
                 sucursal_nombre = usuario.sucursal.nombre
-            
+
             result.append({
                 "id": usuario.id,
                 "username": usuario.username,
@@ -62,14 +84,19 @@ def obtener_usuario_por_id(
         usuario = servicio.buscar_usuario_por_id(usuario_id)
         if not usuario:
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
-        
+        if _rol_as_enum(usuario.rol) == Roles.SUPER_ADMIN:
+            raise HTTPException(
+                status_code=403,
+                detail="No se puede consultar un usuario SUPER_ADMIN desde esta gestión",
+            )
+
         # Extraer todos los datos dentro del db_session
         sucursal_id = None
         sucursal_nombre = None
         if usuario.sucursal:
             sucursal_id = usuario.sucursal.id
             sucursal_nombre = usuario.sucursal.nombre
-        
+
         return {
             "id": usuario.id,
             "username": usuario.username,
@@ -94,26 +121,21 @@ def crear_usuario(
     current_user=Depends(require_role(Roles.ADMIN, Roles.SUPER_ADMIN)),
 ):
     """
-    Crea un nuevo usuario (solo tipo EMPLEADO).
-    Solo ADMIN y SUPER_ADMIN pueden crear usuarios.
+    Crea un nuevo usuario (EMPLEADO o ADMIN).
+    Solo ADMIN y SUPER_ADMIN pueden crear usuarios. No se puede crear SUPER_ADMIN.
     """
     try:
-        # Solo permitir crear usuarios tipo EMPLEADO
-        if usuario.role != Roles.EMPLEADO:
-            raise HTTPException(
-                status_code=403,
-                detail="Solo se pueden crear usuarios tipo EMPLEADO"
-            )
-        
+        _assert_rol_gestionable(usuario.role)
+
         usuario_creado = servicio.crear_usuario(usuario)
-        
+
         # Extraer todos los datos dentro del db_session
         sucursal_id = None
         sucursal_nombre = None
         if usuario_creado.sucursal:
             sucursal_id = usuario_creado.sucursal.id
             sucursal_nombre = usuario_creado.sucursal.nombre
-        
+
         logger.info(
             "Usuario creado",
             extra={
@@ -123,7 +145,7 @@ def crear_usuario(
                 "usuario_username": usuario_creado.username,
             },
         )
-        
+
         return {
             "message": "Usuario creado correctamente",
             "success": True,
@@ -153,19 +175,19 @@ def actualizar_usuario(
     current_user=Depends(require_role(Roles.ADMIN, Roles.SUPER_ADMIN)),
 ):
     """
-    Actualiza un usuario existente.
-    Solo ADMIN y SUPER_ADMIN pueden actualizar usuarios.
+    Actualiza un usuario existente (EMPLEADO o ADMIN).
+    No se puede editar ni asignar SUPER_ADMIN.
     """
     try:
         usuario_actualizado = servicio.actualizar_usuario(usuario_id, usuario_update)
-        
+
         # Extraer todos los datos dentro del db_session
         sucursal_id = None
         sucursal_nombre = None
         if usuario_actualizado.sucursal:
             sucursal_id = usuario_actualizado.sucursal.id
             sucursal_nombre = usuario_actualizado.sucursal.nombre
-        
+
         logger.info(
             "Usuario actualizado",
             extra={
@@ -174,7 +196,7 @@ def actualizar_usuario(
                 "usuario_id": usuario_id,
             },
         )
-        
+
         return {
             "message": "Usuario actualizado correctamente",
             "success": True,

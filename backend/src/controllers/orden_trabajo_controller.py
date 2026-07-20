@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
-from src.schemas import OrdenTrabajoCreateSchema, OrdenTrabajoResponseSchema, ProductoReservadoSchema, ProductoReservadoModistaUpdateSchema, PagoSaldoPendienteSchema, DevolucionParcialSchema, CompletarDevolucionSchema
+from src.schemas import OrdenTrabajoCreateSchema, OrdenTrabajoResponseSchema, ProductoReservadoSchema, ProductoReservadoModistaUpdateSchema, PagoSaldoPendienteSchema, DevolucionParcialSchema, CompletarDevolucionSchema, ResolverRevisionDevolucionSchema, EnviarModistaDesdeOrdenSchema, RegistrarContratoSchema
 from src.services.orden_trabajo_services import OrdenTrabajoServices
 from pony.orm import db_session
 from src.deps import get_current_user, require_role
 from fastapi.responses import FileResponse
 from src.models import OrdenTrabajo
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Body
 
 router = APIRouter(prefix="/ordenes")
 servicio = OrdenTrabajoServices()
@@ -252,11 +252,46 @@ def actualizar_modista_producto_reservado(
         )
 
 
-@router.post("/{orden_id}/registrar-contrato")
-def registrar_contrato_generado(orden_id: int, current_user=Depends(get_current_user)):
-    """Registrar que se generó el contrato para esta orden (cliente, saldo 0, DNI y dirección)."""
+@router.post("/{orden_id}/productos-reservados/{producto_id}/enviar-modista")
+def enviar_producto_a_modista_desde_orden(
+    orden_id: int,
+    producto_id: int,
+    data: EnviarModistaDesdeOrdenSchema,
+    current_user=Depends(get_current_user),
+):
+    """Envía a modista una prenda ya marcada (crea ProductoModista con datos de la orden)."""
     try:
-        return servicio.registrar_contrato_generado(orden_id, current_user)
+        return servicio.enviar_producto_a_modista_desde_orden(
+            orden_id,
+            producto_id,
+            data.modista_id,
+            current_user.id,
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inesperado al enviar a modista: {str(e)}",
+        )
+
+
+@router.post("/{orden_id}/registrar-contrato")
+def registrar_contrato_generado(
+    orden_id: int,
+    data: Optional[RegistrarContratoSchema] = Body(None),
+    current_user=Depends(get_current_user),
+):
+    """Registrar que se generó el contrato para esta orden (cliente, saldo 0, DNI y dirección).
+
+    Body opcional: { firmante: { nombre, dni, direccion, celular? } } para anexar
+    firmante distinto del titular (quien retira). Sin firmante = titular firma.
+    """
+    try:
+        firmante = data.firmante if data is not None else None
+        return servicio.registrar_contrato_generado(
+            orden_id, current_user, firmante=firmante
+        )
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -310,4 +345,27 @@ def devolucion_parcial(
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado al registrar devolución parcial: {str(e)}")
+
+
+@router.post("/{orden_id}/resolver-revision")
+def resolver_revision_devolucion(
+    orden_id: int,
+    data: ResolverRevisionDevolucionSchema,
+    current_user=Depends(get_current_user),
+):
+    """Marca una revisión de devolución parcial como resuelta."""
+    try:
+        return servicio.resolver_revision_devolucion(
+            orden_id,
+            current_user.id,
+            revision_id=data.revision_id,
+            producto_id=data.producto_id,
+        )
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inesperado al resolver revisión: {str(e)}",
+        )
 

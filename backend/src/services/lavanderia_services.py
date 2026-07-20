@@ -9,6 +9,11 @@ from src.services.productos_services import _producto_to_response_dict
 from typing import List, Optional
 
 from src.fechas_ar import hoy_ar
+from src.revision_devolucion import (
+    MENSAJE_CUIDADO_ESPECIAL,
+    cuidado_especial_desde_ingresos,
+    notas_indican_revision,
+)
 
 class LavanderiaServices:
     def crear_lavanderia(self, nueva_lavanderia: schemas.LavanderiaCreate) -> dict:
@@ -55,6 +60,7 @@ class LavanderiaServices:
         notas: Optional[str] = None,
         cliente_nombre: Optional[str] = None,
         cliente_celular: Optional[str] = None,
+        usuario_id: Optional[int] = None,
     ) -> dict:
         with db_session:
             lavanderia = models.Lavanderia.get(id=lavanderia_id)
@@ -78,6 +84,7 @@ class LavanderiaServices:
             notas_val = (notas or "").strip() or None
             cli_n = (cliente_nombre or "").strip() or None
             cli_c = (cliente_celular or "").strip() or None
+            usuario = models.Usuario.get(id=usuario_id) if usuario_id else None
 
             # Pony: no pasar None a Optional(str) en el constructor (falla la validación).
             pl_kwargs = {
@@ -91,11 +98,24 @@ class LavanderiaServices:
                 pl_kwargs["cliente_nombre"] = cli_n
             if cli_c is not None:
                 pl_kwargs["cliente_celular"] = cli_c
+            if usuario is not None:
+                pl_kwargs["enviado_por"] = usuario
             models.ProductoLavanderia(**pl_kwargs)
 
             producto.estado = models.EstadoProducto.LAVANDERIA
             producto.inmovilizado = False
             flush()
+
+            from src.services.auditoria_services import registrar_auditoria
+            from src.models import AccionAuditoria
+            registrar_auditoria(
+                usuario,
+                AccionAuditoria.LAVANDERIA_ENVIO,
+                "producto",
+                producto.id,
+                f"Producto {producto.codigo_barra} enviado a lavandería",
+                {"lavanderia_id": lavanderia.id},
+            )
 
             return {
                 "message": "Producto asignado a lavandería exitosamente",
@@ -129,6 +149,20 @@ class LavanderiaServices:
             "notas": (pl.notas or "") or "",
             "cliente_nombre": (pl.cliente_nombre or "") or "",
             "cliente_celular": (pl.cliente_celular or "") or "",
+            "enviado_por_id": pl.enviado_por.id if getattr(pl, "enviado_por", None) else None,
+            "enviado_por_nombre": (
+                f"{pl.enviado_por.nombre} {pl.enviado_por.apellido}".strip()
+                if getattr(pl, "enviado_por", None)
+                else None
+            ),
+            "recibido_por_id": pl.recibido_por.id if getattr(pl, "recibido_por", None) else None,
+            "recibido_por_nombre": (
+                f"{pl.recibido_por.nombre} {pl.recibido_por.apellido}".strip()
+                if getattr(pl, "recibido_por", None)
+                else None
+            ),
+            "requiere_cuidado_especial": notas_indican_revision(pl.notas)
+            or cuidado_especial_desde_ingresos(pl.producto, [pl])[0],
         }
 
     @staticmethod
@@ -144,9 +178,9 @@ class LavanderiaServices:
                 if not lav:
                     raise HTTPException(status_code=404, detail="Lavandería no encontrada")
 
-            candidatos = list(
-                models.ProductoLavanderia.select(lambda pl: pl.fecha_salida is None)
-            )
+            candidatos = [
+                pl for pl in list(models.ProductoLavanderia.select()) if pl.fecha_salida is None
+            ]
             if lavanderia_id is not None:
                 candidatos = [pl for pl in candidatos if pl.lavanderia.id == lavanderia_id]
 
@@ -163,7 +197,7 @@ class LavanderiaServices:
 
             return [self._producto_en_lavanderia_dict(pl) for pl in por_producto.values()]
 
-    def regresar_producto_de_lavanderia(self, producto_id: int):
+    def regresar_producto_de_lavanderia(self, producto_id: int, usuario_id: Optional[int] = None):
         with db_session:
             producto = models.Producto.get(id=producto_id)
 
@@ -178,20 +212,41 @@ class LavanderiaServices:
                 )
 
             hoy = hoy_ar()
+            usuario = models.Usuario.get(id=usuario_id) if usuario_id else None
             for pl in abiertos:
                 pl.fecha_salida = hoy
+                if usuario is not None:
+                    pl.recibido_por = usuario
 
             producto.estado = models.EstadoProducto.SALON
             producto.inmovilizado = False
 
+            from src.services.auditoria_services import registrar_auditoria
+            from src.models import AccionAuditoria
+            registrar_auditoria(
+                usuario,
+                AccionAuditoria.LAVANDERIA_RECEPCION,
+                "producto",
+                producto.id,
+                f"Recepción desde lavandería — {producto.codigo_barra}",
+                None,
+            )
+
             principal = max(abiertos, key=lambda x: x.id or 0)
+            cuidado, orden_rev = cuidado_especial_desde_ingresos(producto, abiertos)
             return schemas.RegresoProductoLavanderiaResponse(
                 fecha_ingreso=principal.fecha_ingreso,
                 fecha_salida=principal.fecha_salida,
                 estado=producto.estado,
+                requiere_cuidado_especial=cuidado,
+                mensaje_revision=MENSAJE_CUIDADO_ESPECIAL if cuidado else None,
+                orden_id=orden_rev,
+                producto_id=producto.id,
             )
 
-    def regresar_varios_de_lavanderia(self, productos_ids: List[int]) -> dict:
+    def regresar_varios_de_lavanderia(
+        self, productos_ids: List[int], usuario_id: Optional[int] = None
+    ) -> dict:
         """Marca salida de lavandería y estado SALON para cada producto válido.
 
         Tolera ingresos abiertos duplicados del mismo producto (cierra todos).
@@ -199,9 +254,11 @@ class LavanderiaServices:
         """
         regresados: List[int] = []
         errores: List[dict] = []
+        cuidado_especial: List[dict] = []
         hoy = hoy_ar()
         ids_unicos = list(dict.fromkeys(productos_ids))
         with db_session:
+            usuario = models.Usuario.get(id=usuario_id) if usuario_id else None
             for pid in ids_unicos:
                 try:
                     producto = models.Producto.get(id=pid)
@@ -217,18 +274,51 @@ class LavanderiaServices:
                             }
                         )
                         continue
+                    cuidado, orden_rev = cuidado_especial_desde_ingresos(producto, abiertos)
                     for pl in abiertos:
                         pl.fecha_salida = hoy
+                        if usuario is not None:
+                            pl.recibido_por = usuario
                     producto.estado = models.EstadoProducto.SALON
                     producto.inmovilizado = False
                     regresados.append(pid)
+                    if cuidado:
+                        cuidado_especial.append(
+                            {
+                                "producto_id": pid,
+                                "orden_id": orden_rev,
+                                "mensaje": MENSAJE_CUIDADO_ESPECIAL,
+                            }
+                        )
                 except Exception as e:
                     errores.append({"producto_id": pid, "detail": str(e)})
             flush()
+            if regresados:
+                from src.services.auditoria_services import registrar_auditoria
+                from src.models import AccionAuditoria
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.LAVANDERIA_RECEPCION,
+                    "producto",
+                    regresados[0],
+                    f"Recepción desde lavandería — {len(regresados)} prenda(s)",
+                    {"productos": regresados},
+                )
+
+        msg = f"Regresaron {len(regresados)} producto(s) al salón."
+        if errores:
+            msg += f" {len(errores)} con aviso."
+        if cuidado_especial:
+            msg += f" {len(cuidado_especial)} con revisión pendiente (cuidado especial)."
 
         return {
-            "message": f"Regresaron {len(regresados)} producto(s) al salón."
-            + (f" {len(errores)} con aviso." if errores else ""),
+            "message": msg,
             "success": True,
-            "data": {"regresados": regresados, "errores": errores},
+            "data": {
+                "regresados": regresados,
+                "errores": errores,
+                "requiere_cuidado_especial": len(cuidado_especial) > 0,
+                "cuidado_especial": cuidado_especial,
+                "mensaje_revision": MENSAJE_CUIDADO_ESPECIAL if cuidado_especial else None,
+            },
         }

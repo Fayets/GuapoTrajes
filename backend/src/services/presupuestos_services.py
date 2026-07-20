@@ -5,9 +5,10 @@ from decouple import config
 from fastapi import HTTPException
 from src.fechas_ar import fecha_presupuesto_api_ymd, instante_a_fecha_ar, ahora_ar, isoformat_ar
 from src.money import round_pesos
-from src.models import Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, Roles, Usuario, db
+from src.models import AccionAuditoria, Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, Roles, Usuario, db
 from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse, ConjuntoMismaFechaCategoriaOut
 from src.descripcion_producto import format_descripcion_producto
+from src.services.auditoria_services import nombre_usuario, registrar_auditoria
 from src.services.disponibilidad_services import (
     validar_producto_para_item_presupuesto,
     reconstruir_productos_reservados_para_orden,
@@ -196,6 +197,8 @@ class PresupuestosServices:
                     "total": total,
                     "fecha_creacion": ahora_ar(),
                 }
+                if usuario_aplico_descuento:
+                    presupuesto_args["creado_por"] = usuario_aplico_descuento
                 
                 # Solo agregar campos de descuento extra si tienen valores
                 if data.extra_discount_percentage is not None:
@@ -227,6 +230,14 @@ class PresupuestosServices:
                     )
                 
                 flush()
+                registrar_auditoria(
+                    usuario_aplico_descuento,
+                    AccionAuditoria.PRESUPUESTO_CREADO,
+                    "presupuesto",
+                    presupuesto.id,
+                    f"Presupuesto {presupuesto.numero} creado",
+                    {"numero": presupuesto.numero, "total": presupuesto.total},
+                )
                 commit()
                 
                 return {
@@ -238,7 +249,9 @@ class PresupuestosServices:
                         "cliente_id": presupuesto.cliente.id if presupuesto.cliente else None,
                         "precliente_id": presupuesto.precliente.id if presupuesto.precliente else None,
                         "total": presupuesto.total,
-                        "estado": presupuesto.estado
+                        "estado": presupuesto.estado,
+                        "creado_por_id": presupuesto.creado_por.id if presupuesto.creado_por else None,
+                        "creado_por_nombre": nombre_usuario(presupuesto.creado_por),
                     }
                 }
                 
@@ -303,6 +316,11 @@ class PresupuestosServices:
                         extra_discount_applied_by_nombre=f"{p.extra_discount_applied_by.nombre} {p.extra_discount_applied_by.apellido}" if p.extra_discount_applied_by else None,
                         extra_discount_created_at=str(p.extra_discount_created_at) if p.extra_discount_created_at else None,
                         orden_id=p.orden_trabajo.id if p.orden_trabajo else None,
+                        creado_por_id=p.creado_por.id if p.creado_por else None,
+                        creado_por_nombre=nombre_usuario(p.creado_por),
+                        actualizado_por_id=p.actualizado_por.id if p.actualizado_por else None,
+                        actualizado_por_nombre=nombre_usuario(p.actualizado_por),
+                        actualizado_at=isoformat_ar(p.actualizado_at) if p.actualizado_at else None,
                     )
                     for p in presupuestos
                 ]
@@ -569,7 +587,19 @@ class PresupuestosServices:
                     orden.extra_discount_created_at = presupuesto.extra_discount_created_at
                     reconstruir_productos_reservados_para_orden(orden, presupuesto)
 
+                if usuario_aplico_descuento:
+                    presupuesto.actualizado_por = usuario_aplico_descuento
+                    presupuesto.actualizado_at = ahora_ar()
+
                 flush()
+                registrar_auditoria(
+                    usuario_aplico_descuento,
+                    AccionAuditoria.PRESUPUESTO_EDITADO,
+                    "presupuesto",
+                    presupuesto.id,
+                    f"Presupuesto {presupuesto.numero} editado",
+                    {"numero": presupuesto.numero, "total": presupuesto.total},
+                )
                 commit()
 
                 return {
@@ -578,7 +608,9 @@ class PresupuestosServices:
                     "data": {
                         "id": presupuesto.id,
                         "numero": presupuesto.numero,
-                        "total": presupuesto.total
+                        "total": presupuesto.total,
+                        "actualizado_por_id": presupuesto.actualizado_por.id if presupuesto.actualizado_por else None,
+                        "actualizado_por_nombre": nombre_usuario(presupuesto.actualizado_por),
                     }
                 }
 
@@ -653,6 +685,11 @@ class PresupuestosServices:
                     extra_discount_applied_by_nombre=f"{presupuesto.extra_discount_applied_by.nombre} {presupuesto.extra_discount_applied_by.apellido}" if presupuesto.extra_discount_applied_by else None,
                     extra_discount_created_at=str(presupuesto.extra_discount_created_at) if presupuesto.extra_discount_created_at else None,
                     orden_id=presupuesto.orden_trabajo.id if presupuesto.orden_trabajo else None,
+                    creado_por_id=presupuesto.creado_por.id if presupuesto.creado_por else None,
+                    creado_por_nombre=nombre_usuario(presupuesto.creado_por),
+                    actualizado_por_id=presupuesto.actualizado_por.id if presupuesto.actualizado_por else None,
+                    actualizado_por_nombre=nombre_usuario(presupuesto.actualizado_por),
+                    actualizado_at=isoformat_ar(presupuesto.actualizado_at) if presupuesto.actualizado_at else None,
                 )
 
             except HTTPException:

@@ -790,18 +790,24 @@ class ProductoServices:
                 # Si no, filtra por sucursal
                 is_admin = user.rol == Roles.ADMIN
                 
-                data = {}
-                for est in EstadoProducto:
-                    if is_admin:
-                        # ADMIN ve todos los productos
-                        data[est.value] = models.Producto.select(lambda p: p.estado == est).count()
-                    else:
-                        # Empleado ve solo productos de su sucursal
-                        if not user.sucursal:
-                            data[est.value] = 0
-                        else:
-                            sucursal_id = user.sucursal.id
-                            data[est.value] = models.Producto.select(lambda p: p.estado == est and p.sucursal.id == sucursal_id).count()
+                # Pony ORM + Python 3.14: select(lambda …) falla al descompilar.
+                # Contar en memoria sobre Producto.select().
+                productos = list(models.Producto.select())
+                if not is_admin:
+                    if not user.sucursal:
+                        return {est.value: 0 for est in EstadoProducto}
+                    sucursal_id = user.sucursal.id
+                    productos = [
+                        p for p in productos
+                        if p.sucursal and p.sucursal.id == sucursal_id
+                    ]
+
+                data = {est.value: 0 for est in EstadoProducto}
+                for p in productos:
+                    estado = p.estado
+                    key = estado.value if hasattr(estado, "value") else str(estado)
+                    if key in data:
+                        data[key] += 1
                 return data
             except HTTPException:
                 raise

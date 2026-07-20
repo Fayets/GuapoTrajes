@@ -17,6 +17,9 @@ from src.models import (
     Roles,
     TipoMovimiento,
     Usuario,
+    AccionAuditoria,
+    RevisionDevolucion,
+    EstadoRevisionDevolucion,
 )
 from datetime import datetime, timedelta
 from src.fechas_ar import ahora_ar, hoy_ar, isoformat_ar
@@ -27,8 +30,56 @@ import logging
 from src.descripcion_producto import format_descripcion_producto
 from src.presupuesto_titular import titular_presupuesto
 from src.services.disponibilidad_services import reconstruir_productos_reservados_para_orden
+from src.services.auditoria_services import nombre_usuario, registrar_auditoria
 
 logger = logging.getLogger(__name__)
+
+# Prefijo en notas de taller para prendas con revisión pendiente (devolución parcial).
+from src.revision_devolucion import PREFIJO_REVISION_NOTA
+
+
+def _revisiones_abiertas_orden(orden) -> list:
+    return [
+        r
+        for r in list(getattr(orden, "revisiones_devolucion", []) or [])
+        if (r.estado or "") == EstadoRevisionDevolucion.ABIERTA.value
+    ]
+
+
+def _revisiones_abiertas_para_api(orden) -> list:
+    out = []
+    for r in _revisiones_abiertas_orden(orden):
+        prod = r.producto
+        out.append(
+            {
+                "id": r.id,
+                "producto_id": prod.id if prod else None,
+                "producto_descripcion": (
+                    format_descripcion_producto(prod.descripcion, prod.descripcion_extra)
+                    if prod
+                    else ""
+                ),
+                "motivo": r.motivo or "",
+                "destino": r.destino or "",
+                "creada_at": isoformat_ar(r.creada_at),
+            }
+        )
+    return out
+
+
+def _campos_trazabilidad_orden(o) -> dict:
+    revisiones = _revisiones_abiertas_para_api(o)
+    return {
+        "creado_por_id": o.creado_por.id if getattr(o, "creado_por", None) else None,
+        "creado_por_nombre": nombre_usuario(getattr(o, "creado_por", None)),
+        "contrato_generado_por_id": o.contrato_generado_por.id if getattr(o, "contrato_generado_por", None) else None,
+        "contrato_generado_por_nombre": nombre_usuario(getattr(o, "contrato_generado_por", None)),
+        "devolucion_recibida_por_id": o.devolucion_recibida_por.id if getattr(o, "devolucion_recibida_por", None) else None,
+        "devolucion_recibida_por_nombre": nombre_usuario(getattr(o, "devolucion_recibida_por", None)),
+        "devolucion_recibida_at": isoformat_ar(getattr(o, "devolucion_recibida_at", None)),
+        "revisiones_abiertas": revisiones,
+        "tiene_revisiones_abiertas": len(revisiones) > 0,
+    }
 
 
 def _origen_caja_liga_presupuesto_o_orden(origen: Optional[str], presupuesto_numero: str, orden_id: int) -> bool:
@@ -162,6 +213,46 @@ def _campos_titular_presupuesto(presupuesto) -> dict:
         "cliente_celular": tit["cliente_celular"],
         "titular_huerfano": tit["titular_huerfano"],
     }
+
+
+def _campos_firmante_orden(orden) -> dict:
+    nombre = (getattr(orden, "firmante_nombre", None) or "").strip() or None
+    dni = (getattr(orden, "firmante_dni", None) or "").strip() or None
+    direccion = (getattr(orden, "firmante_direccion", None) or "").strip() or None
+    celular = (getattr(orden, "firmante_celular", None) or "").strip() or None
+    return {
+        "firmante_nombre": nombre,
+        "firmante_dni": dni,
+        "firmante_direccion": direccion,
+        "firmante_celular": celular,
+        "tiene_firmante_anexo": bool(nombre),
+    }
+
+
+def _aplicar_firmante_orden(orden, firmante) -> None:
+    """Persiste o limpia el snapshot del firmante anexado (no crea Cliente).
+
+    Pony Optional(str) no acepta None al asignar: se usa "" para limpiar.
+    """
+    if firmante is None:
+        orden.firmante_nombre = ""
+        orden.firmante_dni = ""
+        orden.firmante_direccion = ""
+        orden.firmante_celular = ""
+        return
+    nombre = (getattr(firmante, "nombre", None) or "").strip()
+    dni = (getattr(firmante, "dni", None) or "").strip()
+    direccion = (getattr(firmante, "direccion", None) or "").strip()
+    celular = (getattr(firmante, "celular", None) or "").strip()
+    if not nombre or not dni or not direccion:
+        raise HTTPException(
+            status_code=400,
+            detail="El firmante anexado requiere nombre, DNI y domicilio.",
+        )
+    orden.firmante_nombre = nombre
+    orden.firmante_dni = dni
+    orden.firmante_direccion = direccion
+    orden.firmante_celular = celular
 
 
 class OrdenTrabajoServices:
@@ -300,6 +391,7 @@ class OrdenTrabajoServices:
                     extra_discount_applied_by=presupuesto.extra_discount_applied_by,
                     extra_discount_created_at=presupuesto.extra_discount_created_at,
                     conjunto_separado=bool(conjunto_separado),
+                    creado_por=usuario,
                 )
                 flush()
 
@@ -315,6 +407,7 @@ class OrdenTrabajoServices:
                         orden.id,
                         None,
                         None,
+                        usuario=usuario,
                     )
 
                 if monto_efectivo > 1e-9 and cuenta_destino is not None:
@@ -334,9 +427,40 @@ class OrdenTrabajoServices:
                     )
                     flush()
 
+                if seña_total > 1e-9:
+                    ReciboOrden(
+                        orden_trabajo=orden,
+                        fecha_hora=ahora_ar(),
+                        monto=seña_total,
+                        motivo="Seña",
+                        cliente_nombre=_nombre_cliente_para_recibo(orden),
+                        presupuesto_numero=presupuesto.numero,
+                        movimiento_caja_id=None,
+                        usuario=usuario,
+                    )
+                    flush()
+
                 reconstruir_productos_reservados_para_orden(orden, presupuesto)
                 
                 presupuesto.estado = "Aprobado"
+
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.ORDEN_CREADA,
+                    "orden",
+                    orden.id,
+                    f"Orden #{orden.id} creada (presupuesto {presupuesto.numero})",
+                    {"presupuesto_numero": presupuesto.numero, "seña": seña_total},
+                )
+                if seña_total > 1e-9:
+                    registrar_auditoria(
+                        usuario,
+                        AccionAuditoria.COBRO,
+                        "orden",
+                        orden.id,
+                        f"Cobro seña ${seña_total:.2f} — orden #{orden.id}",
+                        {"monto": seña_total, "tipo": "seña"},
+                    )
                 
                 # Debug: verificar la fecha después de guardar
                 print(f"🔍 DEBUG - Orden guardada fecha_evento: {orden.fecha_evento} (tipo: {type(orden.fecha_evento)})")
@@ -354,7 +478,9 @@ class OrdenTrabajoServices:
                         "estado": orden.estado,
                         "metodo_pago": (f"{orden.metodo_pago_configurable.nombre} - {orden.submetodo_pago.nombre}" 
                                        if orden.metodo_pago_configurable and orden.submetodo_pago 
-                                       else (orden.metodo_pago_configurable.nombre if orden.metodo_pago_configurable else orden.metodo_pago))
+                                       else (orden.metodo_pago_configurable.nombre if orden.metodo_pago_configurable else orden.metodo_pago)),
+                        "creado_por_id": usuario.id,
+                        "creado_por_nombre": nombre_usuario(usuario),
                     }
                 }
 
@@ -430,6 +556,8 @@ class OrdenTrabajoServices:
                         "conjunto_separado": bool(
                             getattr(o, "conjunto_separado", False)
                         ),
+                        **_campos_firmante_orden(o),
+                        **_campos_trazabilidad_orden(o),
                     })
                 
                 return resultado
@@ -500,6 +628,8 @@ class OrdenTrabajoServices:
                     "conjunto_separado": bool(
                         getattr(orden, "conjunto_separado", False)
                     ),
+                    **_campos_firmante_orden(orden),
+                    **_campos_trazabilidad_orden(orden),
                 }
             except HTTPException:
                 raise
@@ -685,6 +815,7 @@ class OrdenTrabajoServices:
                         orden.id,
                         None,
                         None,
+                        usuario=usuario,
                     )
 
                 saldo_pendiente_anterior = round_pesos(orden.saldo_pendiente)
@@ -730,11 +861,21 @@ class OrdenTrabajoServices:
                     cliente_nombre=cliente_nombre_recibo,
                     presupuesto_numero=orden.presupuesto.numero,
                     movimiento_caja_id=movimiento_caja.id if movimiento_caja else None,
+                    usuario=usuario,
                 )
                 flush()
 
                 if nuevo_saldo_pendiente == 0:
                     orden.estado = "Pagada"
+
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.COBRO,
+                    "orden",
+                    orden.id,
+                    f"Cobro ${monto_total:.2f} — orden #{orden.id}",
+                    {"monto": monto_total, "tipo": "pago_saldo", "recibo_id": recibo.id},
+                )
 
                 return {
                     "message": "Pago registrado exitosamente",
@@ -1130,9 +1271,13 @@ class OrdenTrabajoServices:
                         detail="No se puede editar una orden cancelada",
                     )
 
-                pr = ProductoReservado.get(
-                    lambda p: p.orden_trabajo.id == orden_id
-                    and p.producto.id == producto_id
+                pr = next(
+                    (
+                        p
+                        for p in list(orden.productos_reservados)
+                        if p.producto and p.producto.id == producto_id
+                    ),
+                    None,
                 )
                 if not pr:
                     raise HTTPException(
@@ -1150,7 +1295,7 @@ class OrdenTrabajoServices:
                         )
                     pr.notas_modista = notas
                 else:
-                    pr.notas_modista = None
+                    pr.notas_modista = ""
 
                 flush()
                 return {
@@ -1166,11 +1311,123 @@ class OrdenTrabajoServices:
                     detail=f"Error al actualizar modista del producto: {str(e)}",
                 )
 
-    def registrar_contrato_generado(self, orden_id: int, usuario=None) -> dict:
+    def enviar_producto_a_modista_desde_orden(
+        self,
+        orden_id: int,
+        producto_id: int,
+        modista_id: int,
+        usuario_id: int,
+    ) -> dict:
+        """Envía una prenda marcada para modista creando el ingreso real (ProductoModista)."""
+        with db_session:
+            orden = OrdenTrabajo.get(id=orden_id)
+            if not orden:
+                raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
+            if orden.estado and orden.estado.lower() in ("cancelada", "completada"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No se puede enviar a modista una orden en estado '{orden.estado}'",
+                )
+
+            pr = next(
+                (
+                    p
+                    for p in list(orden.productos_reservados)
+                    if p.producto and p.producto.id == producto_id
+                ),
+                None,
+            )
+            if not pr:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Producto no encontrado en esta orden",
+                )
+            if not bool(getattr(pr, "requiere_modista", False)):
+                raise HTTPException(
+                    status_code=400,
+                    detail="La prenda no está marcada para trabajo de modista",
+                )
+            notas = (pr.notas_modista or "").strip()
+            if not notas:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Indicá qué debe hacerse en modista antes de enviar",
+                )
+
+            prod = pr.producto
+            if prod.estado == EstadoProducto.MODISTA:
+                abiertos = [
+                    pm
+                    for pm in list(prod.productos_modistas)
+                    if pm.fecha_salida is None
+                ]
+                if abiertos:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="La prenda ya está enviada a modista",
+                    )
+
+            cliente_nombre, cliente_celular = self._obtener_cliente_orden(orden)
+            fecha_retiro = None
+            presupuesto = orden.presupuesto
+            if presupuesto and getattr(presupuesto, "fecha_retiro", None):
+                fecha_retiro = presupuesto.fecha_retiro.strftime("%d/%m/%Y")
+
+            notas_envio = notas
+            if fecha_retiro:
+                notas_envio = f"Retiro: {fecha_retiro} | {notas}"
+
+            # Copiar valores fuera de la sesión antes de delegar
+            payload = {
+                "modista_id": modista_id,
+                "producto_id": producto_id,
+                "notas": notas_envio,
+                "cliente_nombre": cliente_nombre,
+                "cliente_celular": cliente_celular,
+                "usuario_id": usuario_id,
+                "fecha_retiro": fecha_retiro,
+                "orden_id": orden_id,
+            }
+
+        from src.services.modista_services import ModistaServices
+
+        result = ModistaServices().asignar_producto(
+            modista_id=payload["modista_id"],
+            producto_id=payload["producto_id"],
+            notas=payload["notas"],
+            cliente_nombre=payload["cliente_nombre"],
+            cliente_celular=payload["cliente_celular"],
+            usuario_id=payload["usuario_id"],
+        )
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("message") or "No se pudo enviar a modista",
+            )
+        data = result.get("data") or {}
+        return {
+            "message": "Prenda enviada a modista",
+            "success": True,
+            "data": {
+                **(data if isinstance(data, dict) else {}),
+                "orden_id": payload["orden_id"],
+                "producto_id": payload["producto_id"],
+                "modista_id": payload["modista_id"],
+                "notas_enviadas": payload["notas"],
+                "cliente_nombre": payload["cliente_nombre"],
+                "fecha_retiro": payload["fecha_retiro"],
+            },
+        }
+
+    def registrar_contrato_generado(self, orden_id: int, usuario=None, firmante=None) -> dict:
         """Registrar que se generó el contrato para esta orden (cliente, DNI y dirección).
 
         Empleados: requieren saldo pendiente 0.
         ADMIN / SUPER_ADMIN: pueden generar aunque haya deuda.
+
+        firmante: opcional. Si se envía, se guarda snapshot para el LOCATARIO/pagaré
+        (quien retira). Si es None, se limpia y el impreso usa al titular.
+        Si el contrato ya estaba generado, solo actualiza el firmante (reimpresión).
         """
         with db_session:
             try:
@@ -1186,18 +1443,59 @@ class OrdenTrabajoServices:
                         raise HTTPException(status_code=400, detail="El saldo pendiente debe ser cero para generar el contrato.")
                 if not orden.presupuesto.cliente.dni or not orden.presupuesto.cliente.direccion:
                     raise HTTPException(status_code=400, detail="El cliente debe tener DNI y Dirección para generar el contrato.")
+
+                _aplicar_firmante_orden(orden, firmante)
+                firmante_payload = _campos_firmante_orden(orden)
+
+                ya_generado = getattr(orden, "contrato_generado_at", None) is not None
+                if ya_generado:
+                    flush()
+                    return {
+                        "message": "Firmante del contrato actualizado",
+                        "success": True,
+                        "data": {
+                            "orden_id": orden.id,
+                            "contrato_generado_at": isoformat_ar(orden.contrato_generado_at),
+                            "reimpresion": True,
+                            **firmante_payload,
+                        },
+                    }
+
+                usuario_db = None
+                if usuario is not None:
+                    uid = getattr(usuario, "id", None)
+                    if uid is not None:
+                        usuario_db = Usuario.get(id=int(uid))
                 orden.contrato_generado_at = ahora_ar()
+                if usuario_db:
+                    orden.contrato_generado_por = usuario_db
                 for pr in list(orden.productos_reservados):
                     prod = getattr(pr, "producto", None)
                     if prod:
                         prod.estado = EstadoProducto.CLIENTE
                 flush()
+                detalle_auditoria = {"presupuesto_numero": orden.presupuesto.numero}
+                if firmante_payload.get("tiene_firmante_anexo"):
+                    detalle_auditoria["firmante_nombre"] = firmante_payload["firmante_nombre"]
+                    detalle_auditoria["firmante_dni"] = firmante_payload["firmante_dni"]
+                registrar_auditoria(
+                    usuario_db,
+                    AccionAuditoria.CONTRATO_GENERADO,
+                    "orden",
+                    orden.id,
+                    f"Contrato generado — orden #{orden.id}",
+                    detalle_auditoria,
+                )
                 return {
                     "message": "Contrato registrado correctamente",
                     "success": True,
                     "data": {
                         "orden_id": orden.id,
                         "contrato_generado_at": isoformat_ar(orden.contrato_generado_at),
+                        "contrato_generado_por_id": usuario_db.id if usuario_db else None,
+                        "contrato_generado_por_nombre": nombre_usuario(usuario_db),
+                        "reimpresion": False,
+                        **firmante_payload,
                     },
                 }
             except HTTPException:
@@ -1259,8 +1557,11 @@ class OrdenTrabajoServices:
                             "fecha_evento": o.fecha_evento.isoformat() if o.fecha_evento else None,
                             "fecha_creacion": isoformat_ar(o.fecha_creacion),
                             "contrato_generado_at": isoformat_ar(o.contrato_generado_at),
+                            "contrato_generado_por_id": o.contrato_generado_por.id if getattr(o, "contrato_generado_por", None) else None,
+                            "contrato_generado_por_nombre": nombre_usuario(getattr(o, "contrato_generado_por", None)),
                             "total": float(o.seña_pagada or 0) + float(o.saldo_pendiente or 0),
                             "productos_reservados": productos_reservados,
+                            **_campos_firmante_orden(o),
                         })
                     except Exception as item_e:
                         logger.warning("listar_contratos: omitiendo orden %s: %s", o.id, item_e)
@@ -1324,6 +1625,19 @@ class OrdenTrabajoServices:
 
                 monto_anulado_caja = round_pesos(sum(a["monto"] for a in anulaciones_caja))
                 monto_devuelto_cc = round_pesos(sum(a["monto"] for a in anulaciones_cc))
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.ORDEN_ELIMINADA,
+                    "orden",
+                    orden_id_eliminada,
+                    f"Orden #{orden_id_eliminada} eliminada",
+                    {
+                        "presupuesto_numero": presupuesto_numero,
+                        "seña_pagada": seña_pagada,
+                        "anulado_caja": monto_anulado_caja,
+                        "devuelto_cc": monto_devuelto_cc,
+                    },
+                )
                 partes_msg = [
                     "Orden de trabajo eliminada exitosamente.",
                     "El presupuesto fue cancelado y los productos liberados.",
@@ -1463,6 +1777,7 @@ class OrdenTrabajoServices:
                 None,
                 None,
                 None,
+                usuario=usuario,
             )
             anulaciones.append(
                 {
@@ -1491,6 +1806,7 @@ class OrdenTrabajoServices:
         descripcion: Optional[str] = None,
         cliente_nombre: Optional[str] = None,
         cliente_celular: Optional[str] = None,
+        enviado_por: Optional[Usuario] = None,
     ) -> None:
         """Asigna cada producto al estado destino (SALON, LAVANDERIA o MODISTA). Opcionalmente guarda descripcion y datos de cliente."""
         if destino == "LAVANDERIA" and not lavanderia_id:
@@ -1529,7 +1845,17 @@ class OrdenTrabajoServices:
                 for pm in list(prod.productos_modistas):
                     if pm.fecha_salida is None:
                         pm.fecha_salida = hoy
-                ProductoLavanderia(producto=prod, lavanderia=lavanderia, fecha_ingreso=hoy, notas=notas, cliente_nombre=cli_nombre, cliente_celular=cli_celular)
+                kwargs = dict(
+                    producto=prod,
+                    lavanderia=lavanderia,
+                    fecha_ingreso=hoy,
+                    notas=notas,
+                    cliente_nombre=cli_nombre,
+                    cliente_celular=cli_celular,
+                )
+                if enviado_por is not None:
+                    kwargs["enviado_por"] = enviado_por
+                ProductoLavanderia(**{k: v for k, v in kwargs.items() if v is not None or k in ("producto", "lavanderia", "fecha_ingreso")})
             elif destino == "MODISTA" and modista:
                 for pl in list(prod.productos_lavanderias):
                     if pl.fecha_salida is None:
@@ -1537,7 +1863,17 @@ class OrdenTrabajoServices:
                 for pm in list(prod.productos_modistas):
                     if pm.fecha_salida is None:
                         pm.fecha_salida = hoy
-                ProductoModista(producto=prod, modista=modista, fecha_ingreso=hoy, notas=notas, cliente_nombre=cli_nombre, cliente_celular=cli_celular)
+                kwargs = dict(
+                    producto=prod,
+                    modista=modista,
+                    fecha_ingreso=hoy,
+                    notas=notas,
+                    cliente_nombre=cli_nombre,
+                    cliente_celular=cli_celular,
+                )
+                if enviado_por is not None:
+                    kwargs["enviado_por"] = enviado_por
+                ProductoModista(**{k: v for k, v in kwargs.items() if v is not None or k in ("producto", "modista", "fecha_ingreso")})
 
     def completar_devolucion(
         self,
@@ -1563,12 +1899,53 @@ class OrdenTrabajoServices:
                         detail=f"La orden ya está en estado '{orden.estado}' y no puede ser completada"
                     )
 
+                usuario = Usuario.get(id=usuario_id)
+                if not usuario:
+                    raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
                 productos_en_orden = {pr.producto.id: pr for pr in orden.productos_reservados}
+                revisiones_abiertas = _revisiones_abiertas_orden(orden)
+
+                # Sin prendas reservadas: solo se puede finalizar si no hay revisiones abiertas.
                 if not productos_en_orden:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="La orden no tiene productos reservados para devolver",
+                    if revisiones_abiertas:
+                        raise HTTPException(
+                            status_code=403,
+                            detail=(
+                                "Hay prendas en revisión. No se puede dar de baja el contrato "
+                                "ni marcar la devolución como completada. No romper el pagaré "
+                                "hasta finalizar la revisión."
+                            ),
+                        )
+                    orden.estado = "Completada"
+                    orden.devolucion_recibida_por = usuario
+                    orden.devolucion_recibida_at = ahora_ar()
+                    flush()
+                    registrar_auditoria(
+                        usuario,
+                        AccionAuditoria.DEVOLUCION_COMPLETA,
+                        "orden",
+                        orden.id,
+                        f"Devolución finalizada — orden #{orden.id}",
+                        {"productos": 0, "restantes": 0},
                     )
+                    return {
+                        "message": "Devolución finalizada. Contrato cerrado.",
+                        "success": True,
+                        "data": {
+                            "orden_id": orden.id,
+                            "estado": orden.estado,
+                            "productos_procesados": 0,
+                            "productos_restantes_orden": 0,
+                            "remitos": [],
+                            "orden_completada": True,
+                            "bloqueo_por_revision": False,
+                            "revisiones_abiertas": [],
+                            "devolucion_recibida_por_id": usuario.id,
+                            "devolucion_recibida_por_nombre": nombre_usuario(usuario),
+                            "devolucion_recibida_at": isoformat_ar(orden.devolucion_recibida_at),
+                        },
+                    }
 
                 cliente_nombre, cliente_celular = self._obtener_cliente_orden(orden)
                 remitos_out: List[dict] = []
@@ -1644,6 +2021,7 @@ class OrdenTrabajoServices:
                         descripcion=desc,
                         cliente_nombre=cliente_nombre,
                         cliente_celular=cliente_celular,
+                        enviado_por=usuario,
                     )
                     lav_nombre = None
                     mod_nombre = None
@@ -1691,9 +2069,52 @@ class OrdenTrabajoServices:
                         productos_en_orden.pop(pid_del, None)
 
                 restantes = len(productos_en_orden)
+                bloqueo_por_revision = False
                 if restantes == 0:
-                    orden.estado = "Completada"
+                    if _revisiones_abiertas_orden(orden):
+                        bloqueo_por_revision = True
+                        # No cerrar contrato mientras haya revisión abierta.
+                    else:
+                        orden.estado = "Completada"
+                orden.devolucion_recibida_por = usuario
+                orden.devolucion_recibida_at = ahora_ar()
                 flush()
+
+                for rem in remitos_out:
+                    dest = rem.get("destino")
+                    if dest == "LAVANDERIA":
+                        registrar_auditoria(
+                            usuario,
+                            AccionAuditoria.LAVANDERIA_ENVIO,
+                            "orden",
+                            orden.id,
+                            f"Envío a lavandería — remito {rem.get('numero')}",
+                            {"remito": rem.get("numero"), "productos": rem.get("cantidad")},
+                        )
+                    elif dest == "MODISTA":
+                        registrar_auditoria(
+                            usuario,
+                            AccionAuditoria.MODISTA_ENVIO,
+                            "orden",
+                            orden.id,
+                            f"Envío a modista — remito {rem.get('numero')}",
+                            {"remito": rem.get("numero"), "productos": rem.get("cantidad")},
+                        )
+
+                orden_completada = restantes == 0 and not bloqueo_por_revision
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.DEVOLUCION_COMPLETA if orden_completada else AccionAuditoria.DEVOLUCION_PARCIAL,
+                    "orden",
+                    orden.id,
+                    f"Devolución recibida — orden #{orden.id} ({len(asignados)} prenda(s))",
+                    {
+                        "productos": len(asignados),
+                        "restantes": restantes,
+                        "remitos": len(remitos_out),
+                        "bloqueo_por_revision": bloqueo_por_revision,
+                    },
+                )
 
                 msg_base = (
                     f"Devolución registrada: {len(remitos_out)} remito(s)."
@@ -1702,6 +2123,11 @@ class OrdenTrabajoServices:
                 )
                 if restantes > 0:
                     msg_base += f" Quedan {restantes} prenda(s) en la orden (no incluidas en envíos)."
+                if bloqueo_por_revision:
+                    msg_base += (
+                        " Hay prendas en revisión: no se cerró el contrato. "
+                        "No romper el pagaré hasta finalizar la revisión."
+                    )
 
                 return {
                     "message": msg_base,
@@ -1712,7 +2138,12 @@ class OrdenTrabajoServices:
                         "productos_procesados": len(asignados),
                         "productos_restantes_orden": restantes,
                         "remitos": remitos_out,
-                        "orden_completada": restantes == 0,
+                        "orden_completada": orden_completada,
+                        "bloqueo_por_revision": bloqueo_por_revision,
+                        "revisiones_abiertas": _revisiones_abiertas_para_api(orden),
+                        "devolucion_recibida_por_id": usuario.id,
+                        "devolucion_recibida_por_nombre": nombre_usuario(usuario),
+                        "devolucion_recibida_at": isoformat_ar(orden.devolucion_recibida_at),
                     },
                 }
 
@@ -1756,31 +2187,100 @@ class OrdenTrabajoServices:
 
                 # Productos reservados a devolver (pasar a destino y eliminar de la orden)
                 a_devolver = [productos_en_orden[pid] for pid in productos_ids]
+                usuario = Usuario.get(id=usuario_id)
+                if not usuario:
+                    raise HTTPException(status_code=404, detail="Usuario no encontrado")
                 cliente_nombre, cliente_celular = self._obtener_cliente_orden(orden)
-                self._aplicar_destino_productos(a_devolver, destino, lavanderia_id, modista_id, descripcion=descripcion, cliente_nombre=cliente_nombre, cliente_celular=cliente_celular)
+                motivo = (descripcion or "").strip()
+                if not motivo:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Debe describir el motivo de la revisión",
+                    )
+                notas_taller = f"{PREFIJO_REVISION_NOTA} {motivo}".strip()
+                self._aplicar_destino_productos(
+                    a_devolver,
+                    destino,
+                    lavanderia_id,
+                    modista_id,
+                    descripcion=notas_taller,
+                    cliente_nombre=cliente_nombre,
+                    cliente_celular=cliente_celular,
+                    enviado_por=usuario,
+                )
 
-                # Agregar observaciones en cada ProductoReservado antes de borrar (opcional, para historial)
                 for pr in a_devolver:
+                    prod = pr.producto
                     observaciones_previas = pr.observaciones or ""
-                    nueva_observacion = f"[Devolución parcial - {ahora_ar().strftime('%d/%m/%Y %H:%M')}] {descripcion}"
-                    pr.observaciones = f"{observaciones_previas}\n{nueva_observacion}".strip() if observaciones_previas else nueva_observacion
+                    nueva_observacion = (
+                        f"[Devolución parcial / revisión - {ahora_ar().strftime('%d/%m/%Y %H:%M')}] {motivo}"
+                    )
+                    pr.observaciones = (
+                        f"{observaciones_previas}\n{nueva_observacion}".strip()
+                        if observaciones_previas
+                        else nueva_observacion
+                    )
+                    RevisionDevolucion(
+                        orden=orden,
+                        producto=prod,
+                        motivo=motivo,
+                        destino=destino,
+                        estado=EstadoRevisionDevolucion.ABIERTA.value,
+                        creada_at=ahora_ar(),
+                    )
                     pr.delete()
 
                 if orden.estado and orden.estado.lower() not in ["completada", "cancelada"]:
                     if orden.estado.lower() not in ["en proceso", "entregada"]:
                         orden.estado = "En proceso"
 
+                orden.devolucion_recibida_por = usuario
+                orden.devolucion_recibida_at = ahora_ar()
                 flush()
 
+                if destino == "LAVANDERIA":
+                    registrar_auditoria(
+                        usuario,
+                        AccionAuditoria.LAVANDERIA_ENVIO,
+                        "orden",
+                        orden.id,
+                        f"Envío parcial a lavandería — orden #{orden.id}",
+                        {"productos": productos_ids},
+                    )
+                elif destino == "MODISTA":
+                    registrar_auditoria(
+                        usuario,
+                        AccionAuditoria.MODISTA_ENVIO,
+                        "orden",
+                        orden.id,
+                        f"Envío parcial a modista — orden #{orden.id}",
+                        {"productos": productos_ids},
+                    )
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.DEVOLUCION_PARCIAL,
+                    "orden",
+                    orden.id,
+                    f"Devolución con revisión — orden #{orden.id}",
+                    {"productos": productos_ids, "destino": destino},
+                )
+
                 return {
-                    "message": f"Devolución parcial registrada. Productos enviados a {destino}.",
+                    "message": (
+                        f"Devolución con revisión registrada. Productos enviados a {destino}. "
+                        "No romper el pagaré hasta finalizar la revisión."
+                    ),
                     "success": True,
                     "data": {
                         "orden_id": orden.id,
                         "productos_devueltos": productos_ids,
-                        "descripcion": descripcion,
+                        "descripcion": motivo,
                         "destino": destino,
                         "productos_devueltos_count": len(productos_ids),
+                        "revisiones_abiertas": _revisiones_abiertas_para_api(orden),
+                        "tiene_revisiones_abiertas": True,
+                        "devolucion_recibida_por_id": usuario.id,
+                        "devolucion_recibida_por_nombre": nombre_usuario(usuario),
                     }
                 }
 
@@ -1790,5 +2290,100 @@ class OrdenTrabajoServices:
                 import traceback
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al registrar devolución parcial: {str(e)}")
+
+    def resolver_revision_devolucion(
+        self,
+        orden_id: int,
+        usuario_id: int,
+        revision_id: Optional[int] = None,
+        producto_id: Optional[int] = None,
+    ) -> dict:
+        """Marca una revisión de devolución como RESUELTA."""
+        with db_session:
+            try:
+                orden = OrdenTrabajo.get(id=orden_id)
+                if not orden:
+                    raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
+                if orden.estado and orden.estado.lower() in ["completada", "cancelada"]:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"La orden ya está en estado '{orden.estado}'",
+                    )
+
+                usuario = Usuario.get(id=usuario_id)
+                if not usuario:
+                    raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+                revision = None
+                if revision_id is not None:
+                    revision = RevisionDevolucion.get(id=revision_id)
+                    if not revision or revision.orden.id != orden.id:
+                        raise HTTPException(status_code=404, detail="Revisión no encontrada")
+                elif producto_id is not None:
+                    candidatas = [
+                        r
+                        for r in _revisiones_abiertas_orden(orden)
+                        if r.producto and r.producto.id == producto_id
+                    ]
+                    if not candidatas:
+                        raise HTTPException(
+                            status_code=404,
+                            detail="No hay revisión abierta para ese producto",
+                        )
+                    revision = max(candidatas, key=lambda r: r.id)
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Indique revision_id o producto_id",
+                    )
+
+                if (revision.estado or "") != EstadoRevisionDevolucion.ABIERTA.value:
+                    raise HTTPException(status_code=400, detail="La revisión ya está resuelta")
+
+                revision.estado = EstadoRevisionDevolucion.RESUELTA.value
+                revision.resuelta_at = ahora_ar()
+                revision.resuelta_por = usuario
+                flush()
+
+                registrar_auditoria(
+                    usuario,
+                    AccionAuditoria.REVISION_DEVOLUCION_RESUELTA,
+                    "orden",
+                    orden.id,
+                    f"Revisión resuelta — orden #{orden.id} producto #{revision.producto.id}",
+                    {"revision_id": revision.id, "producto_id": revision.producto.id},
+                )
+
+                abiertas = _revisiones_abiertas_para_api(orden)
+                puede_finalizar = (
+                    len(list(orden.productos_reservados)) == 0 and len(abiertas) == 0
+                )
+
+                return {
+                    "message": "Revisión marcada como resuelta."
+                    + (
+                        " Ya se puede finalizar la devolución / cerrar el contrato."
+                        if puede_finalizar
+                        else ""
+                    ),
+                    "success": True,
+                    "data": {
+                        "orden_id": orden.id,
+                        "revision_id": revision.id,
+                        "producto_id": revision.producto.id,
+                        "revisiones_abiertas": abiertas,
+                        "tiene_revisiones_abiertas": len(abiertas) > 0,
+                        "puede_finalizar_devolucion": puede_finalizar,
+                    },
+                }
+            except HTTPException:
+                raise
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error al resolver revisión: {str(e)}",
+                )
 
 

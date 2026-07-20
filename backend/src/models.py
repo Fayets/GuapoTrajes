@@ -25,6 +25,7 @@ class Sucursal(db.Entity):
     cuentas_destino = Set("CuentaDestino")  # UNA SUCURSAL TIENE VARIAS CUENTAS DESTINO
     metodos_pago = Set("MetodoPagoConfigurable")  # UNA SUCURSAL TIENE VARIOS MÉTODOS DE PAGO
     cierres_caja = Set("CierreCaja")
+    auditoria_eventos = Set("AuditoriaEvento")
     _table_ = "Sucursales"
 
 class CuentaDestino(db.Entity):
@@ -96,6 +97,19 @@ class Usuario(db.Entity):
     presupuestos_con_descuento_extra = Set("Presupuesto", reverse="extra_discount_applied_by")
     ordenes_con_descuento_extra = Set("OrdenTrabajo", reverse="extra_discount_applied_by")
     ventas_con_descuento_extra = Set("Venta", reverse="extra_discount_applied_by")
+    presupuestos_creados = Set("Presupuesto", reverse="creado_por")
+    presupuestos_actualizados = Set("Presupuesto", reverse="actualizado_por")
+    ordenes_creadas = Set("OrdenTrabajo", reverse="creado_por")
+    contratos_generados = Set("OrdenTrabajo", reverse="contrato_generado_por")
+    devoluciones_recibidas = Set("OrdenTrabajo", reverse="devolucion_recibida_por")
+    revisiones_devolucion_resueltas = Set("RevisionDevolucion", reverse="resuelta_por")
+    recibos_orden = Set("ReciboOrden", reverse="usuario")
+    movimientos_cuenta_corriente = Set("CuentaCorriente", reverse="usuario")
+    envios_lavanderia = Set("ProductoLavanderia", reverse="enviado_por")
+    recepciones_lavanderia = Set("ProductoLavanderia", reverse="recibido_por")
+    envios_modista = Set("ProductoModista", reverse="enviado_por")
+    recepciones_modista = Set("ProductoModista", reverse="recibido_por")
+    auditoria_eventos = Set("AuditoriaEvento", reverse="usuario")
     _table_ = "Usuarios"
 
 class Producto(db.Entity):
@@ -128,6 +142,7 @@ class Producto(db.Entity):
     productos_reservados = Set("ProductoReservado")
     items_presupuesto = Set("ItemPresupuesto")
     detalles = Set("DetalleVenta")
+    revisiones_devolucion = Set("RevisionDevolucion")
     _table_ = "Productos"
 
 class Cliente(db.Entity):
@@ -182,6 +197,8 @@ class ProductoModista(db.Entity):
     notas = Optional(str)
     cliente_nombre = Optional(str)
     cliente_celular = Optional(str)
+    enviado_por = Optional(Usuario, reverse="envios_modista", column="enviado_por_id")
+    recibido_por = Optional(Usuario, reverse="recepciones_modista", column="recibido_por_id")
     _table_ = "ProductosModistas"
 
 class ProductoLavanderia(db.Entity):
@@ -193,6 +210,8 @@ class ProductoLavanderia(db.Entity):
     notas = Optional(str)
     cliente_nombre = Optional(str)
     cliente_celular = Optional(str)
+    enviado_por = Optional(Usuario, reverse="envios_lavanderia", column="enviado_por_id")
+    recibido_por = Optional(Usuario, reverse="recepciones_lavanderia", column="recibido_por_id")
     _table_ = "ProductosLavanderias"
 
 #Presupuestos
@@ -220,6 +239,9 @@ class Presupuesto(db.Entity):
     extra_discount_reason = Optional(str)
     extra_discount_applied_by = Optional(Usuario, reverse="presupuestos_con_descuento_extra")
     extra_discount_created_at = Optional(datetime)
+    creado_por = Optional(Usuario, reverse="presupuestos_creados", column="creado_por_id")
+    actualizado_por = Optional(Usuario, reverse="presupuestos_actualizados", column="actualizado_por_id")
+    actualizado_at = Optional(datetime)
     _table_ = "Presupuesto" 
 
 class ItemPresupuesto(db.Entity):
@@ -246,6 +268,7 @@ class OrdenTrabajo(db.Entity):
     submetodo_pago = Optional("SubmetodoPago", column="submetodo_pago_id")  # Nueva relación con submétodo
     productos_reservados = Set('ProductoReservado')
     recibos = Set('ReciboOrden', reverse="orden_trabajo")
+    revisiones_devolucion = Set("RevisionDevolucion", reverse="orden")
     # Campos de descuento extra
     extra_discount_percentage = Optional(float)
     extra_discount_amount = Optional(float)
@@ -255,7 +278,36 @@ class OrdenTrabajo(db.Entity):
     contrato_generado_at = Optional(datetime)  # Fecha en que se generó el contrato (manual)
     etiquetas_armado_impresas_at = Optional(datetime)  # Etiquetas 100x50 impresas al crear la orden
     conjunto_separado = Required(bool, default=False)  # Conjunto ya separado en perchero al crear la orden
+    # Snapshot opcional del firmante del contrato/pagaré (quien retira; no es Cliente)
+    firmante_nombre = Optional(str)
+    firmante_dni = Optional(str)
+    firmante_direccion = Optional(str)
+    firmante_celular = Optional(str)
+    creado_por = Optional(Usuario, reverse="ordenes_creadas", column="creado_por_id")
+    contrato_generado_por = Optional(Usuario, reverse="contratos_generados", column="contrato_generado_por_id")
+    devolucion_recibida_por = Optional(Usuario, reverse="devoluciones_recibidas", column="devolucion_recibida_por_id")
+    devolucion_recibida_at = Optional(datetime)
     _table_ = "OrdenesTrabajo"
+
+
+class EstadoRevisionDevolucion(str, Enum):
+    ABIERTA = "ABIERTA"
+    RESUELTA = "RESUELTA"
+
+
+class RevisionDevolucion(db.Entity):
+    """Prenda devuelta con detalle pendiente de revisión (devolución parcial)."""
+    id = PrimaryKey(int, auto=True)
+    orden = Required(OrdenTrabajo, reverse="revisiones_devolucion", column="orden_id")
+    producto = Required(Producto, reverse="revisiones_devolucion", column="producto_id")
+    motivo = Required(str)
+    destino = Required(str)  # SALON | LAVANDERIA | MODISTA
+    estado = Required(str, default=EstadoRevisionDevolucion.ABIERTA.value)
+    creada_at = Required(datetime, default=ahora_ar)
+    resuelta_at = Optional(datetime)
+    resuelta_por = Optional(Usuario, reverse="revisiones_devolucion_resueltas", column="resuelta_por_id")
+    _table_ = "RevisionesDevolucion"
+
 
 class ReciboOrden(db.Entity):
     """Recibo generado por cada pago (seña o adicional). Siempre se guarda para historial."""
@@ -267,6 +319,7 @@ class ReciboOrden(db.Entity):
     cliente_nombre = Required(str)
     presupuesto_numero = Required(str)
     movimiento_caja_id = Optional(int)  # Opcional: referencia al CajaMovimiento
+    usuario = Optional(Usuario, reverse="recibos_orden", column="usuario_id")
     _table_ = "RecibosOrden"
 
 
@@ -294,7 +347,37 @@ class CuentaCorriente(db.Entity):
     referencia_orden = Optional(int)
     metodo_pago_configurable = Optional("MetodoPagoConfigurable", column="metodo_pago_id")  # Para pagos adicionales
     submetodo_pago = Optional("SubmetodoPago", column="submetodo_pago_id")  # Para pagos adicionales
+    usuario = Optional(Usuario, reverse="movimientos_cuenta_corriente", column="usuario_id")
     _table_ = "CuentaCorriente"
+
+
+class AccionAuditoria(str, Enum):
+    PRESUPUESTO_CREADO = "PRESUPUESTO_CREADO"
+    PRESUPUESTO_EDITADO = "PRESUPUESTO_EDITADO"
+    ORDEN_CREADA = "ORDEN_CREADA"
+    CONTRATO_GENERADO = "CONTRATO_GENERADO"
+    COBRO = "COBRO"
+    DEVOLUCION_COMPLETA = "DEVOLUCION_COMPLETA"
+    DEVOLUCION_PARCIAL = "DEVOLUCION_PARCIAL"
+    REVISION_DEVOLUCION_RESUELTA = "REVISION_DEVOLUCION_RESUELTA"
+    LAVANDERIA_ENVIO = "LAVANDERIA_ENVIO"
+    LAVANDERIA_RECEPCION = "LAVANDERIA_RECEPCION"
+    MODISTA_ENVIO = "MODISTA_ENVIO"
+    MODISTA_RECEPCION = "MODISTA_RECEPCION"
+    ORDEN_ELIMINADA = "ORDEN_ELIMINADA"
+
+
+class AuditoriaEvento(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    fecha_hora = Required(datetime, default=ahora_ar)
+    usuario = Required(Usuario, reverse="auditoria_eventos", column="usuario_id")
+    sucursal = Required(Sucursal, reverse="auditoria_eventos", column="sucursal_id")
+    accion = Required(str)
+    entidad_tipo = Required(str)
+    entidad_id = Required(int)
+    resumen = Required(str)
+    detalle = Optional(str)  # JSON serializado
+    _table_ = "AuditoriaEventos"
 
 class TipoPrecio(str, Enum):
     LISTA = "Lista"

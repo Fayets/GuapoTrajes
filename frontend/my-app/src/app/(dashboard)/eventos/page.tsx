@@ -13,6 +13,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { getApiBaseUrl } from "@/lib/api-config";
+import { toast } from "sonner";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
 type Evento = {
   id: string;
@@ -28,6 +31,8 @@ export default function EventoPage() {
   const [cargando, setCargando] = useState(true);
   const [paginaActual, setPaginaActual] = useState(0);
   const EVENTOS_POR_PAGINA = 18;
+
+  useFlushUndoableDeletesOnLeave();
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -108,21 +113,36 @@ export default function EventoPage() {
     setShowDeleteModal(true);
   };
 
-  const eliminarEvento = async () => {
-    if (!eventoActual) return;
-    try {
-      await fetch(`${API_BASE}/eventos/delete/${eventoActual.id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      setEvento(evento.filter((c) => c.id !== eventoActual.id));
-      setShowDeleteModal(false);
-      setEventoActual(null);
-    } catch (err) {
-      console.error("Error al eliminar evento.", err);
-    }
+  const eliminarEvento = () => {
+    const eventoAEliminar = eventoActual;
+    if (!eventoAEliminar) return;
+    setShowDeleteModal(false);
+    setEventoActual(null);
+    const snapshot = eventoAEliminar;
+    scheduleUndoableDelete({
+      id: `evento-${snapshot.id}`,
+      message: `Evento «${snapshot.nombre}» eliminado`,
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        setEvento((prev) => prev.filter((c) => c.id !== snapshot.id));
+      },
+      onRestore: () => {
+        setEvento((prev) => {
+          if (prev.some((c) => c.id === snapshot.id)) return prev;
+          return [...prev, snapshot];
+        });
+      },
+      executeDelete: async () => {
+        const res = await fetch(`${API_BASE}/eventos/delete/${snapshot.id}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!res.ok) throw new Error("No se pudo eliminar el evento");
+        toast.success("Evento eliminado");
+      },
+    });
   };
 
   const guardarEvento = async () => {

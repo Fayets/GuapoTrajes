@@ -37,7 +37,7 @@ function formatFechaArgentina(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
-type Cliente = { id: number; nombre: string; apellido: string };
+type Cliente = { id: number; nombre: string; apellido: string; notas?: string };
 type Precliente = { id: number; nombre: string; apellido: string; celular: string };
 
 /** Respuesta de /presupuestos/conjuntos-misma-fecha-categoria (aviso en modal). */
@@ -302,6 +302,11 @@ export default function PresupuestoModal({
   const clienteSeleccionado = React.useMemo(() => {
     return clientes.find((c) => String(c.id) === String(formData.clienteId));
   }, [clientes, formData.clienteId]);
+
+  const observacionInternaCliente = React.useMemo(() => {
+    const texto = (clienteSeleccionado?.notas || "").trim();
+    return texto || null;
+  }, [clienteSeleccionado]);
 
   const nombreClienteResumen = React.useMemo(() => {
     if (presupuestoSeleccionado?.cliente_nombre) {
@@ -582,6 +587,17 @@ export default function PresupuestoModal({
                   )}
                 </>
               )}
+              {observacionInternaCliente && (
+                <div
+                  className="alert alert-warning mt-3 mb-0 py-2 small"
+                  role="alert"
+                >
+                  <strong>Observación interna del cliente:</strong>
+                  <div className="mt-1" style={{ whiteSpace: "pre-wrap" }}>
+                    {observacionInternaCliente}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -771,11 +787,36 @@ export default function PresupuestoModal({
                 </div>
                 <div className="col-12">
                   <label className="form-label fw-bold" htmlFor="presupuesto-observaciones">
+                    Observaciones
+                  </label>
+                  {verModoLectura ? (
+                    <div className="form-control-plaintext border rounded p-2 bg-light">
+                      {formData.observaciones?.trim() || "—"}
+                    </div>
+                  ) : (
+                    <textarea
+                      id="presupuesto-observaciones"
+                      name="observaciones"
+                      className="form-control"
+                      rows={3}
+                      placeholder="Notas del presupuesto (opcionales)"
+                      value={formData.observaciones || ""}
+                      onChange={(e) =>
+                        setFormData((prev: any) => ({
+                          ...prev,
+                          observaciones: e.target.value,
+                        }))
+                      }
+                    />
+                  )}
+                </div>
+                <div className="col-12">
+                  <label className="form-label fw-bold" htmlFor="presupuesto-conjuntos-armados">
                     Conjuntos ya armados (solo uso interno)
                   </label>
                   {conjuntosMismaFechaRows.length > 0 ? (
                     <div
-                      id="presupuesto-observaciones"
+                      id="presupuesto-conjuntos-armados"
                       className="border rounded bg-light overflow-auto"
                       style={{
                         maxHeight: "min(40vh, 15rem)",
@@ -813,7 +854,7 @@ export default function PresupuestoModal({
                     </div>
                   ) : (
                     <div
-                      id="presupuesto-observaciones"
+                      id="presupuesto-conjuntos-armados"
                       className="form-control-plaintext border rounded p-2 bg-light text-muted small"
                       style={{ minHeight: "2.75rem", userSelect: "none" }}
                       aria-live="polite"

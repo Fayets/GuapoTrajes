@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/RoleGate";
+import { scheduleUndoableDelete } from "@/lib/undoable-delete";
+import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
 type Item = { id: number; nombre: string; codigo: string };
 
@@ -60,7 +62,18 @@ function useConfigProductos(token: string | null) {
     fetchAll();
   }, [token]);
 
-  return { lineas, talles, telas, colores, loading, refetch: fetchAll };
+  return {
+    lineas,
+    talles,
+    telas,
+    colores,
+    loading,
+    refetch: fetchAll,
+    setLineas,
+    setTalles,
+    setTelas,
+    setColores,
+  };
 }
 
 function SectionBlock({
@@ -69,7 +82,8 @@ function SectionBlock({
   loading,
   token,
   endpoint,
-  onDelete,
+  onOptimisticRemove,
+  onRestore,
   refetch,
 }: {
   title: string;
@@ -77,7 +91,8 @@ function SectionBlock({
   loading: boolean;
   token: string | null;
   endpoint: string;
-  onDelete: (id: number) => void;
+  onOptimisticRemove: (id: number) => void;
+  onRestore: (item: Item) => void;
   refetch: () => void;
 }) {
   const [nombre, setNombre] = useState("");
@@ -133,24 +148,38 @@ function SectionBlock({
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_BASE}/config/productos/${endpoint}/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        toast.error("No se pudo eliminar (puede estar en uso)");
-        return;
-      }
-      onDelete(id);
-      refetch();
-      setDeleteId(null);
-      toast.success("Eliminado");
-    } catch {
-      toast.error("Error al eliminar");
-    }
+  const confirmarEliminar = () => {
+    const id = deleteId;
+    if (id == null) return;
+    const item = items.find((i) => i.id === id);
+    setDeleteId(null);
+    if (!item) return;
+    const snapshot = item;
+    scheduleUndoableDelete({
+      id: `config-productos-${endpoint}-${snapshot.id}`,
+      message: `«${snapshot.nombre}» eliminado`,
+      description: "Podés deshacer durante 10 segundos",
+      onOptimisticRemove: () => {
+        onOptimisticRemove(snapshot.id);
+      },
+      onRestore: () => {
+        onRestore(snapshot);
+      },
+      executeDelete: async () => {
+        if (!token) throw new Error("No se pudo determinar el usuario actual");
+        const res = await fetch(
+          `${API_BASE}/config/productos/${endpoint}/${snapshot.id}`,
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (!res.ok) {
+          throw new Error("No se pudo eliminar (puede estar en uso)");
+        }
+        toast.success("Eliminado");
+      },
+    });
   };
 
   return (
@@ -254,7 +283,7 @@ function SectionBlock({
             <Button variant="outline" size="sm" onClick={() => setDeleteId(null)} className="btn btn-outline-ink btn-sm">
               Cancelar
             </Button>
-            <Button variant="danger" size="sm" onClick={() => deleteId !== null && handleDelete(deleteId)} className="btn btn-danger btn-sm">
+            <Button variant="danger" size="sm" onClick={confirmarEliminar} className="btn btn-danger btn-sm">
               Eliminar
             </Button>
           </DialogFooter>
@@ -270,7 +299,29 @@ export default function ConfigProductosPage() {
     setToken(localStorage.getItem("token"));
   }, []);
 
-  const { lineas, talles, telas, colores, loading, refetch } = useConfigProductos(token);
+  useFlushUndoableDeletesOnLeave();
+
+  const {
+    lineas,
+    talles,
+    telas,
+    colores,
+    loading,
+    refetch,
+    setLineas,
+    setTalles,
+    setTelas,
+    setColores,
+  } = useConfigProductos(token);
+
+  const restoreEn =
+    (setter: React.Dispatch<React.SetStateAction<Item[]>>) => (item: Item) => {
+      setter((prev) => (prev.some((x) => x.id === item.id) ? prev : [...prev, item]));
+    };
+  const removeEn =
+    (setter: React.Dispatch<React.SetStateAction<Item[]>>) => (id: number) => {
+      setter((prev) => prev.filter((x) => x.id !== id));
+    };
 
   return (
     <RoleGate allow={["ADMIN", "SUPER_ADMIN"]}>
@@ -290,7 +341,8 @@ export default function ConfigProductosPage() {
               loading={loading}
               token={token}
               endpoint="lineas"
-              onDelete={() => {}}
+              onOptimisticRemove={removeEn(setLineas)}
+              onRestore={restoreEn(setLineas)}
               refetch={refetch}
             />
           </div>
@@ -301,7 +353,8 @@ export default function ConfigProductosPage() {
               loading={loading}
               token={token}
               endpoint="talles"
-              onDelete={() => {}}
+              onOptimisticRemove={removeEn(setTalles)}
+              onRestore={restoreEn(setTalles)}
               refetch={refetch}
             />
           </div>
@@ -312,7 +365,8 @@ export default function ConfigProductosPage() {
               loading={loading}
               token={token}
               endpoint="telas"
-              onDelete={() => {}}
+              onOptimisticRemove={removeEn(setTelas)}
+              onRestore={restoreEn(setTelas)}
               refetch={refetch}
             />
           </div>
@@ -323,7 +377,8 @@ export default function ConfigProductosPage() {
               loading={loading}
               token={token}
               endpoint="colores"
-              onDelete={() => {}}
+              onOptimisticRemove={removeEn(setColores)}
+              onRestore={restoreEn(setColores)}
               refetch={refetch}
             />
           </div>
