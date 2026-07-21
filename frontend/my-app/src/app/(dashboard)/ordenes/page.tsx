@@ -2909,7 +2909,6 @@ function OrdenesTrabajoContent() {
                                   </span>
                                 </td>
                                 <td className="text-end fw-semibold text-success px-2 py-1 text-nowrap">
-                                  $
                                   {formatMoneyAr(seña.monto)}
                                 </td>
                                 <td className="px-2 py-1">

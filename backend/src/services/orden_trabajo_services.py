@@ -1164,7 +1164,7 @@ class OrdenTrabajoServices:
                 raise HTTPException(status_code=500, detail=f"Error al obtener historial de pagos: {str(e)}")
 
     def listar_recibos_orden(self, orden_id: int) -> dict:
-        """Listar historial de recibos de una orden (seña inicial + recibos de pagos adicionales)."""
+        """Listar historial de recibos de una orden (recibos reales; seña sintética solo si falta en DB)."""
         with db_session:
             try:
                 orden = OrdenTrabajo.get(id=orden_id)
@@ -1172,7 +1172,14 @@ class OrdenTrabajoServices:
                     raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
                 cliente_nombre = _nombre_cliente_para_recibo(orden)
                 recibos = []
-                if orden.seña_pagada > 0:
+                recibos_reales = sorted(orden.recibos, key=lambda r: r.fecha_hora)
+                # Al crear la orden ya se persiste ReciboOrden de seña; no inventar otro.
+                # Solo sintetizar para órdenes viejas sin fila en RecibosOrden.
+                tiene_recibo_sena = any(
+                    "seña" in (r.motivo or "").lower() or "sena" in (r.motivo or "").lower()
+                    for r in recibos_reales
+                )
+                if orden.seña_pagada > 0 and not tiene_recibo_sena:
                     motivo_sena = "Seña"
                     # Un solo predicado en el lambda (Pony + Py3.13: `and` en select → DecompileError TO_BOOL).
                     cc_movs_orden = list(
@@ -1186,24 +1193,38 @@ class OrdenTrabajoServices:
                     if cc_debit_sena_rec > 1e-6:
                         cc_txt = f"${int(round(cc_debit_sena_rec)):,}".replace(",", ".")
                         motivo_sena = f"Seña — {cc_txt} con cuenta corriente"
+                    # Monto de seña inicial desde caja + CC (no usar seña_pagada acumulada).
+                    presupuesto_numero = orden.presupuesto.numero
+                    monto_sena_inicial = 0.0
+                    for cm in CajaMovimiento.select():
+                        origen = str(getattr(cm, "origen", None) or "")
+                        if origen.startswith(f"SEÑA_PRESUPUESTO:{presupuesto_numero}"):
+                            monto_sena_inicial = round_pesos(cm.monto)
+                            break
+                    if cc_debit_sena_rec > 1e-6:
+                        monto_sena_inicial = round_pesos(monto_sena_inicial + cc_debit_sena_rec)
+                    if monto_sena_inicial <= 0:
+                        monto_sena_inicial = round_pesos(orden.seña_pagada)
                     recibos.append({
                         "id": None,
                         "orden_id": orden.id,
                         "tipo": "Seña inicial",
                         "fecha_hora": isoformat_ar(orden.fecha_creacion),
-                        "monto": orden.seña_pagada,
+                        "monto": monto_sena_inicial,
                         "motivo": motivo_sena,
                         "cliente_nombre": cliente_nombre,
                         "presupuesto_numero": orden.presupuesto.numero,
                     })
-                for r in sorted(orden.recibos, key=lambda r: r.fecha_hora):
+                for r in recibos_reales:
+                    motivo = r.motivo or ""
+                    es_sena = "seña" in motivo.lower() or "sena" in motivo.lower()
                     recibos.append({
                         "id": r.id,
                         "orden_id": orden.id,
-                        "tipo": "Pago adicional",
+                        "tipo": "Seña inicial" if es_sena else "Pago adicional",
                         "fecha_hora": isoformat_ar(r.fecha_hora),
                         "monto": r.monto,
-                        "motivo": r.motivo,
+                        "motivo": motivo,
                         "cliente_nombre": r.cliente_nombre,
                         "presupuesto_numero": r.presupuesto_numero,
                     })
