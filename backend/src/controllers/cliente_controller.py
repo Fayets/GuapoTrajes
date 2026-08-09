@@ -71,6 +71,16 @@ def obtener_relaciones_cliente(cliente_id: int, current_user=Depends(get_current
         raise HTTPException(status_code=500, detail="Error al obtener las relaciones del cliente")
 
 
+@router.get("/descuentos/{cliente_id}")
+def listar_descuentos_cliente(cliente_id: int, current_user=Depends(get_current_user)):
+    try:
+        return servicio.listar_descuentos(cliente_id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al obtener descuentos del cliente")
+
+
 @router.put("/update/{cliente_id}", response_model=ClientUpdateResponse)
 def actualizar_cliente(cliente_id: int, cliente_actualizar: schemas.ClientCreate, current_user=Depends(get_current_user)):
     try:

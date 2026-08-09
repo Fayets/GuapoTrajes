@@ -93,6 +93,7 @@ interface PrendaAArmarProducto {
   ubicacion_critica?: string;
   requiere_modista?: boolean;
   notas_modista?: string;
+  arreglos?: string;
   fecha_retiro?: string;
 }
 
@@ -111,6 +112,8 @@ interface PrendaAArmarOrden {
   lugar_evento?: string;
   total: number;
   cantidad_total_items: number;
+  observaciones?: string;
+  tiene_arreglos?: boolean;
   etiquetas_impresas_en_orden?: boolean;
   etiquetas_armado_impresas_at?: string | null;
   conjunto_separado?: boolean;
@@ -124,6 +127,22 @@ interface ItemColaEtiquetaVisual {
   descripcion: string;
   clienteNombre: string;
   estado: EstadoColaEtiqueta;
+}
+
+function numeroPresupuestoDesdeOrigen(origen: string | null | undefined): string | null {
+  if (!origen) return null;
+  if (
+    origen.startsWith("SEÑA_PRESUPUESTO:") ||
+    origen.startsWith("PAGO_ADICIONAL_ORDEN:")
+  ) {
+    const numero = origen.split(":", 2)[1]?.trim();
+    return numero || null;
+  }
+  return null;
+}
+
+function esNumeroPresupuesto(valor: string | null | undefined): boolean {
+  return !!valor && /^PRES-\d+$/i.test(valor.trim());
 }
 
 export default function ReportesPage() {
@@ -2164,6 +2183,7 @@ export default function ReportesPage() {
           descripcion: p.descripcion,
           cantidad: p.cantidad,
         })),
+        observacionesArreglos: orden.observaciones || "",
       });
       const resultado = await imprimirEtiquetaResumenConjunto(payload);
       if (resultado.resultado === "ok") {
@@ -3703,7 +3723,17 @@ export default function ReportesPage() {
                             })()}
                           </td>
                           <td className="fw-medium">
-                            {recibo.presupuesto_numero}
+                            {esNumeroPresupuesto(recibo.presupuesto_numero) ? (
+                              <a
+                                href={`/presupuestos?buscar=${encodeURIComponent(recibo.presupuesto_numero)}`}
+                                className="text-decoration-none fw-medium"
+                                title="Ver presupuesto"
+                              >
+                                {recibo.presupuesto_numero}
+                              </a>
+                            ) : (
+                              recibo.presupuesto_numero
+                            )}
                           </td>
                           <td>{recibo.cliente_nombre}</td>
                           <td className="small text-muted">
@@ -4066,7 +4096,29 @@ export default function ReportesPage() {
                                   : "N/A"}
                               </td>
                               <td className="small">
-                                <span className="text-muted">{detalle.origen || "N/A"}</span>
+                                {(() => {
+                                  const numPres = numeroPresupuestoDesdeOrigen(detalle.origen);
+                                  if (numPres) {
+                                    const prefijo = detalle.origen?.startsWith("SEÑA_PRESUPUESTO:")
+                                      ? "Seña"
+                                      : "Pago adicional";
+                                    return (
+                                      <>
+                                        <span className="text-muted">{prefijo}: </span>
+                                        <a
+                                          href={`/presupuestos?buscar=${encodeURIComponent(numPres)}`}
+                                          className="text-decoration-none fw-medium"
+                                          title="Ver presupuesto"
+                                        >
+                                          {numPres}
+                                        </a>
+                                      </>
+                                    );
+                                  }
+                                  return (
+                                    <span className="text-muted">{detalle.origen || "N/A"}</span>
+                                  );
+                                })()}
                               </td>
                               <td>
                                 <span className="badge bg-secondary small">
@@ -5216,6 +5268,15 @@ export default function ReportesPage() {
                                   Ya separado
                                 </span>
                               )}
+                              {orden.tiene_arreglos && orden.observaciones && (
+                                <span
+                                  className="badge bg-warning text-dark ms-2"
+                                  title={orden.observaciones}
+                                >
+                                  <i className="bi bi-scissors me-1" aria-hidden />
+                                  Arreglos / medidas
+                                </span>
+                              )}
                             </div>
                           </button>
                         </h2>
@@ -5275,6 +5336,17 @@ export default function ReportesPage() {
                                 </div>
                               </div>
                             )}
+                            {orden.observaciones ? (
+                              <div className="alert alert-warning py-2 small mb-3">
+                                <strong>
+                                  <i className="bi bi-scissors me-1" aria-hidden />
+                                  Arreglos / medidas (presupuesto)
+                                </strong>
+                                <div className="mt-1 whitespace-pre-wrap">
+                                  {orden.observaciones}
+                                </div>
+                              </div>
+                            ) : null}
                             <div className="row mb-3">
                               <div className="col-md-6">
                                 <p className="mb-1">
@@ -5346,7 +5418,7 @@ export default function ReportesPage() {
                                     <th>Tela</th>
                                     <th>Descripción</th>
                                     <th>Estado crítico</th>
-                                    <th>Modista</th>
+                                    <th>Arreglos / modista</th>
                                     <th className="text-center">Cantidad</th>
                                   </tr>
                                 </thead>
@@ -5414,17 +5486,22 @@ export default function ReportesPage() {
                                         )}
                                       </td>
                                       <td className="small">
-                                        {producto.requiere_modista ? (
+                                        {producto.arreglos ? (
                                           <div>
-                                            <span className="badge bg-warning text-dark mb-1">
-                                              <i className="bi bi-scissors me-1" />
-                                              A modista
-                                            </span>
-                                            {producto.notas_modista && (
-                                              <div className="text-muted">
-                                                {producto.notas_modista}
-                                              </div>
+                                            {producto.requiere_modista ? (
+                                              <span className="badge bg-warning text-dark mb-1">
+                                                <i className="bi bi-scissors me-1" />
+                                                A modista
+                                              </span>
+                                            ) : (
+                                              <span className="badge bg-warning text-dark mb-1">
+                                                <i className="bi bi-rulers me-1" />
+                                                Medidas / arreglos
+                                              </span>
                                             )}
+                                            <div className="text-muted whitespace-pre-wrap">
+                                              {producto.arreglos}
+                                            </div>
                                             {(producto.fecha_retiro ||
                                               orden.fecha_retiro) && (
                                               <div className="fw-semibold mt-1">

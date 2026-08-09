@@ -28,6 +28,7 @@ from typing import List, Optional, Any
 import logging
 
 from src.descripcion_producto import format_descripcion_producto
+from src.presupuesto_observaciones import observaciones_presupuesto_para_mostrar
 from src.presupuesto_titular import titular_presupuesto
 from src.services.disponibilidad_services import reconstruir_productos_reservados_para_orden
 from src.services.auditoria_services import nombre_usuario, registrar_auditoria
@@ -556,6 +557,9 @@ class OrdenTrabajoServices:
                         "conjunto_separado": bool(
                             getattr(o, "conjunto_separado", False)
                         ),
+                        "observaciones": observaciones_presupuesto_para_mostrar(
+                            presupuesto.observaciones
+                        ),
                         **_campos_firmante_orden(o),
                         **_campos_trazabilidad_orden(o),
                     })
@@ -627,6 +631,9 @@ class OrdenTrabajoServices:
                     ),
                     "conjunto_separado": bool(
                         getattr(orden, "conjunto_separado", False)
+                    ),
+                    "observaciones": observaciones_presupuesto_para_mostrar(
+                        presupuesto.observaciones
                     ),
                     **_campos_firmante_orden(orden),
                     **_campos_trazabilidad_orden(orden),
@@ -1895,6 +1902,73 @@ class OrdenTrabajoServices:
                 if enviado_por is not None:
                     kwargs["enviado_por"] = enviado_por
                 ProductoModista(**{k: v for k, v in kwargs.items() if v is not None or k in ("producto", "modista", "fecha_ingreso")})
+
+    def cerrar_devolucion_pendiente_admin(
+        self,
+        orden_id: int,
+        usuario_id: int,
+        *,
+        motivo: str = "Cierre administrativo — devolución ya registrada fuera del sistema",
+    ) -> dict:
+        """
+        Cierra una orden cuya devolución ya ocurrió (p. ej. pruebas o cierre manual).
+        Libera ProductoReservado y marca la orden como Completada.
+        """
+        with db_session:
+            orden = OrdenTrabajo.get(id=orden_id)
+            if not orden:
+                raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
+
+            est = (orden.estado or "").strip().lower()
+            if est in ("completada", "cancelada"):
+                return {
+                    "message": f"La orden #{orden_id} ya está {orden.estado}.",
+                    "success": True,
+                    "data": {"orden_id": orden_id, "estado": orden.estado},
+                }
+
+            usuario = Usuario.get(id=usuario_id)
+            if not usuario:
+                raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+            liberados = 0
+            for pr in list(orden.productos_reservados):
+                prod = pr.producto
+                if prod and prod.estado == EstadoProducto.CLIENTE:
+                    prod.estado = EstadoProducto.SALON
+                pr.delete()
+                liberados += 1
+
+            for rev in _revisiones_abiertas_orden(orden):
+                rev.estado = EstadoRevisionDevolucion.RESUELTA.value
+                rev.resuelta_at = ahora_ar()
+                if usuario:
+                    rev.resuelta_por = usuario
+
+            orden.estado = "Completada"
+            orden.devolucion_recibida_por = usuario
+            orden.devolucion_recibida_at = ahora_ar()
+            flush()
+
+            registrar_auditoria(
+                usuario,
+                AccionAuditoria.DEVOLUCION_COMPLETA,
+                "orden",
+                orden.id,
+                f"{motivo} — orden #{orden.id}",
+                {"productos_liberados": liberados, "motivo": motivo},
+            )
+
+            return {
+                "message": "Devolución cerrada administrativamente.",
+                "success": True,
+                "data": {
+                    "orden_id": orden.id,
+                    "estado": orden.estado,
+                    "productos_liberados": liberados,
+                    "devolucion_recibida_at": isoformat_ar(orden.devolucion_recibida_at),
+                },
+            }
 
     def completar_devolucion(
         self,

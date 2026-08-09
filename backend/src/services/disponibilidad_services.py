@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 from src.descripcion_producto import format_descripcion_producto
 from src.fechas_ar import hoy_ar
-from src.models import ProductoReservado, Producto, EstadoProducto
+from src.models import ItemPresupuesto, ProductoReservado, Producto, EstadoProducto
 
 
 def _as_date(d: date | datetime) -> date:
@@ -21,6 +21,33 @@ def _as_date(d: date | datetime) -> date:
 
 def _intervalos_solapan(a_ini: date, a_fin: date, b_ini: date, b_fin: date) -> bool:
     return a_ini <= b_fin and a_fin >= b_ini
+
+
+def _presupuesto_estado_bloquea(estado: str | None) -> bool:
+    e = (estado or "").strip().lower()
+    if e in ("cancelada", "cancelado", "rechazado", "rechazada", "vencido", "vencida"):
+        return False
+    return e in ("pendiente", "aprobado", "convertido_orden")
+
+
+def _presupuesto_tiene_orden_activa(presupuesto) -> bool:
+    orden = presupuesto.orden_trabajo
+    if not orden:
+        return False
+    oest = (orden.estado or "").strip().lower()
+    return oest not in ("cancelada", "cancelado")
+
+
+def _rango_bloqueo_presupuesto(presupuesto) -> tuple[date, date]:
+    """
+    Ventana de bloqueo de un presupuesto activo:
+    desde 5 días antes del retiro hasta la devolución (o evento si faltan fechas).
+    Alineado con la ventana de seguridad de ProductoReservado al cobrar seña.
+    """
+    retiro = _as_date(presupuesto.fecha_retiro or presupuesto.fecha_evento)
+    fin = _as_date(presupuesto.fecha_devolucion or presupuesto.fecha_evento)
+    inicio = retiro - timedelta(days=5)
+    return inicio, fin
 
 
 def _estado_producto_codigo(estado) -> str:
@@ -72,25 +99,39 @@ def verificar_disponibilidad(
     """
     Verifica si un producto está disponible en las fechas indicadas.
 
-    Solo bloquea por **órdenes con seña** (ProductoReservado): ventana
-    [fecha_bloqueo, fecha_bloqueo+5], coherente con crear_orden_trabajo (fecha_bloqueo = R - 5 días).
-
-    Los presupuestos sin orden **no** bloquean (el cliente puede no concretar).
+    Bloquea por:
+    1. **Presupuestos activos sin orden** (pendiente/aprobado): solapamiento con
+       [fecha_retiro−5, fecha_devolución] del presupuesto existente vs el solicitado.
+    2. **Órdenes con seña** (ProductoReservado): ventana [fecha_bloqueo, fecha_bloqueo+5].
 
     Args:
         producto_id: ID del producto a verificar
         fecha_retiro: Inicio del alquiler solicitado (retiro del cliente)
         fecha_devolucion: Fin del alquiler solicitado
-        presupuesto_excluir_id: Reservado por compatibilidad de API; ya no afecta la regla.
+        presupuesto_excluir_id: Al editar, excluir ítems del propio presupuesto.
         orden_excluir_id: Si se edita un presupuesto con orden, excluir sus propias reservas.
 
     Returns:
         True si el producto está disponible, False si está ocupado
     """
-    _ = presupuesto_excluir_id  # compatibilidad API; bloqueo solo con OT + seña
     try:
         fecha_retiro = _as_date(fecha_retiro)
         fecha_devolucion = _as_date(fecha_devolucion)
+
+        for item in ItemPresupuesto.select():
+            if item.producto.id != producto_id:
+                continue
+            presupuesto = item.presupuesto
+            if presupuesto_excluir_id is not None and presupuesto.id == presupuesto_excluir_id:
+                continue
+            if not _presupuesto_estado_bloquea(presupuesto.estado):
+                continue
+            if _presupuesto_tiene_orden_activa(presupuesto):
+                continue
+
+            p_ini, p_fin = _rango_bloqueo_presupuesto(presupuesto)
+            if _intervalos_solapan(p_ini, p_fin, fecha_retiro, fecha_devolucion):
+                return False
 
         for producto_reservado in ProductoReservado.select():
             if producto_reservado.producto.id != producto_id:
@@ -126,6 +167,7 @@ def validar_producto_para_item_presupuesto(
     *,
     fecha_retiro: date,
     fecha_devolucion: date,
+    presupuesto_excluir_id: Optional[int] = None,
     orden_excluir_id: Optional[int],
     es_reuso_del_mismo_presupuesto: bool,
     ignorar_conflicto_reserva: bool = False,
@@ -141,14 +183,14 @@ def validar_producto_para_item_presupuesto(
         producto.id,
         fecha_retiro,
         fecha_devolucion,
-        presupuesto_excluir_id=None,
+        presupuesto_excluir_id=presupuesto_excluir_id,
         orden_excluir_id=orden_excluir_id,
     ):
         raise HTTPException(
             status_code=400,
             detail=(
                 f'El producto "{desc}" no está disponible para la nueva fecha. '
-                "Conflicto con otra reserva."
+                "Conflicto con otro presupuesto u orden de trabajo."
             ),
         )
     if es_reuso_del_mismo_presupuesto:

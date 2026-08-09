@@ -483,10 +483,8 @@ export default function VentasPage() {
       payment_method: null,
       cuenta_destino_id: cuentaDestinoId,
       descuento_porcentaje: tieneDescuento ? porcentajeDescuento : null,
-      extra_discount_percentage: tieneDescuentoExtra
-        ? porcentajeDescuento
-        : null,
-      extra_discount_amount: tieneDescuentoExtra
+      extra_discount_percentage: tieneDescuento ? porcentajeDescuento : null,
+      extra_discount_amount: tieneDescuento
         ? totalOriginal - (totalConDescuento as number)
         : null,
       extra_discount_reason: tieneDescuentoExtra ? motivoDescuentoExtra : null,

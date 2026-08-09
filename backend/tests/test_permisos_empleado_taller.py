@@ -81,7 +81,11 @@ def test_empleado_puede_operar_pero_no_administrar_talleres():
     # Sí puede enviar y recibir prendas de Modista.
     asignar_modista = client.post(
         "/modistas/asignar-producto",
-        json={"modista_id": modista_id, "producto_id": w.producto_a_id},
+        json={
+            "modista_id": modista_id,
+            "producto_id": w.producto_a_id,
+            "notas": "Arreglo de prueba permisos",
+        },
         headers=headers,
     )
     assert asignar_modista.status_code == 200

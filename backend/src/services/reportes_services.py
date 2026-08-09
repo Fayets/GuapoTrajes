@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 import re
 from src.descripcion_producto import format_descripcion_producto
 from src.fechas_ar import isoformat_ar
+from src.presupuesto_observaciones import observaciones_presupuesto_para_mostrar
 from src.models import Presupuesto, OrdenTrabajo, ItemPresupuesto, Producto, Cliente, CajaMovimiento, Venta, TipoMovimiento, EstadoProducto, ProductoReservado, ProductoLavanderia, ProductoModista, DetalleVenta, DetalleVenta
 
 
@@ -1427,6 +1428,9 @@ class ReportesServices:
                     pr_por_producto = {
                         pr.producto.id: pr for pr in orden.productos_reservados
                     }
+                    observaciones_orden = observaciones_presupuesto_para_mostrar(
+                        presupuesto.observaciones
+                    )
 
                     # Obtener productos/conjuntos a armar (items del presupuesto)
                     productos_a_armar = []
@@ -1476,6 +1480,7 @@ class ReportesServices:
                             if pr_item and requiere_modista_orden
                             else ""
                         )
+                        arreglos_mostrar = notas_modista_orden or observaciones_orden
 
                         productos_a_armar.append({
                             "producto_id": producto.id,
@@ -1497,6 +1502,7 @@ class ReportesServices:
                             "ubicacion_critica": ubicacion_critica,
                             "requiere_modista": requiere_modista_orden,
                             "notas_modista": notas_modista_orden,
+                            "arreglos": arreglos_mostrar,
                             "fecha_retiro": fecha_retiro_iso,
                         })
 
@@ -1532,6 +1538,8 @@ class ReportesServices:
                         "conjunto_separado": bool(
                             getattr(orden, "conjunto_separado", False)
                         ),
+                        "observaciones": observaciones_orden,
+                        "tiene_arreglos": bool(observaciones_orden),
                     }
 
                     resultado.append(orden_info)
@@ -1596,6 +1604,10 @@ class ReportesServices:
 
                     # Excluir órdenes completadas (ya devolvieron todos los productos)
                     if orden.estado and orden.estado.lower() == "completada":
+                        continue
+
+                    # Solo contratos generados (misma regla que pantalla Devoluciones)
+                    if not getattr(orden, "contrato_generado_at", None):
                         continue
 
                     # Verificar que tenga fecha_devolucion

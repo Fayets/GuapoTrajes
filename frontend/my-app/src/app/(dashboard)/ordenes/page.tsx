@@ -28,8 +28,11 @@ import {
 } from "@/components/metodo-pago-selector";
 import { ConfirmarGenerarContratoModal } from "@/components/modales/confirmar-generar-contrato-modal";
 import { ConfirmDeleteDialog } from "@/components/modales/confirm-delete-dialog";
+import {
+  EnviarModistaDialog,
+  type EnviarModistaContext,
+} from "@/components/modales/enviar-modista-dialog";
 import { imprimirEtiquetas100x50Lote } from "@/lib/imprimir-etiqueta-100x50";
-import { imprimirEtiquetasModistaLote } from "@/lib/imprimir-etiqueta-modista";
 import {
   resolverLocatarioContrato,
   type FirmanteContratoPayload,
@@ -111,6 +114,7 @@ type OrdenTrabajo = {
   contrato_generado_por_nombre?: string | null;
   devolucion_recibida_por_nombre?: string | null;
   devolucion_recibida_at?: string | null;
+  observaciones?: string;
   firmante_nombre?: string | null;
   firmante_dni?: string | null;
   firmante_direccion?: string | null;
@@ -179,20 +183,8 @@ function OrdenesTrabajoContent() {
     useState<OrdenTrabajo | null>(null);
   const [imprimiendoEtiquetasArmado, setImprimiendoEtiquetasArmado] =
     useState(false);
-  const [modistaProductoId, setModistaProductoId] = useState<number | null>(
-    null
-  );
-  const [modistaNotasDraft, setModistaNotasDraft] = useState("");
-  const [guardandoModista, setGuardandoModista] = useState(false);
-  const [modistasCatalogo, setModistasCatalogo] = useState<
-    Array<{ id: number; nombre: string }>
-  >([]);
-  const [enviarModistaProducto, setEnviarModistaProducto] =
+  const [enviarModistaProd, setEnviarModistaProd] =
     useState<ProductoReservado | null>(null);
-  const [enviarModistaId, setEnviarModistaId] = useState<number | null>(null);
-  const [enviandoModista, setEnviandoModista] = useState(false);
-  const [imprimiendoEtiquetaModista, setImprimiendoEtiquetaModista] =
-    useState(false);
 
   const ORDENES_POR_PAGINA = 18;
   const verContratoAbiertoRef = useRef<number | null>(null);
@@ -1135,16 +1127,6 @@ function OrdenesTrabajoContent() {
     }
   };
 
-  const abrirPanelModista = (prod: ProductoReservado) => {
-    if (modistaProductoId === prod.producto_id) {
-      setModistaProductoId(null);
-      setModistaNotasDraft("");
-      return;
-    }
-    setModistaProductoId(prod.producto_id);
-    setModistaNotasDraft(prod.notas_modista || "");
-  };
-
   const actualizarProductoModistaEnOrden = (
     productoId: number,
     patch: Partial<ProductoReservado>
@@ -1167,183 +1149,33 @@ function OrdenesTrabajoContent() {
     );
   };
 
-  const guardarIndicacionModista = async (
-    prod: ProductoReservado,
-    requiere: boolean
-  ) => {
-    if (!ordenSeleccionada) return;
-    const notas = modistaNotasDraft.trim();
-    if (requiere && !notas) {
-      toast.error("Indicá qué debe hacerse en modista");
-      return;
-    }
-    setGuardandoModista(true);
-    try {
-      const res = await fetch(
-        `${getApiBaseUrl()}/ordenes/${ordenSeleccionada.id}/productos-reservados/${prod.producto_id}/modista`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+  const contextoModistaOrden: EnviarModistaContext | null =
+    enviarModistaProd && ordenSeleccionada
+      ? {
+          tipo: "orden",
+          ordenId: ordenSeleccionada.id,
+          producto: {
+            producto_id: enviarModistaProd.producto_id,
+            producto_descripcion: enviarModistaProd.producto_descripcion,
+            codigo_barra: enviarModistaProd.codigo_barra,
+            notas_modista:
+              enviarModistaProd.notas_modista ||
+              ordenSeleccionada.observaciones ||
+              undefined,
           },
-          body: JSON.stringify({
-            requiere_modista: requiere,
-            notas_modista: requiere ? notas : null,
-          }),
+          clienteNombre: ordenSeleccionada.cliente_nombre,
+          clienteDni: ordenSeleccionada.cliente_dni,
+          clienteCelular: ordenSeleccionada.cliente_celular,
+          fechaRetiro: ordenSeleccionada.fecha_retiro,
         }
-      );
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(
-          typeof body.detail === "string"
-            ? body.detail
-            : body.message || "No se pudo guardar"
-        );
-      }
-      const data = body.data || {};
-      actualizarProductoModistaEnOrden(prod.producto_id, {
-        requiere_modista: data.requiere_modista ?? requiere,
-        notas_modista: data.notas_modista ?? (requiere ? notas : ""),
-      });
-      toast.success(
-        requiere ? "Prenda marcada para modista" : "Indicación de modista quitada"
-      );
-      if (!requiere) {
-        setModistaProductoId(null);
-        setModistaNotasDraft("");
-      }
-    } catch (e: unknown) {
-      toast.error(
-        e instanceof Error ? e.message : "Error al guardar indicación de modista"
-      );
-    } finally {
-      setGuardandoModista(false);
-    }
-  };
+      : null;
 
-  const fechaRetiroEtiqueta = (orden: OrdenTrabajo) => {
-    if (!orden.fecha_retiro) return "—";
-    try {
-      return formatDdMmYyyyDesdeIso(orden.fecha_retiro);
-    } catch {
-      return orden.fecha_retiro;
-    }
-  };
-
-  const imprimirEtiquetaTrabajoModista = async (prod: ProductoReservado) => {
-    if (!ordenSeleccionada) return;
-    const notas = (prod.notas_modista || modistaNotasDraft || "").trim();
-    if (!prod.requiere_modista && !notas) {
-      toast.error("Guardá el trabajo de modista antes de imprimir la etiqueta");
-      return;
-    }
-    setImprimiendoEtiquetaModista(true);
-    try {
-      const result = await imprimirEtiquetasModistaLote([
-        {
-          codigoBarra: prod.codigo_barra || "0",
-          clienteNombre: ordenSeleccionada.cliente_nombre || "Cliente",
-          fechaRetiro: fechaRetiroEtiqueta(ordenSeleccionada),
-          prendaDescripcion: prod.producto_descripcion || "Prenda",
-          notasTrabajo: notas || prod.notas_modista || "",
-        },
-      ]);
-      if (result.porIndice[0] !== "ok") {
-        throw new Error(
-          result.mensajeAyuda || "No se pudo generar la etiqueta de modista"
-        );
-      }
-      toast.success("Etiqueta de modista enviada a impresión");
-    } catch (e: unknown) {
-      toast.error(
-        e instanceof Error ? e.message : "Error al imprimir etiqueta de modista"
-      );
-    } finally {
-      setImprimiendoEtiquetaModista(false);
-    }
-  };
-
-  const abrirModalEnviarModista = async (prod: ProductoReservado) => {
-    if (!prod.requiere_modista) {
-      toast.error("Marcá primero el trabajo de modista");
-      return;
-    }
+  const abrirEnviarModista = (prod: ProductoReservado) => {
     if ((prod.estado || "").toUpperCase() === "MODISTA") {
       toast.info("La prenda ya está enviada a modista");
       return;
     }
-    setEnviarModistaProducto(prod);
-    setEnviarModistaId(null);
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/modistas/all`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setModistasCatalogo(
-          Array.isArray(data)
-            ? data.map((m: any) => ({ id: m.id, nombre: m.nombre || String(m.id) }))
-            : []
-        );
-      }
-    } catch {
-      setModistasCatalogo([]);
-    }
-  };
-
-  const confirmarEnviarModista = async () => {
-    if (!ordenSeleccionada || !enviarModistaProducto || !enviarModistaId) {
-      toast.error("Seleccioná una modista");
-      return;
-    }
-    setEnviandoModista(true);
-    try {
-      const res = await fetch(
-        `${getApiBaseUrl()}/ordenes/${ordenSeleccionada.id}/productos-reservados/${enviarModistaProducto.producto_id}/enviar-modista`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({ modista_id: enviarModistaId }),
-        }
-      );
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(
-          typeof body.detail === "string"
-            ? body.detail
-            : body.message || "No se pudo enviar a modista"
-        );
-      }
-      actualizarProductoModistaEnOrden(enviarModistaProducto.producto_id, {
-        estado: "MODISTA",
-      });
-      toast.success(body.message || "Prenda enviada a modista");
-      const prodEnviado = enviarModistaProducto;
-      setEnviarModistaProducto(null);
-      setEnviarModistaId(null);
-      // Ofrecer reimprimir etiqueta
-      const reimprimir = window.confirm(
-        "¿Querés imprimir la etiqueta de trabajo para la modista?"
-      );
-      if (reimprimir) {
-        await imprimirEtiquetaTrabajoModista({
-          ...prodEnviado,
-          estado: "MODISTA",
-        });
-      }
-    } catch (e: unknown) {
-      toast.error(
-        e instanceof Error ? e.message : "Error al enviar a modista"
-      );
-    } finally {
-      setEnviandoModista(false);
-    }
+    setEnviarModistaProd(prod);
   };
 
   const generarContratoDesdeFila = (orden: OrdenTrabajo) => {
@@ -2291,92 +2123,27 @@ function OrdenesTrabajoContent() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!enviarModistaProducto}
+      <EnviarModistaDialog
+        open={!!enviarModistaProd}
         onOpenChange={(open) => {
-          if (!open && !enviandoModista) {
-            setEnviarModistaProducto(null);
-            setEnviarModistaId(null);
-          }
+          if (!open) setEnviarModistaProd(null);
         }}
-      >
-        <DialogContent
-          className="w-full border-0"
-          dialogClassName="modal-dialog-centered"
-          dialogStyle={{ maxWidth: "480px", width: "95%" }}
-        >
-          <DialogHeader className="border-bottom pb-3">
-            <DialogTitle>Enviar a modista</DialogTitle>
-            <DialogDescription className="mb-0">
-              {enviarModistaProducto?.producto_descripcion}
-              <br />
-              <span className="small">
-                Se usa el cliente y las notas de trabajo de la orden. La prenda
-                aparecerá en el taller de modista.
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="modal-body py-3">
-            {enviarModistaProducto?.notas_modista && (
-              <div className="alert alert-warning py-2 small mb-3">
-                <strong>Trabajo:</strong> {enviarModistaProducto.notas_modista}
-              </div>
-            )}
-            <label className="form-label fw-semibold" htmlFor="enviar-modista-select">
-              Modista
-            </label>
-            <select
-              id="enviar-modista-select"
-              className="form-select"
-              value={enviarModistaId ?? ""}
-              onChange={(e) =>
-                setEnviarModistaId(
-                  e.target.value ? Number(e.target.value) : null
-                )
-              }
-              disabled={enviandoModista}
-            >
-              <option value="">Seleccionar modista...</option>
-              {modistasCatalogo.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-          <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2">
-            <button
-              type="button"
-              className="btn btn-light border"
-              onClick={() => {
-                setEnviarModistaProducto(null);
-                setEnviarModistaId(null);
-              }}
-              disabled={enviandoModista}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void confirmarEnviarModista()}
-              disabled={enviandoModista || !enviarModistaId}
-            >
-              {enviandoModista ? (
-                <>
-                  <i className="bi bi-arrow-clockwise spin me-2"></i>
-                  Enviando...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-send me-2"></i>
-                  Confirmar envío
-                </>
-              )}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        contexto={contextoModistaOrden}
+        token={
+          typeof window !== "undefined" ? localStorage.getItem("token") : null
+        }
+        onSuccess={(info) => {
+          const prodId = enviarModistaProd?.producto_id;
+          if (prodId) {
+            actualizarProductoModistaEnOrden(prodId, {
+              estado: "MODISTA",
+              requiere_modista: true,
+              notas_modista: info?.notas ?? enviarModistaProd?.notas_modista,
+            });
+          }
+          setEnviarModistaProd(null);
+        }}
+      />
 
       <ConfirmarGenerarContratoModal
         open={showConfirmGenerarContrato}
@@ -2499,10 +2266,6 @@ function OrdenesTrabajoContent() {
           open={showViewModal}
           onOpenChange={(open) => {
             setShowViewModal(open);
-            if (!open) {
-              setModistaProductoId(null);
-              setModistaNotasDraft("");
-            }
           }}
         >
           <DialogContent
@@ -2616,6 +2379,16 @@ function OrdenesTrabajoContent() {
                         {ordenSeleccionada.creado_por_nombre || "—"}
                       </span>
                     </div>
+                    {ordenSeleccionada.observaciones ? (
+                      <div className="col-12">
+                        <span className="text-muted small d-block">
+                          Arreglos / medidas (presupuesto)
+                        </span>
+                        <div className="p-2 rounded bg-warning bg-opacity-10 border border-warning border-opacity-25 small whitespace-pre-wrap">
+                          {ordenSeleccionada.observaciones}
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="col-12 col-md-6">
                       <span className="text-muted small d-block">Contrato generado por</span>
                       <span className="fw-semibold">
@@ -2716,107 +2489,17 @@ function OrdenesTrabajoContent() {
                             )}
                             {!esHistorico && (
                             <div className="mt-2 d-flex flex-wrap gap-2 align-items-start">
-                              <button
-                                type="button"
-                                className={`btn btn-sm ${
-                                  prod.requiere_modista || modistaProductoId === prod.producto_id
-                                    ? "btn-warning"
-                                    : "btn-outline-warning"
-                                }`}
-                                onClick={() => abrirPanelModista(prod)}
-                                disabled={guardandoModista}
-                              >
-                                <i className="bi bi-scissors me-1" />
-                                {prod.requiere_modista ? "Editar trabajo" : "Trabajo modista"}
-                              </button>
-                              {prod.requiere_modista && (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-outline-dark"
-                                    disabled={imprimiendoEtiquetaModista}
-                                    onClick={() =>
-                                      void imprimirEtiquetaTrabajoModista(prod)
-                                    }
-                                  >
-                                    <i className="bi bi-printer me-1" />
-                                    Imprimir etiqueta
-                                  </button>
-                                  {(prod.estado || "").toUpperCase() !== "MODISTA" && (
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-primary"
-                                      disabled={enviandoModista}
-                                      onClick={() =>
-                                        void abrirModalEnviarModista(prod)
-                                      }
-                                    >
-                                      <i className="bi bi-send me-1" />
-                                      Enviar a modista
-                                    </button>
-                                  )}
-                                </>
-                              )}
+                              {(prod.estado || "").toUpperCase() !== "MODISTA" ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-warning"
+                                  onClick={() => abrirEnviarModista(prod)}
+                                >
+                                  <i className="bi bi-scissors me-1" />
+                                  Enviar a modista
+                                </button>
+                              ) : null}
                             </div>
-                            )}
-                            {!esHistorico && modistaProductoId === prod.producto_id && (
-                              <div className="mt-2 border rounded-3 p-3 bg-white">
-                                <label className="form-label small fw-semibold mb-1">
-                                  Trabajo en modista
-                                </label>
-                                <textarea
-                                  className="form-control form-control-sm"
-                                  rows={3}
-                                  placeholder="Ej.: achicar mangas, subir cintura..."
-                                  value={modistaNotasDraft}
-                                  onChange={(e) =>
-                                    setModistaNotasDraft(e.target.value)
-                                  }
-                                  disabled={guardandoModista}
-                                />
-                                <div className="d-flex flex-wrap gap-2 mt-2">
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-warning"
-                                    disabled={guardandoModista}
-                                    onClick={() =>
-                                      void guardarIndicacionModista(prod, true)
-                                    }
-                                  >
-                                    {guardandoModista ? (
-                                      <>
-                                        <i className="bi bi-arrow-clockwise spin me-1" />
-                                        Guardando...
-                                      </>
-                                    ) : (
-                                      "Guardar"
-                                    )}
-                                  </button>
-                                  {prod.requiere_modista && (
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-outline-secondary"
-                                      disabled={guardandoModista}
-                                      onClick={() =>
-                                        void guardarIndicacionModista(prod, false)
-                                      }
-                                    >
-                                      Quitar
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-light border"
-                                    disabled={guardandoModista}
-                                    onClick={() => {
-                                      setModistaProductoId(null);
-                                      setModistaNotasDraft("");
-                                    }}
-                                  >
-                                    Cerrar
-                                  </button>
-                                </div>
-                              </div>
                             )}
                           </div>
                           );

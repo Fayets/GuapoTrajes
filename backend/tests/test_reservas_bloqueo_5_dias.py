@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
+from fastapi import HTTPException
 from pony.orm import db_session
 
 from src.schemas import ItemPresupuestoIn, PresupuestoCreate
@@ -123,7 +124,7 @@ def test_metricas_resumen_bloqueo_mundo(mundo_reserva):
 
 @pytest.fixture(scope="module")
 def mundo_solo_presupuesto_sin_sena():
-    """Presupuesto pendiente sin orden: no debe bloquear (la seña compromete la prenda)."""
+    """Presupuesto pendiente sin orden: bloquea por solapamiento de fechas de alquiler."""
     w = seed_base_world()
     pres = PresupuestosServices()
     cu = fake_current_user(w.usuario.id)
@@ -155,22 +156,133 @@ def mundo_solo_presupuesto_sin_sena():
     return w
 
 
+CASOS_PRESUPUESTO_SIN_SENA = [
+    (-10, -6, True, "completamente_antes_de_R_menos_5"),
+    (-7, -5, False, "solapa_en_R_menos_5"),
+    (-3, -1, False, "dentro_de_ventana_pre_retiro"),
+    (-1, 1, False, "solapa_en_retiro"),
+    (0, 5, False, "desde_retiro"),
+    (10, 15, False, "dentro_del_alquiler"),
+    (21, 25, True, "completamente_despues"),
+]
+
+
 @pytest.mark.parametrize("prod_attr", ["producto_a", "producto_b"])
-@pytest.mark.parametrize("off_ret,off_dev,_esp,desc", CASOS_BLOQUEO)
-def test_presupuesto_sin_sena_no_bloquea_fechas(
+@pytest.mark.parametrize("off_ret,off_dev,esperado,desc", CASOS_PRESUPUESTO_SIN_SENA)
+def test_presupuesto_sin_sena_bloquea_fechas_solapadas(
     mundo_solo_presupuesto_sin_sena,
     prod_attr,
     off_ret,
     off_dev,
-    _esp,
+    esperado,
     desc,
 ):
-    """Sin ProductoReservado (sin seña), cualquier ventana solicitada sigue disponible."""
+    """Presupuesto pendiente sin seña bloquea si el período de alquiler se solapa."""
     w = mundo_solo_presupuesto_sin_sena
     pid = getattr(w, prod_attr).id
     fr = _d(off_ret)
     fd = _d(off_dev)
     assert fr <= fd
-    assert verificar_disponibilidad(pid, fr, fd) is True, (
-        f"{prod_attr} {desc}: sin seña no debe bloquear retiro={fr} dev={fd}"
+    got = verificar_disponibilidad(pid, fr, fd)
+    assert got is esperado, (
+        f"{prod_attr} {desc}: retiro={fr} dev={fd} "
+        f"esperado_disponible={esperado} obtuvo={got}"
     )
+
+
+def test_presupuesto_sin_sena_no_bloquea_fechas_sin_solapar(mundo_solo_presupuesto_sin_sena):
+    """Presupuesto pendiente no bloquea si las fechas no se solapan."""
+    w = mundo_solo_presupuesto_sin_sena
+    pid = w.producto_a.id
+    fr = _d(25)
+    fd = _d(30)
+    assert verificar_disponibilidad(pid, fr, fd) is True
+
+
+def test_segundo_presupuesto_rechazado_si_solapa(mundo_solo_presupuesto_sin_sena):
+    """Crear un segundo presupuesto con las mismas fechas y producto debe fallar."""
+    w = mundo_solo_presupuesto_sin_sena
+    pres = PresupuestosServices()
+    cu = fake_current_user(w.usuario.id)
+    payload = PresupuestoCreate(
+        cliente_id=w.cliente.id,
+        fecha_evento=R,
+        fecha_retiro=R,
+        fecha_devolucion=R + timedelta(days=5),
+        categoria_evento="Casamiento",
+        nombre_agasajado="Y",
+        lugar_evento="Salón",
+        observaciones="",
+        items=[
+            ItemPresupuestoIn(
+                producto_id=w.producto_a.id,
+                cantidad=1,
+                precio_unitario=100.0,
+                subtotal=100.0,
+            ),
+        ],
+    )
+    with pytest.raises(HTTPException):
+        pres.crear_presupuesto(payload, cu)
+
+
+def test_escenario_usuario_evento_agosto_vs_julio():
+    """
+    Reporte usuario: presupuesto evento 01/08/26 bloquea producto para otro del 28/07/26.
+    Datos aislados con seed_base_world (sin seña).
+    """
+    w = seed_base_world()
+    pres = PresupuestosServices()
+    cu = fake_current_user(w.usuario.id)
+    pid = w.producto_a.id
+
+    pres.crear_presupuesto(
+        PresupuestoCreate(
+            cliente_id=w.cliente.id,
+            fecha_evento=date(2026, 8, 1),
+            fecha_retiro=date(2026, 8, 1),
+            fecha_devolucion=date(2026, 8, 5),
+            categoria_evento="Casamiento",
+            nombre_agasajado="Evento A",
+            lugar_evento="Salón",
+            observaciones="test escenario usuario",
+            items=[
+                ItemPresupuestoIn(
+                    producto_id=pid,
+                    cantidad=1,
+                    precio_unitario=100.0,
+                    subtotal=100.0,
+                ),
+            ],
+        ),
+        cu,
+    )
+
+    assert verificar_disponibilidad(pid, date(2026, 7, 28), date(2026, 7, 30)) is False
+
+    with pytest.raises(HTTPException) as exc:
+        pres.crear_presupuesto(
+            PresupuestoCreate(
+                cliente_id=w.cliente.id,
+                fecha_evento=date(2026, 7, 28),
+                fecha_retiro=date(2026, 7, 28),
+                fecha_devolucion=date(2026, 7, 30),
+                categoria_evento="Casamiento",
+                nombre_agasajado="Evento B",
+                lugar_evento="Salón",
+                observaciones="test escenario usuario B",
+                items=[
+                    ItemPresupuestoIn(
+                        producto_id=pid,
+                        cantidad=1,
+                        precio_unitario=100.0,
+                        subtotal=100.0,
+                    ),
+                ],
+            ),
+            cu,
+        )
+    assert exc.value.status_code == 400
+    assert "no está disponible" in str(exc.value.detail).lower()
+
+    assert verificar_disponibilidad(pid, date(2026, 8, 10), date(2026, 8, 12)) is True

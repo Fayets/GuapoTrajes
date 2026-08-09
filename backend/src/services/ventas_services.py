@@ -5,6 +5,7 @@ from src.descripcion_producto import format_descripcion_producto
 from src.models import EstadoProducto, CuentaDestino
 from datetime import datetime, date
 from src.fechas_ar import ahora_ar
+from src.descuento_trazabilidad import descuento_maximo_estandar, registrar_descuento_venta
 from pony.orm import flush
 
 class VentasServices:
@@ -151,31 +152,30 @@ class VentasServices:
 
                 # 7) Totalizar venta (con descuento opcional)
                 descuento_pct = venta_data.descuento_porcentaje
+                total_bruto = total_venta
                 if descuento_pct is not None and descuento_pct > 0:
-                    descuento_maximo_estandar = (
-                        50.0 if usuario.rol == models.Roles.ADMIN else 15.0
-                    )
-                    if descuento_pct > descuento_maximo_estandar:
+                    maximo_estandar = descuento_maximo_estandar(usuario)
+                    if descuento_pct > maximo_estandar:
                         motivo = (venta_data.extra_discount_reason or "").strip()
                         if not motivo:
                             raise HTTPException(
                                 status_code=400,
                                 detail=(
                                     f"El motivo es obligatorio para descuentos mayores al "
-                                    f"{int(descuento_maximo_estandar)}%"
+                                    f"{int(maximo_estandar)}%"
                                 ),
                             )
-                        venta.extra_discount_percentage = descuento_pct
-                        venta.extra_discount_amount = round(
-                            total_venta * (descuento_pct / 100), 2
-                        )
-                        venta.extra_discount_reason = motivo
-                        venta.extra_discount_applied_by = usuario
-                        venta.extra_discount_created_at = ahora_ar()
+                    else:
+                        motivo = (venta_data.extra_discount_reason or "").strip()
 
-                    total_final = round(
-                        total_venta * (1 - descuento_pct / 100), 2
-                    )
+                    monto_descuento = round(total_bruto * (descuento_pct / 100), 2)
+                    venta.extra_discount_percentage = descuento_pct
+                    venta.extra_discount_amount = monto_descuento
+                    venta.extra_discount_reason = motivo
+                    venta.extra_discount_applied_by = usuario
+                    venta.extra_discount_created_at = ahora_ar()
+
+                    total_final = round(total_bruto - monto_descuento, 2)
                     if total_venta > 0 and detalles_creados:
                         acumulado = 0.0
                         for idx, det in enumerate(detalles_creados):
@@ -214,6 +214,15 @@ class VentasServices:
                 }
                 
                 caja_service.create_movimiento(movimiento_data, usuario.id)
+
+                registrar_descuento_venta(
+                    venta,
+                    usuario,
+                    porcentaje=float(descuento_pct or 0),
+                    monto=float(venta.extra_discount_amount or 0),
+                    motivo=(venta.extra_discount_reason or "").strip(),
+                    total_final=float(venta.total or 0),
+                )
                 
                 return {
                     "id": venta_id,

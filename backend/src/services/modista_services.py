@@ -7,6 +7,7 @@ from src.services.productos_services import _producto_to_response_dict
 from typing import List, Optional
 
 from src.fechas_ar import hoy_ar
+from src.orden_etiquetado import ordenar_productos_para_etiquetado
 from src.revision_devolucion import (
     MENSAJE_CUIDADO_ESPECIAL,
     cuidado_especial_desde_ingresos,
@@ -86,7 +87,12 @@ class ModistaServices:
                 if pm.fecha_salida is None:
                     pm.fecha_salida = hoy
 
-            notas_val = (notas or "").strip() or None
+            notas_val = (notas or "").strip()
+            if not notas_val:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Indicá qué trabajo debe realizarse en la prenda",
+                )
             cli_n = (cliente_nombre or "").strip() or None
             cli_c = (cliente_celular or "").strip() or None
             usuario = models.Usuario.get(id=usuario_id) if usuario_id else None
@@ -95,9 +101,8 @@ class ModistaServices:
                 "producto": producto,
                 "modista": modista,
                 "fecha_ingreso": hoy,
+                "notas": notas_val,
             }
-            if notas_val is not None:
-                pm_kwargs["notas"] = notas_val
             if cli_n is not None:
                 pm_kwargs["cliente_nombre"] = cli_n
             if cli_c is not None:
@@ -213,6 +218,9 @@ class ModistaServices:
             ),
             "requiere_cuidado_especial": notas_indican_revision(pm.notas)
             or cuidado_especial_desde_ingresos(pm.producto, [pm])[0],
+            "linea_nombre": producto.linea.nombre if producto.linea else None,
+            "talle_nombre": producto.talle.nombre if producto.talle else None,
+            "talle_codigo": producto.talle.codigo if producto.talle else None,
         }
 
     @staticmethod
@@ -241,7 +249,8 @@ class ModistaServices:
                 if prev is None or (pm.id or 0) > (prev.id or 0):
                     por_producto[pm.producto.id] = pm
 
-            return [self._producto_en_modista_dict(pm) for pm in por_producto.values()]
+            items = [self._producto_en_modista_dict(pm) for pm in por_producto.values()]
+            return ordenar_productos_para_etiquetado(items)
 
     def regresar_varios_de_modista(
         self, productos_ids: List[int], usuario_id: Optional[int] = None

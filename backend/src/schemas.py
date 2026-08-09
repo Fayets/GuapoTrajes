@@ -512,6 +512,7 @@ class ItemPresupuestoResponse(BaseModel):
     id: int
     producto_id: int
     producto_descripcion: str
+    codigo_barra: Optional[str] = None
     cantidad: int
     precio_unitario: float
     subtotal: float

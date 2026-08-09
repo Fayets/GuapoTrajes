@@ -67,11 +67,47 @@ type Item = {
   id?: number;
   productoId: number;
   productoNombre: string;
+  codigoBarra?: string;
   cantidad: number;
   tipoPrecio?: TipoPrecioProducto | string;
   precioUnitario?: number;
   subtotal: number;
 };
+
+function codigoBarraDeItem(item: Item, productos: Producto[]): string {
+  const directo =
+    item.codigoBarra ??
+    (item as { codigo_barra?: string }).codigo_barra ??
+    "";
+  if (directo.trim()) return directo.trim();
+  const prod = productos.find((p) => p.id === item.productoId);
+  return (prod?.codigo_barra ?? "").trim();
+}
+
+function EtiquetaProductoPresupuesto({
+  nombre,
+  codigoBarra,
+}: {
+  nombre: string;
+  codigoBarra?: string;
+}) {
+  return (
+    <span className="d-inline-flex flex-column align-items-start gap-0 min-w-0">
+      <span className={`fw-medium text-break ${descripcionProductoTextClass(nombre)}`}>
+        {nombre}
+      </span>
+      {codigoBarra ? (
+        <span
+          className="text-muted font-monospace lh-1"
+          style={{ fontSize: "0.68rem", letterSpacing: "0.03em" }}
+          title="Código de barras"
+        >
+          {codigoBarra}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 const ITEMS_PRECIO_GRID_STYLE: React.CSSProperties = {
   display: "grid",
@@ -925,11 +961,10 @@ export default function PresupuestoModal({
                           className="list-group-item bg-transparent border-0 px-0 py-2"
                         >
                           <div style={ITEMS_PRECIO_GRID_STYLE}>
-                            <span
-                              className={`fw-medium text-break ${descripcionProductoTextClass(nombreProducto)}`}
-                            >
-                              {nombreProducto}
-                            </span>
+                            <EtiquetaProductoPresupuesto
+                              nombre={nombreProducto}
+                              codigoBarra={codigoBarraDeItem(item as Item, productos)}
+                            />
                             <span className="badge bg-primary rounded-pill text-end justify-self-end">
                               {formatMoneyAr(Number(subtotal))}
                             </span>
@@ -1082,11 +1117,10 @@ export default function PresupuestoModal({
                             className="list-group-item bg-transparent border-0 px-0 py-2"
                           >
                             <div style={ITEMS_PRECIO_GRID_STYLE}>
-                              <span
-                                className={`fw-medium text-break ${descripcionProductoTextClass(item.productoNombre)}`}
-                              >
-                                {item.productoNombre}
-                              </span>
+                              <EtiquetaProductoPresupuesto
+                                nombre={item.productoNombre}
+                                codigoBarra={codigoBarraDeItem(item, productos)}
+                              />
                               <span className="badge bg-primary rounded-pill text-nowrap justify-self-end">
                                 {formatMoneyAr(item.subtotal)}
                               </span>

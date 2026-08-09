@@ -37,6 +37,9 @@ const ACCION_LABEL: Record<string, string> = {
   MODISTA_ENVIO: "Envío modista",
   MODISTA_RECEPCION: "Recepción modista",
   ORDEN_ELIMINADA: "Orden eliminada",
+  DESCUENTO_APLICADO: "Descuento aplicado",
+  DESCUENTO_MODIFICADO: "Descuento modificado",
+  DESCUENTO_ELIMINADO: "Descuento eliminado",
 };
 
 export default function AuditoriaPage() {

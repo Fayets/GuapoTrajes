@@ -3,7 +3,6 @@
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -41,20 +40,23 @@ export function ConfirmDeleteDialog({
     >
       <DialogContent
         className="w-full border-0 p-0 gap-0 overflow-hidden rounded-3"
-        dialogStyle={{ maxWidth: "440px", width: "95%" }}
+        dialogClassName="modal-dialog-centered"
+        dialogStyle={{ maxWidth: "480px", width: "95%" }}
       >
-        <DialogHeader className="px-4 pt-4 pb-2 border-bottom">
-          <DialogTitle className="fw-semibold mb-2">{title}</DialogTitle>
-          <DialogDescription className="text-muted small mb-0 lh-base">
-            <span className="d-block mb-2 fw-medium text-body">
-              ¿Está seguro que desea eliminar {itemLabel}?
-            </span>
-            {description ? (
-              <span className="d-block text-muted">{description}</span>
-            ) : null}
-          </DialogDescription>
+        <DialogHeader className="px-4 pt-4 pb-3 border-bottom">
+          <DialogTitle className="fw-semibold mb-0">{title}</DialogTitle>
         </DialogHeader>
-        <DialogFooter className="px-4 py-4 border-top bg-light gap-3 d-flex justify-content-end">
+
+        <div className="modal-body px-4 py-4">
+          <p className="mb-0 fw-medium text-body lh-base">
+            ¿Está seguro que desea eliminar {itemLabel}?
+          </p>
+          {description ? (
+            <p className="text-muted small mb-0 mt-3 lh-base">{description}</p>
+          ) : null}
+        </div>
+
+        <DialogFooter className="px-4 py-3 border-top bg-light gap-2 d-flex flex-wrap justify-content-end">
           <button
             type="button"
             className="btn btn-secondary"

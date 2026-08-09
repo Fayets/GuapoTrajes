@@ -62,6 +62,19 @@ type OrdenRow = {
   contrato_generado_at?: string | null;
 };
 
+type DescuentoClienteRow = {
+  fecha: string;
+  origen: string;
+  origen_id: number;
+  referencia: string;
+  porcentaje: number;
+  monto: number;
+  motivo: string;
+  total_final: number;
+  aplicado_por?: string | null;
+  tipo: string;
+};
+
 type ClienteDetalle = {
   id: number;
   nombre: string;
@@ -130,9 +143,10 @@ export default function ClientePerfilPage() {
   const [cliente, setCliente] = useState<ClienteDetalle | null>(null);
   const [saldoActual, setSaldoActual] = useState(0);
   const [movimientos, setMovimientos] = useState<MovimientoCC[]>([]);
-  const [tab, setTab] = useState<"cc" | "historial">("cc");
+  const [tab, setTab] = useState<"cc" | "historial" | "descuentos">("cc");
   const [presupuestos, setPresupuestos] = useState<PresupuestoRow[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenRow[]>([]);
+  const [descuentos, setDescuentos] = useState<DescuentoClienteRow[]>([]);
   const [modalPresupuestoOpen, setModalPresupuestoOpen] = useState(false);
   const [modalPresupuestoCargando, setModalPresupuestoCargando] = useState(false);
   const [modalPresupuestoData, setModalPresupuestoData] = useState<PresupuestoDetalle | null>(null);
@@ -158,7 +172,7 @@ export default function ClientePerfilPage() {
 
     setCargando(true);
     try {
-      const [rCliente, rSaldo, rMovs, rPres, rOrd] = await Promise.all([
+      const [rCliente, rSaldo, rMovs, rPres, rOrd, rDesc] = await Promise.all([
         fetch(`${API_BASE}/clientes/get_by_id/${targetId}`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
@@ -180,6 +194,11 @@ export default function ClientePerfilPage() {
           signal,
         }),
         fetch(`${API_BASE}/ordenes/`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+          signal,
+        }),
+        fetch(`${API_BASE}/clientes/descuentos/${targetId}`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
           signal,
@@ -236,6 +255,11 @@ export default function ClientePerfilPage() {
             : []
         );
       } else setOrdenes([]);
+
+      if (rDesc.ok) {
+        const jsonDesc = await rDesc.json();
+        setDescuentos(Array.isArray(jsonDesc?.data) ? jsonDesc.data : []);
+      } else setDescuentos([]);
     } catch {
       if (signal.aborted) return;
       setCliente(null);
@@ -243,6 +267,7 @@ export default function ClientePerfilPage() {
       setMovimientos([]);
       setPresupuestos([]);
       setOrdenes([]);
+      setDescuentos([]);
     } finally {
       if (!signal.aborted) {
         setCargando(false);
@@ -426,6 +451,15 @@ export default function ClientePerfilPage() {
             Alquileres
           </button>
         </li>
+        <li className="nav-item">
+          <button
+            type="button"
+            className={`nav-link ${tab === "descuentos" ? "active" : ""}`}
+            onClick={() => setTab("descuentos")}
+          >
+            Descuentos
+          </button>
+        </li>
       </ul>
 
       {cargando ? (
@@ -549,7 +583,7 @@ export default function ClientePerfilPage() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : tab === "historial" ? (
         <div className="d-flex flex-column gap-4">
           <div className="row g-2">
             <div className="col-sm-4">
@@ -678,6 +712,59 @@ export default function ClientePerfilPage() {
             </Link>
           </section>
         </div>
+      ) : (
+        <div className="d-flex flex-column gap-3">
+          <p className="small text-muted mb-0">
+            Historial de descuentos aplicados a este cliente en presupuestos y ventas.
+          </p>
+          <div className="table-responsive card shadow-sm">
+            <table className="table table-sm align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Fecha</th>
+                  <th>Origen</th>
+                  <th>Referencia</th>
+                  <th className="text-center">Descuento (%)</th>
+                  <th className="text-end">Monto</th>
+                  <th>Quién aplicó</th>
+                  <th>Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {descuentos.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center text-muted py-4">
+                      No hay descuentos registrados para este cliente.
+                    </td>
+                  </tr>
+                ) : (
+                  descuentos.map((d, idx) => (
+                    <tr key={`${d.origen}-${d.origen_id}-${idx}`}>
+                      <td className="text-nowrap small">
+                        {d.fecha
+                          ? format(parseISO(d.fecha.replace(" ", "T")), "dd/MM/yyyy HH:mm", {
+                              locale: es,
+                            })
+                          : "—"}
+                      </td>
+                      <td>
+                        <span className="badge bg-secondary text-capitalize">{d.origen}</span>
+                        {d.tipo === "extra" ? (
+                          <span className="badge bg-warning text-dark ms-1">Extra</span>
+                        ) : null}
+                      </td>
+                      <td>{d.referencia}</td>
+                      <td className="text-center">{d.porcentaje.toFixed(0)}%</td>
+                      <td className="text-end">{formatMoneyAr(d.monto)}</td>
+                      <td>{d.aplicado_por || "—"}</td>
+                      <td className="small">{d.motivo || "—"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       <Dialog
@@ -804,10 +891,21 @@ function DetallePresupuestoBody({ data }: { data: PresupuestoDetalle }) {
               items.map((it: unknown, idx: number) => {
                 const row = it as Record<string, unknown>;
                 const desc = String(row.producto_descripcion ?? row.descripcion ?? "—");
+                const codigo = String(row.codigo_barra ?? "").trim();
                 const sub = Number(row.subtotal ?? row.precio_unitario ?? 0);
                 return (
                   <tr key={String(row.id ?? idx)}>
-                    <td>{desc}</td>
+                    <td>
+                      <div>{desc}</div>
+                      {codigo ? (
+                        <div
+                          className="text-muted font-monospace"
+                          style={{ fontSize: "0.68rem", letterSpacing: "0.03em" }}
+                        >
+                          {codigo}
+                        </div>
+                      ) : null}
+                    </td>
                     <td className="text-end">
                       {formatMoneyAr(sub)}
                     </td>

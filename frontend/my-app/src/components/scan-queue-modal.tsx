@@ -16,8 +16,9 @@ type ScanQueueModalProps = {
   onClearAll: () => void;
   onRemoveLine: (productoId: number) => void;
   onLoteCambiarEstado: (
-    estado: "LAVANDERIA" | "MODISTA"
+    estado: "LAVANDERIA"
   ) => Promise<{ ok: boolean; message?: string }>;
+  onEnviarModista?: () => void;
 };
 
 export function ScanQueueModal({
@@ -27,6 +28,7 @@ export function ScanQueueModal({
   onClearAll,
   onRemoveLine,
   onLoteCambiarEstado,
+  onEnviarModista,
 }: ScanQueueModalProps) {
   const router = useRouter();
   const [busyEstado, setBusyEstado] = useState(false);
@@ -59,24 +61,25 @@ export function ScanQueueModal({
     router.push("/ventas");
   };
 
-  const ejecutarEstado = async (estado: "LAVANDERIA" | "MODISTA") => {
+  const ejecutarLavanderia = async () => {
     if (items.length === 0 || busyEstado) return;
     setBusyEstado(true);
     try {
-      const r = await onLoteCambiarEstado(estado);
+      const r = await onLoteCambiarEstado("LAVANDERIA");
       if (!r.ok) {
         toast.error(r.message || "No se pudo actualizar el estado.");
         return;
       }
-      toast.success(
-        estado === "LAVANDERIA"
-          ? "Estado actualizado a lavandería."
-          : "Estado actualizado a modista."
-      );
+      toast.success("Estado actualizado a lavandería.");
       onClose();
     } finally {
       setBusyEstado(false);
     }
+  };
+
+  const abrirModista = () => {
+    if (items.length === 0 || busyEstado) return;
+    onEnviarModista?.();
   };
 
   if (!open) return null;
@@ -169,15 +172,15 @@ export function ScanQueueModal({
               type="button"
               className="btn btn-info text-white"
               disabled={items.length === 0 || busyEstado}
-              onClick={() => void ejecutarEstado("LAVANDERIA")}
+              onClick={() => void ejecutarLavanderia()}
             >
               Lavandería
             </button>
             <button
               type="button"
               className="btn btn-primary"
-              disabled={items.length === 0 || busyEstado}
-              onClick={() => void ejecutarEstado("MODISTA")}
+              disabled={items.length === 0 || busyEstado || !onEnviarModista}
+              onClick={abrirModista}
             >
               Modista
             </button>

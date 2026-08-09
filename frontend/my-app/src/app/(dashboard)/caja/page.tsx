@@ -697,8 +697,7 @@ export default function CajaPage() {
     return metodo;
   };
 
-  // Función para calcular totales agrupados por método antiguo.
-  // El panel superior solo suma INGRESOS; los egresos no se restan (no se descuentan del total).
+  // Totales netos por método: ingresos − egresos (incluye ANULACION_ORDEN al borrar una orden).
   const calcularTotalesAgrupados = () => {
     const totalesAgrupados: { [key: string]: number } = {};
 
@@ -707,8 +706,6 @@ export default function CajaPage() {
     });
 
     movimientos.forEach((mov) => {
-      if (mov.tipo !== "INGRESO") return;
-
       let metodoEnum =
         (mov.payment_method_type && metodosPago.some((m) => m.value === mov.payment_method_type))
           ? mov.payment_method_type!
@@ -717,7 +714,8 @@ export default function CajaPage() {
 
       if (!metodosPago.find((m) => m.value === metodoEnum)) return;
 
-      totalesAgrupados[metodoEnum] += mov.monto;
+      const delta = mov.tipo === "INGRESO" ? mov.monto : -mov.monto;
+      totalesAgrupados[metodoEnum] += delta;
     });
 
     return totalesAgrupados;

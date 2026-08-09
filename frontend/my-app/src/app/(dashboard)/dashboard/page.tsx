@@ -22,6 +22,10 @@ import { useSucursal } from "@/context/sucursal-context";
 import { getApiBaseUrl } from "@/lib/api-config";
 import { useScanQueueWithScanner } from "@/hooks/use-scan-queue-with-scanner";
 import { ScanQueueModal } from "@/components/scan-queue-modal";
+import {
+  EnviarModistaDialog,
+  type EnviarModistaContext,
+} from "@/components/modales/enviar-modista-dialog";
 import { formatMoneyAr } from "@/lib/money";
 
 type Rol = "ADMIN" | "EMPLEADO" | "SUPER_ADMIN";
@@ -48,6 +52,7 @@ export default function Dashboard() {
   const { me, loading } = useAuth();
   const { sucursalActual } = useSucursal();
   const [scanModalOpen, setScanModalOpen] = useState(false);
+  const [modistaColaOpen, setModistaColaOpen] = useState(false);
   const [kpis, setKpis] = useState<Kpis>(KPIS_INICIALES);
   const [kpisLoading, setKpisLoading] = useState(true);
   const { items: scanQueueItems, clearAll, removeLine } =
@@ -127,7 +132,7 @@ export default function Dashboard() {
   }, [sucursalId]);
 
   const handleLoteCambiarEstado = async (
-    estado: "LAVANDERIA" | "MODISTA"
+    estado: "LAVANDERIA"
   ): Promise<{ ok: boolean; message?: string }> => {
     const api = getApiBaseUrl();
     const token = localStorage.getItem("token");
@@ -162,6 +167,21 @@ export default function Dashboard() {
     clearAll();
     return { ok: true };
   };
+
+  const contextoModistaCola: EnviarModistaContext | null =
+    modistaColaOpen && scanQueueItems.length > 0
+      ? {
+          tipo: "stock",
+          productos: scanQueueItems.map((row) => ({
+            id: row.productoId,
+            descripcion: row.descripcion,
+            codigo_barra: row.codigoBarra,
+          })),
+        }
+      : null;
+
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   // Dominios visuales: personas | caja | inventario | documentos
   const modules: {
@@ -337,6 +357,23 @@ export default function Dashboard() {
         onClearAll={clearAll}
         onRemoveLine={removeLine}
         onLoteCambiarEstado={handleLoteCambiarEstado}
+        onEnviarModista={() => {
+          setScanModalOpen(false);
+          setModistaColaOpen(true);
+        }}
+      />
+
+      <EnviarModistaDialog
+        open={modistaColaOpen}
+        onOpenChange={(open) => {
+          if (!open) setModistaColaOpen(false);
+        }}
+        contexto={contextoModistaCola}
+        token={token}
+        onSuccess={() => {
+          clearAll();
+          setModistaColaOpen(false);
+        }}
       />
 
       {/* Métricas: solo en móvil */}

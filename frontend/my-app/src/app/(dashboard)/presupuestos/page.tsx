@@ -96,6 +96,7 @@ type ItemPresupuesto = {
   id: number;
   productoId: number;
   productoNombre: string;
+  codigoBarra?: string;
   cantidad: number;
   tipoPrecio: TipoPrecioProducto;
   precioUnitario: number;
@@ -351,6 +352,11 @@ export default function PresupuestosPage() {
           item.descripcion ??
           item.producto?.descripcion ??
           "Producto",
+        codigoBarra:
+          item.codigoBarra ??
+          item.codigo_barra ??
+          item.producto?.codigo_barra ??
+          undefined,
         cantidad,
         tipoPrecio,
         precioUnitario,
@@ -444,6 +450,7 @@ export default function PresupuestosPage() {
       fechaRetiro?: string;
       fechaDevolucion?: string;
       ordenExcluirId?: number;
+      presupuestoExcluirId?: number;
     }) => {
       try {
         const token = localStorage.getItem("token");
@@ -455,6 +462,9 @@ export default function PresupuestosPage() {
         }
         if (opts?.ordenExcluirId != null) {
           params.orden_excluir_id = opts.ordenExcluirId;
+        }
+        if (opts?.presupuestoExcluirId != null) {
+          params.presupuesto_excluir_id = opts.presupuestoExcluirId;
         }
         const data = (await fetchAllProductos(token, params)) as Producto[];
         setProductos(data);
@@ -478,14 +488,16 @@ export default function PresupuestosPage() {
     if (!showModal || verModoLectura) return;
     const { fechaRetiro, fechaDevolucion } = fechasAlquilerEfectivas();
     const ordenExcluirId = presupuestoSeleccionado?.orden_id ?? undefined;
+    const presupuestoExcluirId = presupuestoSeleccionado?.id ?? undefined;
     if (fechaRetiro && fechaDevolucion) {
       void fetchProductos({
         fechaRetiro,
         fechaDevolucion,
         ordenExcluirId,
+        presupuestoExcluirId,
       });
     } else {
-      void fetchProductos({ ordenExcluirId });
+      void fetchProductos({ ordenExcluirId, presupuestoExcluirId });
     }
   }, [
     showModal,
@@ -494,6 +506,7 @@ export default function PresupuestosPage() {
     formData.fechaRetiro,
     formData.fechaDevolucion,
     presupuestoSeleccionado?.orden_id,
+    presupuestoSeleccionado?.id,
     fetchProductos,
     fechasAlquilerEfectivas,
   ]);
@@ -632,7 +645,11 @@ export default function PresupuestosPage() {
 
   const ordenExcluirDisponibilidadQuery = () => {
     const oid = presupuestoSeleccionado?.orden_id;
-    return oid != null ? `&orden_excluir_id=${encodeURIComponent(String(oid))}` : "";
+    const pid = presupuestoSeleccionado?.id;
+    const parts: string[] = [];
+    if (oid != null) parts.push(`orden_excluir_id=${encodeURIComponent(String(oid))}`);
+    if (pid != null) parts.push(`presupuesto_excluir_id=${encodeURIComponent(String(pid))}`);
+    return parts.length ? `&${parts.join("&")}` : "";
   };
 
   const normalizarProductoDesdeApi = (raw: Record<string, unknown>): Producto => ({
@@ -693,7 +710,7 @@ export default function PresupuestosPage() {
 
     if (producto.disponible_en_fechas === false) {
       if (!esAdmin) {
-        return `El producto ${nombre} no está disponible en las fechas elegidas (reservado en otra orden).`;
+        return `El producto ${nombre} no está disponible en las fechas elegidas (reservado en otro presupuesto u orden).`;
       }
       if (
         !ignorarConflictosReservaRef.current &&
@@ -741,7 +758,7 @@ export default function PresupuestosPage() {
     }
 
     return null;
-  }, [fechasAlquilerEfectivas, presupuestoSeleccionado?.orden_id, items, esAdmin]);
+  }, [fechasAlquilerEfectivas, presupuestoSeleccionado?.orden_id, presupuestoSeleccionado?.id, items, esAdmin]);
 
   const resetCamposAgregarProducto = useCallback(() => {
     setProductoFiltro("");
@@ -761,6 +778,7 @@ export default function PresupuestosPage() {
         producto.descripcion,
         producto.descripcion_extra
       ),
+      codigoBarra: producto.codigo_barra || undefined,
       cantidad: 1,
       tipoPrecio,
       precioUnitario,
@@ -918,6 +936,7 @@ export default function PresupuestosPage() {
             producto.descripcion,
             producto.descripcion_extra
           ),
+          codigoBarra: producto.codigo_barra || undefined,
           cantidad: 1,
           tipoPrecio,
           precioUnitario,
@@ -1072,8 +1091,13 @@ export default function PresupuestosPage() {
     }
 
     const totalOriginal = calcularTotal();
+    const descuentoMaximoEstandar = esAdmin ? 50 : 15; // 50% para admin, 15% para empleados
     const tieneDescuento =
-      totalConDescuento !== null && porcentajeDescuento !== null;
+      porcentajeDescuento !== null &&
+      porcentajeDescuento > 0 &&
+      totalConDescuento !== null;
+    const tieneDescuentoExtra =
+      tieneDescuento && porcentajeDescuento > descuentoMaximoEstandar;
     const totalFinal = tieneDescuento
       ? (totalConDescuento as number)
       : totalOriginal;
@@ -1104,9 +1128,6 @@ export default function PresupuestosPage() {
       });
     }
 
-    const descuentoMaximoEstandar = esAdmin ? 50 : 15; // 50% para admin, 15% para empleados
-    const tieneDescuentoExtra = porcentajeDescuento !== null && porcentajeDescuento > descuentoMaximoEstandar;
-
     const payload: Record<string, unknown> = {
       fecha_evento: fechaNegocioYmd(formData.fechaEvento) || formData.fechaEvento,
       fecha_retiro: formData.fechaRetiro
@@ -1127,8 +1148,8 @@ export default function PresupuestosPage() {
         precio_unitario: item.precioUnitario,
         subtotal: item.subtotal,
       })),
-      extra_discount_percentage: tieneDescuentoExtra ? porcentajeDescuento : null,
-      extra_discount_amount: tieneDescuentoExtra ? (totalOriginal - totalFinal) : null,
+      extra_discount_percentage: tieneDescuento ? porcentajeDescuento : null,
+      extra_discount_amount: tieneDescuento ? (totalOriginal - totalFinal) : null,
       extra_discount_reason: tieneDescuentoExtra ? motivoDescuentoExtra : null,
     };
     if (tienePrecliente && preclienteId != null) {
@@ -1252,11 +1273,20 @@ export default function PresupuestosPage() {
     setCurrentPage(0);
   }, [busqueda]);
 
-  // Filtrar presupuestos por DNI, apellido solo, nombre solo o apellido + nombre
+  // Filtrar presupuestos por número, DNI, apellido, nombre o apellido + nombre
   const presupuestosFiltrados = (() => {
     const termino = normalizarParaBusqueda(busqueda);
     if (!termino) return presupuestos;
+    const terminoSinPrefijo = termino.replace(/^pres-/, "");
     return presupuestos.filter((p) => {
+      const numero = (p.numero ?? "").toString().trim();
+      const numeroNorm = normalizarParaBusqueda(numero);
+      if (numeroNorm.includes(termino)) return true;
+      if (terminoSinPrefijo && numeroNorm.replace(/^pres-/, "").includes(terminoSinPrefijo)) {
+        return true;
+      }
+      if (/^\d+$/.test(termino) && p.id.toString() === termino) return true;
+
       const nombreCompleto = (p.cliente_nombre ?? "").trim();
       const dni = (p.cliente_dni ?? "").toString().trim();
       if (normalizarParaBusqueda(dni).includes(termino)) return true;
@@ -1429,6 +1459,14 @@ export default function PresupuestosPage() {
       cancelled = true;
     };
   }, [searchParams.get("editar"), API_BASE, adaptPresupuestoDesdeApi, pathname, router]);
+
+  useEffect(() => {
+    const raw = searchParams.get("buscar");
+    if (raw?.trim()) {
+      setBusqueda(raw.trim());
+    }
+  }, [searchParams.get("buscar")]);
+
   const productosResumenDesdeItemsPresupuesto = (items: ItemPresupuesto[]) =>
     items.map((item) => {
       const prod = productos.find((p) => p.id === item.productoId);
@@ -1858,7 +1896,7 @@ export default function PresupuestosPage() {
         <div className="card shadow-sm">
           <div className="card-body border-bottom">
             <label htmlFor="presupuestos-busqueda" className="form-label visually-hidden">
-              Buscar por DNI, apellido, nombre o apellido y nombre
+              Buscar por número de presupuesto, DNI, apellido o nombre
             </label>
             <div className="input-group gt-search">
               <span className="input-group-text">
@@ -1868,10 +1906,10 @@ export default function PresupuestosPage() {
                 id="presupuestos-busqueda"
                 type="search"
                 className="form-control"
-                placeholder="Buscar por DNI, apellido, nombre o apellido y nombre..."
+                placeholder="Buscar por N° presupuesto (ej. PRES-179), DNI, apellido o nombre..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                aria-label="Buscar presupuestos por cliente"
+                aria-label="Buscar presupuestos por número o cliente"
               />
             </div>
           </div>

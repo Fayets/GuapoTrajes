@@ -8,6 +8,10 @@ from src.money import round_pesos
 from src.models import AccionAuditoria, Presupuesto, ItemPresupuesto, Producto, Cliente, Precliente, Roles, Usuario, db
 from src.schemas import PresupuestoCreate, PresupuestoResponse, ItemPresupuestoResponse, ConjuntoMismaFechaCategoriaOut
 from src.descripcion_producto import format_descripcion_producto
+from src.descuento_trazabilidad import (
+    descuento_maximo_estandar,
+    registrar_cambio_descuento_presupuesto,
+)
 from src.services.auditoria_services import nombre_usuario, registrar_auditoria
 from src.services.disponibilidad_services import (
     validar_producto_para_item_presupuesto,
@@ -49,9 +53,7 @@ def _presupuesto_cliente_info(p):
 
 
 def _descuento_maximo_estandar(usuario: Optional[Usuario]) -> float:
-    if usuario and usuario.rol in (Roles.ADMIN, Roles.SUPER_ADMIN):
-        return 50.0
-    return 15.0
+    return descuento_maximo_estandar(usuario)
 
 
 def _puede_ignorar_conflictos_reserva(current_user) -> bool:
@@ -238,6 +240,16 @@ class PresupuestosServices:
                     f"Presupuesto {presupuesto.numero} creado",
                     {"numero": presupuesto.numero, "total": presupuesto.total},
                 )
+                registrar_cambio_descuento_presupuesto(
+                    presupuesto,
+                    usuario_aplico_descuento,
+                    porcentaje_nuevo=data.extra_discount_percentage,
+                    monto_nuevo=data.extra_discount_amount,
+                    motivo_nuevo=data.extra_discount_reason,
+                    total_final=total,
+                    accion_contexto="presupuesto_creado",
+                    descuento_anterior={"porcentaje": 0, "monto": 0, "motivo": ""},
+                )
                 commit()
                 
                 return {
@@ -300,6 +312,7 @@ class PresupuestosServices:
                                     item.producto.descripcion,
                                     item.producto.descripcion_extra,
                                 ),
+                                codigo_barra=item.producto.codigo_barra or None,
                                 cantidad=item.cantidad,
                                 precio_unitario=item.precio_unitario,
                                 subtotal=item.subtotal
@@ -471,6 +484,7 @@ class PresupuestosServices:
                         producto,
                         fecha_retiro=fecha_retiro,
                         fecha_devolucion=fecha_devolucion,
+                        presupuesto_excluir_id=presupuesto.id,
                         orden_excluir_id=orden_excluir_id,
                         es_reuso_del_mismo_presupuesto=(producto.id in old_product_ids),
                         ignorar_conflicto_reserva=ignorar_conflictos,
@@ -516,6 +530,11 @@ class PresupuestosServices:
                 descuento_maximo_estandar = _descuento_maximo_estandar(
                     usuario_aplico_descuento
                 )
+                descuento_anterior = {
+                    "porcentaje": float(presupuesto.extra_discount_percentage or 0),
+                    "monto": float(presupuesto.extra_discount_amount or 0),
+                    "motivo": (presupuesto.extra_discount_reason or "").strip(),
+                }
 
                 if data.extra_discount_percentage is not None and data.extra_discount_percentage > 0:
                     # Si el descuento es mayor al estándar, validar motivo
@@ -600,6 +619,16 @@ class PresupuestosServices:
                     f"Presupuesto {presupuesto.numero} editado",
                     {"numero": presupuesto.numero, "total": presupuesto.total},
                 )
+                registrar_cambio_descuento_presupuesto(
+                    presupuesto,
+                    usuario_aplico_descuento,
+                    porcentaje_nuevo=data.extra_discount_percentage,
+                    monto_nuevo=data.extra_discount_amount,
+                    motivo_nuevo=data.extra_discount_reason,
+                    total_final=total,
+                    accion_contexto="presupuesto_editado",
+                    descuento_anterior=descuento_anterior,
+                )
                 commit()
 
                 return {
@@ -669,6 +698,7 @@ class PresupuestosServices:
                                 item.producto.descripcion,
                                 item.producto.descripcion_extra,
                             ),
+                            codigo_barra=item.producto.codigo_barra or None,
                             cantidad=item.cantidad,
                             precio_unitario=item.precio_unitario,
                             subtotal=item.subtotal

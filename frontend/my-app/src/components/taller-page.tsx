@@ -20,6 +20,7 @@ import { getApiBaseUrl } from "@/lib/api-config"
 import { useAuth } from "@/context/auth-context"
 import type { TallerConfig } from "@/lib/taller-config"
 import { imprimirEtiquetas50x25Lote } from "@/lib/imprimir-etiqueta-50x25"
+import { ordenarProductosParaEtiquetado } from "@/lib/ordenar-productos-etiquetado"
 import { toast } from "sonner"
 import { scheduleUndoableDelete } from "@/lib/undoable-delete"
 import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes"
@@ -44,6 +45,9 @@ type ProductoEnTaller = {
   enviado_por_nombre?: string | null
   recibido_por_nombre?: string | null
   requiere_cuidado_especial?: boolean
+  linea_nombre?: string | null
+  talle_nombre?: string | null
+  talle_codigo?: string | null
 }
 
 type EstadoColaEtiqueta = "pendiente" | "imprimiendo" | "ok" | "error"
@@ -214,7 +218,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
               porId.set(p.id, p)
             }
           }
-          setProductosEnTaller(Array.from(porId.values()))
+          setProductosEnTaller(ordenarProductosParaEtiquetado(Array.from(porId.values())))
           setVolvioPorId({})
           setColaVisualEtiquetas([])
         }
@@ -248,7 +252,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
   }
 
   const handleRemitoMarcados = () => {
-    const sel = productosMarcadosVolvieron
+    const sel = ordenarProductosParaEtiquetado(productosMarcadosVolvieron)
     if (!recepcionId) {
       toast.error(L.chooseEntityError)
       return
@@ -314,7 +318,7 @@ export function TallerPage({ config }: { config: import("@/lib/taller-config").T
   }
 
   const handleImprimirEtiquetasMarcados = async () => {
-    const sel = productosMarcadosVolvieron
+    const sel = ordenarProductosParaEtiquetado(productosMarcadosVolvieron)
     if (sel.length === 0) {
       toast.error("Marcá las prendas cuyas etiquetas querés imprimir")
       return

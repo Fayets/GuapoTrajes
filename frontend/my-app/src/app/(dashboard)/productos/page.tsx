@@ -20,6 +20,10 @@ import { fetchProductosPage } from "@/lib/fetch-productos";
 import { formatDescripcionProducto } from "@/lib/descripcion-producto";
 import { formatMoneyAr } from "@/lib/money";
 import { ConfirmDeleteDialog } from "@/components/modales/confirm-delete-dialog";
+import {
+  EnviarModistaDialog,
+  type EnviarModistaContext,
+} from "@/components/modales/enviar-modista-dialog";
 import { scheduleUndoableDelete } from "@/lib/undoable-delete";
 import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 
@@ -130,10 +134,6 @@ export default function ProductosPage() {
   const [guardandoLavanderia, setGuardandoLavanderia] = useState(false);
 
   const [productoEnvioModista, setProductoEnvioModista] = useState<Producto | null>(null);
-  const [modistasList, setModistasList] = useState<Array<{ id: number; nombre: string }>>([]);
-  const [modEnvioId, setModEnvioId] = useState<number | "">("");
-  const [modEnvioNotas, setModEnvioNotas] = useState("");
-  const [guardandoModista, setGuardandoModista] = useState(false);
 
   const API_BASE = getApiBaseUrl();
   const API_URL = `${API_BASE}/productos`;
@@ -193,33 +193,6 @@ export default function ProductosPage() {
     void loadLav();
   }, [token, API_BASE]);
 
-  useEffect(() => {
-    if (!token) return;
-    const loadMod = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/modistas/all`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          setModistasList([]);
-          return;
-        }
-        const data = await res.json();
-        setModistasList(
-          Array.isArray(data)
-            ? data.map((m: { id: number; nombre?: string }) => ({
-                id: Number(m.id),
-                nombre: String(m.nombre ?? m.id),
-              }))
-            : []
-        );
-      } catch {
-        setModistasList([]);
-      }
-    };
-    void loadMod();
-  }, [token, API_BASE]);
-
   const cerrarModalEnvioLavanderia = () => {
     setProductoEnvioLavanderia(null);
     setLavEnvioId("");
@@ -268,53 +241,19 @@ export default function ProductosPage() {
     }
   };
 
-  const cerrarModalEnvioModista = () => {
-    setProductoEnvioModista(null);
-    setModEnvioId("");
-    setModEnvioNotas("");
-    setGuardandoModista(false);
-  };
-
-  const confirmarEnvioModista = async () => {
-    if (!token || !productoEnvioModista) return;
-    const mid = modEnvioId === "" ? 0 : Number(modEnvioId);
-    if (!mid) {
-      toast.error("Seleccioná una modista");
-      return;
-    }
-    setGuardandoModista(true);
-    try {
-      const res = await fetch(`${API_BASE}/modistas/asignar-producto`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          modista_id: mid,
-          producto_id: productoEnvioModista.id,
-          notas: modEnvioNotas.trim() || null,
-        }),
-      });
-      const result = (await res.json().catch(() => ({}))) as {
-        message?: string;
-        success?: boolean;
-      };
-      if (!res.ok || result?.success === false) {
-        toast.error(result?.message || "No se pudo enviar a modista");
-        return;
+  const contextoModistaProducto: EnviarModistaContext | null = productoEnvioModista
+    ? {
+        tipo: "stock",
+        productos: [
+          {
+            id: productoEnvioModista.id,
+            descripcion: productoEnvioModista.descripcion,
+            descripcion_extra: productoEnvioModista.descripcion_extra,
+            codigo_barra: productoEnvioModista.codigo_barra,
+          },
+        ],
       }
-      toast.success(result?.message || "Producto enviado a modista");
-      const enviadoId = productoEnvioModista.id;
-      cerrarModalEnvioModista();
-      loadProductos();
-      setProductoActual((prev) =>
-        prev && prev.id === enviadoId ? { ...prev, estado: "MODISTA" } : prev
-      );
-    } finally {
-      setGuardandoModista(false);
-    }
-  };
+    : null;
 
   // Carga de productos con paginación y filtro remoto
   const loadProductos = async () => {
@@ -919,8 +858,6 @@ export default function ProductosPage() {
                             estadoAnterior !== "MODISTA"
                           ) {
                             setProductoEnvioModista(producto);
-                            setModEnvioId("");
-                            setModEnvioNotas("");
                             return;
                           }
                           const payload = { estado: nuevoEstado };
@@ -1189,104 +1126,24 @@ export default function ProductosPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <EnviarModistaDialog
         open={!!productoEnvioModista}
         onOpenChange={(open) => {
-          if (!open) cerrarModalEnvioModista();
+          if (!open) setProductoEnvioModista(null);
         }}
-      >
-        <DialogContent
-          className="w-full border-0"
-          dialogClassName="modal-dialog-centered modal-lg"
-          dialogStyle={{ maxWidth: "560px", width: "95%" }}
-        >
-          <DialogHeader className="border-bottom pb-3 px-3 px-md-4">
-            <DialogTitle className="fw-semibold mb-0">Enviar a modista</DialogTitle>
-          </DialogHeader>
-          <div className="modal-body px-3 px-md-4 py-3">
-            {productoEnvioModista ? (
-              <>
-                <div className="mb-3 small">
-                  <p className="mb-1 fw-semibold text-dark">
-                    {formatDescripcionProducto(
-                      productoEnvioModista.descripcion,
-                      productoEnvioModista.descripcion_extra
-                    )}
-                  </p>
-                  <p className="mb-0 text-muted font-monospace">
-                    {productoEnvioModista.codigo_barra || `ID ${productoEnvioModista.id}`}
-                  </p>
-                </div>
-                <div className="mb-3">
-                  <label className="form-label fw-semibold" htmlFor="mod-envio-select">
-                    Modista
-                  </label>
-                  <select
-                    id="mod-envio-select"
-                    className="form-select"
-                    value={modEnvioId === "" ? "" : String(modEnvioId)}
-                    onChange={(e) =>
-                      setModEnvioId(e.target.value ? Number(e.target.value) : "")
-                    }
-                  >
-                    <option value="">Seleccionar modista…</option>
-                    {modistasList.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="mb-0">
-                  <label className="form-label fw-semibold" htmlFor="mod-envio-notas">
-                    Notas <span className="text-muted fw-normal">(opcional)</span>
-                  </label>
-                  <textarea
-                    id="mod-envio-notas"
-                    className="form-control"
-                    rows={3}
-                    value={modEnvioNotas}
-                    onChange={(e) => setModEnvioNotas(e.target.value)}
-                    placeholder="Ej. ajuste de manga, fecha límite…"
-                  />
-                </div>
-              </>
-            ) : null}
-          </div>
-          <DialogFooter className="border-top pt-3 d-flex flex-wrap justify-content-end gap-2 px-3 px-md-4 pb-2">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={guardandoModista}
-              onClick={cerrarModalEnvioModista}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={guardandoModista || modistasList.length === 0}
-              onClick={() => void confirmarEnvioModista()}
-            >
-              {guardandoModista ? (
-                <>
-                  <span
-                    className="spinner-border spinner-border-sm me-2"
-                    role="status"
-                    aria-hidden
-                  />
-                  Guardando…
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-scissors me-2" aria-hidden />
-                  Confirmar envío
-                </>
-              )}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        contexto={contextoModistaProducto}
+        token={token}
+        onSuccess={() => {
+          const enviadoId = productoEnvioModista?.id;
+          setProductoEnvioModista(null);
+          loadProductos();
+          if (enviadoId) {
+            setProductoActual((prev) =>
+              prev && prev.id === enviadoId ? { ...prev, estado: "MODISTA" } : prev
+            );
+          }
+        }}
+      />
 
       {/* Modal etiqueta */}
       <Dialog open={isModalEtiquetaOpen} onOpenChange={setIsModalEtiquetaOpen}>
@@ -1676,8 +1533,6 @@ export default function ProductosPage() {
                               productoActual?.id
                             ) {
                               setProductoEnvioModista(productoActual as Producto);
-                              setModEnvioId("");
-                              setModEnvioNotas("");
                               return;
                             }
                             setProductoActual({

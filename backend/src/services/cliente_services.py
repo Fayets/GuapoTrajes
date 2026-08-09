@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from typing import Optional
 from pony.orm.core import TransactionIntegrityError, flush
 from src import models, schemas
+from src.descuento_trazabilidad import listar_descuentos_cliente
 
 
 def _cliente_a_dict(cliente: models.Cliente) -> dict:
@@ -234,4 +235,16 @@ class ClientServices:
                     "total_relaciones": presupuestos_count + cuentas_count + ventas_count
                 },
                 "tiene_relaciones": (presupuestos_count + cuentas_count + ventas_count) > 0
+            }
+
+    def listar_descuentos(self, cliente_id: int) -> dict:
+        with db_session:
+            cliente = models.Cliente.get(id=cliente_id)
+            if not cliente:
+                raise HTTPException(status_code=404, detail="Cliente no encontrado")
+            items = listar_descuentos_cliente(cliente_id)
+            return {
+                "message": "Descuentos del cliente",
+                "success": True,
+                "data": items,
             }

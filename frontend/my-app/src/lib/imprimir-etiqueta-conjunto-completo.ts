@@ -58,6 +58,7 @@ export type ItemEtiquetaResumenConjunto = {
   categoriaEvento: string;
   lugarEvento: string;
   lineasPrendas: string[];
+  observacionesArreglos?: string;
 };
 
 export type ImpresionResumenConjuntoResultado = {
@@ -115,6 +116,12 @@ const ETIQUETA_RESUMEN_STYLES = `<style>
   .prenda-text {
     flex: 1; min-width: 0;
     white-space: normal; word-break: break-word; overflow-wrap: anywhere;
+  }
+  .arreglos {
+    flex-shrink: 0;
+    font: 700 9.8pt/1.15 system-ui, sans-serif;
+    white-space: normal; word-break: break-word; overflow-wrap: anywhere;
+    max-height: 18mm; overflow: hidden;
   }
 
   /* Vista previa en iframe (tamaño real de la etiqueta) */
@@ -174,6 +181,7 @@ export function construirEtiquetaResumenConjunto(input: {
   categoriaEvento: string;
   lugarEvento: string;
   productos: PrendaResumenEntrada[];
+  observacionesArreglos?: string;
 }): ItemEtiquetaResumenConjunto {
   return {
     ordenId: input.ordenId,
@@ -183,6 +191,7 @@ export function construirEtiquetaResumenConjunto(input: {
     categoriaEvento: (input.categoriaEvento || "").trim(),
     lugarEvento: (input.lugarEvento || "").trim(),
     lineasPrendas: input.productos.map(formatearLineaPrendaCompacta),
+    observacionesArreglos: (input.observacionesArreglos || "").trim() || undefined,
   };
 }
 
@@ -212,6 +221,10 @@ export function generarHtmlEtiquetaResumenConjunto(
     )
     .join("");
 
+  const arreglosHtml = item.observacionesArreglos
+    ? `<div class="sep"></div><div class="arreglos">Arreglos: ${esc(item.observacionesArreglos)}</div>`
+    : "";
+
   const logoHtml =
     logoSrc?.trim()
       ? `<div class="logo-wrap"><img src="${logoSrc}" alt="Guapo Trajes" /></div>`
@@ -229,6 +242,7 @@ export function generarHtmlEtiquetaResumenConjunto(
         <div class="lugar">${esc(lugarLinea)}</div>
         <div class="sep"></div>
         <div class="prendas">${prendasHtml}</div>
+        ${arreglosHtml}
       </div></div>
     </body></html>`;
 }
