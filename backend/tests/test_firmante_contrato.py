@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
-from pony.orm import db_session
+from pony.orm import db_session, flush
 
-from src.models import OrdenTrabajo, Presupuesto, Roles
+from src.models import OrdenTrabajo, Precliente, Presupuesto, Roles
 from src.schemas import FirmanteContratoSchema, ItemPresupuestoIn, PresupuestoCreate
 from src.services.orden_trabajo_services import OrdenTrabajoServices
 from src.services.presupuestos_services import PresupuestosServices
@@ -51,6 +51,53 @@ def _crear_orden_pagada(w, total: float = 500.0):
         o = Presupuesto.get(id=pid).orden_trabajo
         assert o is not None
         return o.id
+
+
+def _crear_orden_pagada_precliente(w, total: float = 500.0):
+    cu = fake_current_user(w.usuario.id)
+    with db_session:
+        pc = Precliente(
+            nombre="Pre",
+            apellido="Cliente",
+            celular="5491100110011",
+        )
+        flush()
+        pc_id = pc.id
+    R = date(2035, 4, 10)
+    out = PresupuestosServices().crear_presupuesto(
+        PresupuestoCreate(
+            precliente_id=pc_id,
+            fecha_evento=R + timedelta(days=3),
+            fecha_retiro=R,
+            fecha_devolucion=R + timedelta(days=7),
+            categoria_evento="FirmantePreTest",
+            nombre_agasajado="Agasajado",
+            lugar_evento="Local",
+            observaciones="",
+            items=[
+                ItemPresupuestoIn(
+                    producto_id=w.producto_a.id,
+                    cantidad=1,
+                    precio_unitario=total,
+                    subtotal=total,
+                ),
+            ],
+        ),
+        cu,
+    )
+    pid = out["data"]["id"]
+    OrdenTrabajoServices().crear_orden_trabajo(
+        presupuesto_id=pid,
+        seña_pagada=total,
+        payment_method="EFECTIVO",
+        usuario_id=w.usuario.id,
+        cuenta_destino_id=w.cuenta_destino.id,
+    )
+    with db_session:
+        o = Presupuesto.get(id=pid).orden_trabajo
+        assert o is not None
+        assert o.presupuesto.precliente is not None
+        return o.id, pc_id
 
 
 def test_registrar_contrato_sin_firmante_deja_campos_vacios():
@@ -166,3 +213,39 @@ def test_obtener_orden_incluye_firmante():
     assert data["tiene_firmante_anexo"] is True
     assert data["firmante_nombre"] == "Retira"
     assert data["cliente_nombre"].startswith("Ana") or "Ana" in data["cliente_nombre"]
+
+
+def test_precliente_sin_firmante_rechaza():
+    w = seed_base_world()
+    oid, _pc_id = _crear_orden_pagada_precliente(w)
+    admin = SimpleNamespace(id=w.usuario.id, rol=Roles.ADMIN)
+    with pytest.raises(HTTPException) as ei:
+        OrdenTrabajoServices().registrar_contrato_generado(oid, usuario=admin)
+    assert ei.value.status_code == 400
+    assert "precliente" in ei.value.detail.lower() or "firmante" in ei.value.detail.lower()
+
+
+def test_precliente_con_firmante_genera_sin_convertir():
+    w = seed_base_world()
+    oid, pc_id = _crear_orden_pagada_precliente(w)
+    admin = SimpleNamespace(id=w.usuario.id, rol=Roles.ADMIN)
+    firmante = FirmanteContratoSchema(
+        nombre="Tercero Retira",
+        dni="40111222",
+        direccion="Calle Tercero 1",
+        celular="5491199999999",
+    )
+    result = OrdenTrabajoServices().registrar_contrato_generado(
+        oid, usuario=admin, firmante=firmante
+    )
+    assert result["success"] is True
+    assert result["data"]["tiene_firmante_anexo"] is True
+    assert result["data"]["firmante_nombre"] == "Tercero Retira"
+
+    with db_session:
+        o = OrdenTrabajo.get(id=oid)
+        assert o.contrato_generado_at is not None
+        assert o.presupuesto.precliente is not None
+        assert o.presupuesto.precliente.id == pc_id
+        assert o.presupuesto.cliente is None
+        assert o.firmante_nombre == "Tercero Retira"

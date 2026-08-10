@@ -1448,13 +1448,14 @@ class OrdenTrabajoServices:
         }
 
     def registrar_contrato_generado(self, orden_id: int, usuario=None, firmante=None) -> dict:
-        """Registrar que se generó el contrato para esta orden (cliente, DNI y dirección).
+        """Registrar que se generó el contrato para esta orden.
 
         Empleados: requieren saldo pendiente 0.
         ADMIN / SUPER_ADMIN: pueden generar aunque haya deuda.
 
-        firmante: opcional. Si se envía, se guarda snapshot para el LOCATARIO/pagaré
-        (quien retira). Si es None, se limpia y el impreso usa al titular.
+        firmante: opcional para cliente titular. Obligatorio si el titular es
+        precliente (tercero que retira/firma); en ese caso no se convierte al
+        precliente. Si es None con cliente, se limpia el snapshot.
         Si el contrato ya estaba generado, solo actualiza el firmante (reimpresión).
         """
         with db_session:
@@ -1462,15 +1463,37 @@ class OrdenTrabajoServices:
                 orden = OrdenTrabajo.get(id=orden_id)
                 if not orden:
                     raise HTTPException(status_code=404, detail="Orden de trabajo no encontrada")
-                if orden.presupuesto.precliente is not None:
-                    raise HTTPException(status_code=400, detail="Solo se puede generar contrato para órdenes de cliente (no precliente).")
+
+                es_precliente = orden.presupuesto.precliente is not None
+                tiene_firmante = firmante is not None and bool(
+                    (getattr(firmante, "nombre", None) or "").strip()
+                    and (getattr(firmante, "dni", None) or "").strip()
+                    and (getattr(firmante, "direccion", None) or "").strip()
+                )
+
+                if es_precliente and not tiene_firmante:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "La orden es de precliente. Convertí al titular a cliente "
+                            "con DNI y dirección, o anexá un firmante (quien retira) "
+                            "para generar el contrato."
+                        ),
+                    )
+
                 saldo = round_pesos(orden.saldo_pendiente or 0)
                 if saldo > 0:
                     rol_str = self._rol_efectivo_usuario(usuario)
                     if rol_str not in (Roles.ADMIN.value, Roles.SUPER_ADMIN.value):
                         raise HTTPException(status_code=400, detail="El saldo pendiente debe ser cero para generar el contrato.")
-                if not orden.presupuesto.cliente.dni or not orden.presupuesto.cliente.direccion:
-                    raise HTTPException(status_code=400, detail="El cliente debe tener DNI y Dirección para generar el contrato.")
+
+                if not es_precliente:
+                    cliente = orden.presupuesto.cliente
+                    if not cliente or not cliente.dni or not cliente.direccion:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="El cliente debe tener DNI y Dirección para generar el contrato.",
+                        )
 
                 _aplicar_firmante_orden(orden, firmante)
                 firmante_payload = _campos_firmante_orden(orden)
@@ -1503,6 +1526,8 @@ class OrdenTrabajoServices:
                         prod.estado = EstadoProducto.CLIENTE
                 flush()
                 detalle_auditoria = {"presupuesto_numero": orden.presupuesto.numero}
+                if es_precliente:
+                    detalle_auditoria["titular_precliente"] = True
                 if firmante_payload.get("tiene_firmante_anexo"):
                     detalle_auditoria["firmante_nombre"] = firmante_payload["firmante_nombre"]
                     detalle_auditoria["firmante_dni"] = firmante_payload["firmante_dni"]

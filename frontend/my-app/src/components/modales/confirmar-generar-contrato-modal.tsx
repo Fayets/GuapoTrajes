@@ -19,6 +19,8 @@ type ConfirmarGenerarContratoModalProps = {
   clienteNombre?: string | null;
   /** Snapshot previo si la orden ya tenía firmante anexado */
   firmanteInicial?: FirmanteContratoPayload | null;
+  /** Precliente / tercero: firmante obligatorio (no se puede desmarcar) */
+  firmanteObligatorio?: boolean;
   esReimpresion?: boolean;
   saldoPendiente?: number;
   esAdmin?: boolean;
@@ -39,6 +41,7 @@ export function ConfirmarGenerarContratoModal({
   ordenId,
   clienteNombre,
   firmanteInicial = null,
+  firmanteObligatorio = false,
   esReimpresion = false,
   saldoPendiente = 0,
   esAdmin = false,
@@ -52,7 +55,7 @@ export function ConfirmarGenerarContratoModal({
   useEffect(() => {
     if (!open) return;
     const tieneInicial = Boolean((firmanteInicial?.nombre || "").trim());
-    setAnexarFirmante(tieneInicial);
+    setAnexarFirmante(firmanteObligatorio || tieneInicial);
     setFirmante(
       tieneInicial
         ? {
@@ -64,10 +67,10 @@ export function ConfirmarGenerarContratoModal({
         : { ...FIRMANTE_VACIO }
     );
     setErrorFirmante(null);
-  }, [open, firmanteInicial]);
+  }, [open, firmanteInicial, firmanteObligatorio]);
 
   const handleConfirm = () => {
-    if (!anexarFirmante) {
+    if (!anexarFirmante && !firmanteObligatorio) {
       void onConfirm(null);
       return;
     }
@@ -87,6 +90,8 @@ export function ConfirmarGenerarContratoModal({
       celular: celular || null,
     });
   };
+
+  const mostrarCamposFirmante = anexarFirmante || firmanteObligatorio;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,33 +135,48 @@ export function ConfirmarGenerarContratoModal({
         </DialogHeader>
 
         <div className="px-4 py-3 border-bottom">
-          <div className="form-check mb-2">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="anexar-firmante-contrato"
-              checked={anexarFirmante}
-              disabled={loading}
-              onChange={(e) => {
-                setAnexarFirmante(e.target.checked);
-                setErrorFirmante(null);
-              }}
-            />
-            <label
-              className="form-check-label small"
-              htmlFor="anexar-firmante-contrato"
-            >
-              Anexar firmante distinto (quien retira / responde por el
-              alquiler)
-            </label>
-          </div>
-          <p className="small text-muted mb-0">
-            Por defecto firma el cliente de la orden. Marcá esta opción solo
-            cuando otra persona retira o firma el pagaré.
-          </p>
+          {firmanteObligatorio ? (
+            <p className="small mb-3">
+              <span className="fw-semibold text-body">
+                Firmante obligatorio
+              </span>
+              <span className="d-block text-muted mt-1">
+                El titular es precliente. Completá los datos de quien retira /
+                responde por el alquiler. El precliente no se convierte a
+                cliente.
+              </span>
+            </p>
+          ) : (
+            <>
+              <div className="form-check mb-2">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="anexar-firmante-contrato"
+                  checked={anexarFirmante}
+                  disabled={loading}
+                  onChange={(e) => {
+                    setAnexarFirmante(e.target.checked);
+                    setErrorFirmante(null);
+                  }}
+                />
+                <label
+                  className="form-check-label small"
+                  htmlFor="anexar-firmante-contrato"
+                >
+                  Anexar firmante distinto (quien retira / responde por el
+                  alquiler)
+                </label>
+              </div>
+              <p className="small text-muted mb-0">
+                Por defecto firma el cliente de la orden. Marcá esta opción solo
+                cuando otra persona retira o firma el pagaré.
+              </p>
+            </>
+          )}
 
-          {anexarFirmante && (
-            <div className="mt-3">
+          {mostrarCamposFirmante && (
+            <div className={firmanteObligatorio ? "" : "mt-3"}>
               <div className="mb-2">
                 <label className="form-label small fw-semibold mb-1">
                   Nombre completo

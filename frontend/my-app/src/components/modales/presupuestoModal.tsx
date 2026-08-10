@@ -28,6 +28,7 @@ import {
   ymdWeekdayUtc,
 } from "@/lib/fecha-calendario";
 import { formatMoneyAr } from "@/lib/money";
+import { shouldValidateQuoteAvailability } from "@/lib/scan-queue";
 
 /** ISO / YYYY-MM-DD → DD/MM/AAAA (día ya normalizado a negocio AR). */
 function formatFechaArgentina(iso: string): string {
@@ -211,6 +212,19 @@ export default function PresupuestoModal({
   const [eventos, setEventos] = React.useState<
     { id: number; nombre: string }[]
   >([]);
+
+  const fechasCompletasParaDisponibilidad = shouldValidateQuoteAvailability(
+    formData?.fechaEvento,
+    formData?.fechaRetiro,
+    formData?.fechaDevolucion
+  );
+
+  const ESTADOS_NO_DISPONIBLES = new Set([
+    "LAVANDERIA",
+    "MODISTA",
+    "CLIENTE",
+    "VENDIDO",
+  ]);
 
   useEffect(() => {
     if (show && !verModoLectura) {
@@ -1026,19 +1040,32 @@ export default function PresupuestoModal({
                             .map((p) => {
                               const reservado =
                                 p.disponible_en_fechas === false;
+                              const estadoUpper = (p.estado || "")
+                                .toUpperCase()
+                                .trim();
+                              const noDisponiblePorEstado =
+                                fechasCompletasParaDisponibilidad &&
+                                ESTADOS_NO_DISPONIBLES.has(estadoUpper);
+                              const noDisponible =
+                                reservado || noDisponiblePorEstado;
                               const desc = formatDescripcionProducto(
                                 p.descripcion,
                                 p.descripcion_extra
                               );
                               const base = `${desc} (${p.codigo_barra}) - ${resumenPreciosProducto(p)}`;
-                              const label = reservado ? `${base} — RESERVADO` : base;
+                              let label = base;
+                              if (reservado) {
+                                label = `${base} — RESERVADO`;
+                              } else if (noDisponiblePorEstado) {
+                                label = `${base} — ${estadoUpper}`;
+                              }
                               return (
                                 <option
                                   key={p.id}
                                   value={p.id}
-                                  disabled={reservado}
+                                  disabled={noDisponible}
                                   style={
-                                    reservado
+                                    noDisponible
                                       ? { color: "#c1121f", fontWeight: 600 }
                                       : undefined
                                   }

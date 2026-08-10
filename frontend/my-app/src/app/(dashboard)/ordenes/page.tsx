@@ -176,6 +176,12 @@ function OrdenesTrabajoContent() {
   const [ordenConfirmarContrato, setOrdenConfirmarContrato] =
     useState<OrdenTrabajo | null>(null);
   const [reimpresionContrato, setReimpresionContrato] = useState(false);
+  const [firmanteObligatorioContrato, setFirmanteObligatorioContrato] =
+    useState(false);
+  /** precliente: titular (convertir) | tercero (firmante sin convertir) */
+  const [caminoPreclienteContrato, setCaminoPreclienteContrato] = useState<
+    "titular" | "tercero" | null
+  >(null);
   const [generandoContrato, setGenerandoContrato] = useState(false);
   const [modalEtiquetasArmadoAbierto, setModalEtiquetasArmadoAbierto] =
     useState(false);
@@ -998,10 +1004,50 @@ function OrdenesTrabajoContent() {
     }
   };
 
-  const solicitarConfirmacionGenerarContrato = (orden: OrdenTrabajo) => {
+  const solicitarConfirmacionGenerarContrato = (
+    orden: OrdenTrabajo,
+    opts?: { firmanteObligatorio?: boolean }
+  ) => {
     setOrdenConfirmarContrato(orden);
     setReimpresionContrato(Boolean(orden.contrato_generado_at));
+    setFirmanteObligatorioContrato(Boolean(opts?.firmanteObligatorio));
     setShowConfirmGenerarContrato(true);
+  };
+
+  const generarContratoDesdeFila = (orden: OrdenTrabajo) => {
+    if (tieneSaldoPendiente(orden) && !esAdmin) {
+      toast.error("El saldo pendiente debe ser cero para generar el contrato.");
+      return;
+    }
+    // Precliente: reimpresión o ya tiene firmante → contrato con firmante obligatorio
+    if (
+      orden.es_precliente &&
+      (orden.contrato_generado_at ||
+        orden.tiene_firmante_anexo ||
+        orden.firmante_nombre)
+    ) {
+      solicitarConfirmacionGenerarContrato(orden, { firmanteObligatorio: true });
+      return;
+    }
+    // Precliente nuevo: elegir titular (convertir) o tercero (firmante)
+    if (orden.es_precliente) {
+      setOrdenParaContrato(orden);
+      setDniCompletar("");
+      setDireccionCompletar("");
+      setCaminoPreclienteContrato("titular");
+      setShowModalCompletarContrato(true);
+      return;
+    }
+    // Cliente sin DNI/dirección
+    if (!orden.cliente_dni || !orden.cliente_direccion) {
+      setOrdenParaContrato(orden);
+      setDniCompletar(orden.cliente_dni ?? "");
+      setDireccionCompletar(orden.cliente_direccion ?? "");
+      setCaminoPreclienteContrato(null);
+      setShowModalCompletarContrato(true);
+      return;
+    }
+    solicitarConfirmacionGenerarContrato(orden);
   };
 
   const ejecutarGeneracionContrato = async (
@@ -1009,6 +1055,11 @@ function OrdenesTrabajoContent() {
   ) => {
     const orden = ordenConfirmarContrato;
     if (!orden) return;
+
+    if (firmanteObligatorioContrato && !firmanteAnexo) {
+      toast.error("Debés anexar un firmante para generar el contrato de precliente.");
+      return;
+    }
 
     const yaGenerado = reimpresionContrato;
     setGenerandoContrato(true);
@@ -1052,6 +1103,7 @@ function OrdenesTrabajoContent() {
       }
       setShowConfirmGenerarContrato(false);
       setOrdenConfirmarContrato(null);
+      setFirmanteObligatorioContrato(false);
     } catch (e) {
       console.error(e);
       toast.error("Error al generar el contrato.");
@@ -1176,21 +1228,6 @@ function OrdenesTrabajoContent() {
       return;
     }
     setEnviarModistaProd(prod);
-  };
-
-  const generarContratoDesdeFila = (orden: OrdenTrabajo) => {
-    if (tieneSaldoPendiente(orden) && !esAdmin) {
-      toast.error("El saldo pendiente debe ser cero para generar el contrato.");
-      return;
-    }
-    if (orden.es_precliente || !orden.cliente_dni || !orden.cliente_direccion) {
-      setOrdenParaContrato(orden);
-      setDniCompletar(orden.cliente_dni ?? "");
-      setDireccionCompletar(orden.cliente_direccion ?? "");
-      setShowModalCompletarContrato(true);
-      return;
-    }
-    solicitarConfirmacionGenerarContrato(orden);
   };
 
   const generarContrato = () => {
@@ -2151,6 +2188,7 @@ function OrdenesTrabajoContent() {
           if (!open && !generandoContrato) {
             setShowConfirmGenerarContrato(false);
             setOrdenConfirmarContrato(null);
+            setFirmanteObligatorioContrato(false);
           }
         }}
         ordenId={ordenConfirmarContrato?.id}
@@ -2166,6 +2204,7 @@ function OrdenesTrabajoContent() {
               }
             : null
         }
+        firmanteObligatorio={firmanteObligatorioContrato}
         esReimpresion={reimpresionContrato}
         saldoPendiente={ordenConfirmarContrato?.saldo_pendiente ?? 0}
         esAdmin={esAdmin}
@@ -2187,42 +2226,106 @@ function OrdenesTrabajoContent() {
         onConfirm={confirmarEliminarOrden}
       />
 
-      {/* Modal: Completar DNI y dirección para generar contrato (precliente o cliente sin datos) */}
-      <Dialog open={showModalCompletarContrato} onOpenChange={setShowModalCompletarContrato}>
-        <DialogContent className="w-full border-0 p-0 gap-0 overflow-hidden rounded-3" dialogStyle={{ maxWidth: "460px", width: "95%" }}>
+      {/* Modal: Completar DNI/dirección o firmante de tercero (precliente) */}
+      <Dialog
+        open={showModalCompletarContrato}
+        onOpenChange={(open) => {
+          setShowModalCompletarContrato(open);
+          if (!open) {
+            setOrdenParaContrato(null);
+            setCaminoPreclienteContrato(null);
+            setDniCompletar("");
+            setDireccionCompletar("");
+          }
+        }}
+      >
+        <DialogContent className="w-full border-0 p-0 gap-0 overflow-hidden rounded-3" dialogStyle={{ maxWidth: "480px", width: "95%" }}>
           <DialogHeader className="px-4 pt-4 pb-2 border-bottom">
-            <DialogTitle className="fw-semibold mb-2">Completar datos para el contrato</DialogTitle>
+            <DialogTitle className="fw-semibold mb-2">
+              {ordenParaContrato?.es_precliente
+                ? "Generar contrato (precliente)"
+                : "Completar datos para el contrato"}
+            </DialogTitle>
             <DialogDescription className="text-muted small mb-0 lh-base">
               {ordenParaContrato?.es_precliente
-                ? "El contrato requiere cliente con DNI y dirección. Completá los datos para convertir a cliente y generar el contrato."
+                ? "Si viene el titular, convertílo a cliente. Si retira un tercero, anexá firmante sin convertir al precliente."
                 : "Completá DNI y dirección del cliente para poder generar el contrato."}
             </DialogDescription>
           </DialogHeader>
           {ordenParaContrato && (
             <div className="px-4 py-4">
-              <p className="small text-muted mb-4">
+              <p className="small text-muted mb-3">
                 Orden #{ordenParaContrato.id} · {ordenParaContrato.presupuesto_numero} · {ordenParaContrato.cliente_nombre}
               </p>
-              <div className="mb-3">
-                <label className="form-label fw-semibold">DNI</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Ej: 12345678"
-                  value={dniCompletar}
-                  onChange={(e) => setDniCompletar(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="form-label fw-semibold">Dirección</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Calle, número, localidad"
-                  value={direccionCompletar}
-                  onChange={(e) => setDireccionCompletar(e.target.value)}
-                />
-              </div>
+
+              {ordenParaContrato.es_precliente && (
+                <div className="mb-3">
+                  <div className="form-check mb-2">
+                    <input
+                      className="form-check-input"
+                      type="radio"
+                      name="camino-precliente-contrato"
+                      id="camino-titular"
+                      checked={caminoPreclienteContrato === "titular"}
+                      onChange={() => setCaminoPreclienteContrato("titular")}
+                      disabled={procesandoContrato}
+                    />
+                    <label className="form-check-label small" htmlFor="camino-titular">
+                      Es el titular (completar DNI y convertir a cliente)
+                    </label>
+                  </div>
+                  <div className="form-check">
+                    <input
+                      className="form-check-input"
+                      type="radio"
+                      name="camino-precliente-contrato"
+                      id="camino-tercero"
+                      checked={caminoPreclienteContrato === "tercero"}
+                      onChange={() => setCaminoPreclienteContrato("tercero")}
+                      disabled={procesandoContrato}
+                    />
+                    <label className="form-check-label small" htmlFor="camino-tercero">
+                      Firma un tercero / quien retira (anexar firmante)
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {(!ordenParaContrato.es_precliente ||
+                caminoPreclienteContrato === "titular") && (
+                <>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">DNI</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Ej: 12345678"
+                      value={dniCompletar}
+                      onChange={(e) => setDniCompletar(e.target.value)}
+                      disabled={procesandoContrato}
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label fw-semibold">Dirección</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Calle, número, localidad"
+                      value={direccionCompletar}
+                      onChange={(e) => setDireccionCompletar(e.target.value)}
+                      disabled={procesandoContrato}
+                    />
+                  </div>
+                </>
+              )}
+
+              {ordenParaContrato.es_precliente &&
+                caminoPreclienteContrato === "tercero" && (
+                  <p className="small text-muted mb-0">
+                    En el siguiente paso vas a cargar nombre, DNI y domicilio del
+                    firmante. El precliente permanece como titular del conjunto.
+                  </p>
+                )}
             </div>
           )}
           <DialogFooter className="px-4 py-4 border-top bg-light gap-3 d-flex justify-content-end">
@@ -2232,6 +2335,7 @@ function OrdenesTrabajoContent() {
               onClick={() => {
                 setShowModalCompletarContrato(false);
                 setOrdenParaContrato(null);
+                setCaminoPreclienteContrato(null);
                 setDniCompletar("");
                 setDireccionCompletar("");
               }}
@@ -2239,24 +2343,50 @@ function OrdenesTrabajoContent() {
             >
               Cancelar
             </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={completarDatosYGenerarContrato}
-              disabled={procesandoContrato || !dniCompletar.trim() || !direccionCompletar.trim()}
-            >
-              {procesandoContrato ? (
-                <>
-                  <i className="bi bi-arrow-clockwise spin me-2"></i>
-                  Procesando...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-file-earmark-text me-2"></i>
-                  Completar y generar contrato
-                </>
-              )}
-            </button>
+            {ordenParaContrato?.es_precliente &&
+            caminoPreclienteContrato === "tercero" ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={procesandoContrato}
+                onClick={() => {
+                  const orden = ordenParaContrato;
+                  if (!orden) return;
+                  setShowModalCompletarContrato(false);
+                  setCaminoPreclienteContrato(null);
+                  setOrdenParaContrato(null);
+                  solicitarConfirmacionGenerarContrato(orden, {
+                    firmanteObligatorio: true,
+                  });
+                }}
+              >
+                <i className="bi bi-person-plus me-2"></i>
+                Continuar con firmante
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={completarDatosYGenerarContrato}
+                disabled={
+                  procesandoContrato ||
+                  !dniCompletar.trim() ||
+                  !direccionCompletar.trim()
+                }
+              >
+                {procesandoContrato ? (
+                  <>
+                    <i className="bi bi-arrow-clockwise spin me-2"></i>
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <i className="bi bi-file-earmark-text me-2"></i>
+                    Completar y generar contrato
+                  </>
+                )}
+              </button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
