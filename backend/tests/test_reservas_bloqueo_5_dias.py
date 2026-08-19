@@ -1,9 +1,9 @@
 """
-Pruebas funcionales: bloqueo de alquiler en la ventana [fecha_retiro-5, fecha_retiro]
+Pruebas funcionales: bloqueo de alquiler en la ventana [fecha_retiro-5, fecha_devolucion]
 tras generar orden de trabajo (ProductoReservado).
 
 Regla: no disponible si el intervalo solicitado [fecha_retiro, fecha_devolucion]
-se solapa con [R-5, R] donde R es la fecha de retiro del titular de la reserva.
+se solapa con [R-5, D] donde R es la fecha de retiro y D la devolución del titular.
 """
 from __future__ import annotations
 
@@ -71,15 +71,17 @@ def mundo_reserva():
 
 
 # (retiro_offset, devolucion_offset, esperado_disponible, descripcion)
+# Titular: retiro = R, devolución = R+20 → ocupación [R-5, R+20]
 CASOS_BLOQUEO = [
     (-7, -6, True, "completamente_antes_de_R_menos_5"),
     (-7, -5, False, "solapa_en_R_menos_5"),
     (-5, -4, False, "empieza_en_borde_R_menos_5"),
     (-4, -2, False, "dentro_de_ventana"),
     (-3, 0, False, "hasta_R"),
-    (1, 3, True, "completamente_despues_de_R"),
+    (1, 3, False, "despues_del_retiro_dentro_del_alquiler"),
     (-6, 1, False, "solapa_por_devolucion_mas_alla_de_R"),
     (-8, -7, True, "muy_antes_sin_solapar"),
+    (21, 25, True, "completamente_despues_de_devolucion"),
 ]
 
 

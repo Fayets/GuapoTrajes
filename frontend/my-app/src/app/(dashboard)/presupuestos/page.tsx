@@ -694,8 +694,8 @@ export default function PresupuestosPage() {
     }
 
     const estado = (producto.estado ?? "").trim().toUpperCase();
-    if (estado && estado !== "SALON") {
-      return `El producto ${nombre} no está disponible (estado actual: ${estado}). Debe estar en salón.`;
+    if (estado === "VENDIDO") {
+      return `El producto ${nombre} no está disponible (vendido).`;
     }
 
     if (
@@ -796,9 +796,20 @@ export default function PresupuestosPage() {
         resetCamposAgregarProducto();
         return false;
       }
-      setAvisoAgregarProducto(null);
       appendItemPresupuesto(producto);
       resetCamposAgregarProducto();
+      const estado = (producto.estado ?? "").trim().toUpperCase();
+      if (estado && estado !== "SALON" && estado !== "VENDIDO") {
+        const nombre = formatDescripcionProducto(
+          producto.descripcion,
+          producto.descripcion_extra
+        );
+        setAvisoAgregarProducto(
+          `${nombre} está en ${estado} hoy. Se agregó igual: las fechas no chocan con otra reserva.`
+        );
+      } else {
+        setAvisoAgregarProducto(null);
+      }
       return true;
     },
     [items, validarProductoParaAgregar, resetCamposAgregarProducto]

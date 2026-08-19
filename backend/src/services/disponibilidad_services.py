@@ -42,12 +42,30 @@ def _rango_bloqueo_presupuesto(presupuesto) -> tuple[date, date]:
     """
     Ventana de bloqueo de un presupuesto activo:
     desde 5 días antes del retiro hasta la devolución (o evento si faltan fechas).
-    Alineado con la ventana de seguridad de ProductoReservado al cobrar seña.
+    Misma ocupación que una orden con seña.
     """
     retiro = _as_date(presupuesto.fecha_retiro or presupuesto.fecha_evento)
     fin = _as_date(presupuesto.fecha_devolucion or presupuesto.fecha_evento)
     inicio = retiro - timedelta(days=5)
+    if fin < inicio:
+        fin = inicio
     return inicio, fin
+
+
+def _rango_bloqueo_producto_reservado(producto_reservado) -> tuple[date, date]:
+    """
+    Ocupación de una orden con seña: [fecha_bloqueo, devolución].
+    fecha_bloqueo es retiro−5; el fin es la devolución del presupuesto (no solo +5 días).
+    """
+    inicio = _as_date(producto_reservado.fecha_bloqueo)
+    orden = producto_reservado.orden_trabajo
+    presupuesto = getattr(orden, "presupuesto", None) if orden else None
+    if presupuesto is not None:
+        fin = _as_date(presupuesto.fecha_devolucion or presupuesto.fecha_evento)
+        if fin < inicio:
+            fin = inicio
+        return inicio, fin
+    return inicio, inicio + timedelta(days=5)
 
 
 def _estado_producto_codigo(estado) -> str:
@@ -102,7 +120,11 @@ def verificar_disponibilidad(
     Bloquea por:
     1. **Presupuestos activos sin orden** (pendiente/aprobado): solapamiento con
        [fecha_retiro−5, fecha_devolución] del presupuesto existente vs el solicitado.
-    2. **Órdenes con seña** (ProductoReservado): ventana [fecha_bloqueo, fecha_bloqueo+5].
+    2. **Órdenes con seña** (ProductoReservado): la misma ocupación
+       [fecha_bloqueo, fecha_devolución] (= [retiro−5, devolución]).
+
+    No usa el estado físico actual (CLIENTE / MODISTA / LAVANDERÍA). Eso indica
+    dónde está la prenda hoy, no si se puede comprometer para otra fecha.
 
     Args:
         producto_id: ID del producto a verificar
@@ -145,12 +167,8 @@ def verificar_disponibilidad(
             if oest in ("cancelada", "cancelado"):
                 continue
 
-            fecha_bloqueo_inicio = _as_date(producto_reservado.fecha_bloqueo)
-            fecha_bloqueo_fin = fecha_bloqueo_inicio + timedelta(days=5)
-
-            if _intervalos_solapan(
-                fecha_bloqueo_inicio, fecha_bloqueo_fin, fecha_retiro, fecha_devolucion
-            ):
+            r_ini, r_fin = _rango_bloqueo_producto_reservado(producto_reservado)
+            if _intervalos_solapan(r_ini, r_fin, fecha_retiro, fecha_devolucion):
                 return False
 
         return True
@@ -173,8 +191,9 @@ def validar_producto_para_item_presupuesto(
     ignorar_conflicto_reserva: bool = False,
 ) -> None:
     """
-    Valida disponibilidad por ventana de reserva y, si el ítem no es reutilización del mismo
-    presupuesto, estado en salón y no inmovilizado.
+    Valida el calendario de reservas. El estado físico de hoy (cliente, modista,
+    lavandería) no impide armar un presupuesto para otra fecha. Sí bloquean
+    inmovilizado y VENDIDO, salvo reutilización del mismo presupuesto.
     """
     desc = format_descripcion_producto(
         producto.descripcion, producto.descripcion_extra
@@ -200,13 +219,10 @@ def validar_producto_para_item_presupuesto(
             status_code=400,
             detail=f'El producto "{desc}" no está disponible (inmovilizado).',
         )
-    if _estado_producto_codigo(producto.estado) != EstadoProducto.SALON.value:
+    if _estado_producto_codigo(producto.estado) == EstadoProducto.VENDIDO.value:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f'El producto "{desc}" no está disponible para asignar '
-                f'(estado actual: {_estado_producto_codigo(producto.estado) or "—"}). Debe estar en salón.'
-            ),
+            detail=f'El producto "{desc}" no está disponible (vendido).',
         )
 
 

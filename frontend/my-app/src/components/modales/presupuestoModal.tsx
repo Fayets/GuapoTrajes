@@ -28,7 +28,6 @@ import {
   ymdWeekdayUtc,
 } from "@/lib/fecha-calendario";
 import { formatMoneyAr } from "@/lib/money";
-import { shouldValidateQuoteAvailability } from "@/lib/scan-queue";
 
 /** ISO / YYYY-MM-DD → DD/MM/AAAA (día ya normalizado a negocio AR). */
 function formatFechaArgentina(iso: string): string {
@@ -212,19 +211,6 @@ export default function PresupuestoModal({
   const [eventos, setEventos] = React.useState<
     { id: number; nombre: string }[]
   >([]);
-
-  const fechasCompletasParaDisponibilidad = shouldValidateQuoteAvailability(
-    formData?.fechaEvento,
-    formData?.fechaRetiro,
-    formData?.fechaDevolucion
-  );
-
-  const ESTADOS_NO_DISPONIBLES = new Set([
-    "LAVANDERIA",
-    "MODISTA",
-    "CLIENTE",
-    "VENDIDO",
-  ]);
 
   useEffect(() => {
     if (show && !verModoLectura) {
@@ -1043,11 +1029,12 @@ export default function PresupuestoModal({
                               const estadoUpper = (p.estado || "")
                                 .toUpperCase()
                                 .trim();
-                              const noDisponiblePorEstado =
-                                fechasCompletasParaDisponibilidad &&
-                                ESTADOS_NO_DISPONIBLES.has(estadoUpper);
-                              const noDisponible =
-                                reservado || noDisponiblePorEstado;
+                              const vendido = estadoUpper === "VENDIDO";
+                              const noDisponible = reservado || vendido;
+                              const enOtroSitio =
+                                !noDisponible &&
+                                Boolean(estadoUpper) &&
+                                estadoUpper !== "SALON";
                               const desc = formatDescripcionProducto(
                                 p.descripcion,
                                 p.descripcion_extra
@@ -1056,8 +1043,10 @@ export default function PresupuestoModal({
                               let label = base;
                               if (reservado) {
                                 label = `${base} — RESERVADO`;
-                              } else if (noDisponiblePorEstado) {
-                                label = `${base} — ${estadoUpper}`;
+                              } else if (vendido) {
+                                label = `${base} — VENDIDO`;
+                              } else if (enOtroSitio) {
+                                label = `${base} — en ${estadoUpper}`;
                               }
                               return (
                                 <option
