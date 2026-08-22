@@ -2,8 +2,6 @@ from fastapi import APIRouter, HTTPException, Depends
 from src.services.pagos_services import PagosServices
 from src.controllers.auth_controller import get_current_user
 from src.schemas import PagoAdicionalRequest, CreditoManualRequest
-from src.deps import require_role
-from src.models import Roles
 
 router = APIRouter(prefix="/pagos")
 servicio = PagosServices()
@@ -39,9 +37,9 @@ def obtener_saldo_cliente(cliente_id: int, current_user=Depends(get_current_user
 @router.post("/credito-manual")
 def registrar_credito_manual(
     data: CreditoManualRequest,
-    current_user=Depends(require_role(Roles.ADMIN, Roles.SUPER_ADMIN)),
+    current_user=Depends(get_current_user),
 ):
-    """Alta manual de saldo a favor (solo ADMIN o SUPER_ADMIN)."""
+    """Alta de saldo a favor. Empleado, admin y super admin pueden cargar crédito."""
     try:
         return servicio.registrar_credito_manual(data, current_user.id)
     except HTTPException as e:
