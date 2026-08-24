@@ -1,9 +1,9 @@
-"""Reporte contratos por fecha: no duplicar presupuesto+orden (10 vs 5)."""
+"""Reporte contratos por fecha: solo contratos firmados, no duplicar presupuesto+orden."""
 from __future__ import annotations
 
 from datetime import date, timedelta
 
-from pony.orm import db_session, flush
+from pony.orm import db_session
 
 from src.fechas_ar import hoy_ar
 from src.models import OrdenTrabajo, Presupuesto
@@ -52,6 +52,10 @@ def _crear_n_ordenes(w, n: int, total: float = 1000.0, seña: float = 1000.0):
         with db_session:
             o = Presupuesto.get(id=pid).orden_trabajo
             ids.append({"presupuesto_id": pid, "orden_id": o.id})
+        OrdenTrabajoServices().registrar_contrato_generado(
+            ids[-1]["orden_id"],
+            usuario=cu,
+        )
     return ids
 
 
@@ -132,5 +136,7 @@ def test_contratos_por_fecha_ordenes_trabajo_coincide_con_listado():
         ]
         assert len(nuestros) == 3
         assert all(c["tipo"] == "orden_trabajo" for c in nuestros)
+        assert all(c.get("contrato_generado_at") for c in nuestros)
     finally:
         _cleanup(ids)
+

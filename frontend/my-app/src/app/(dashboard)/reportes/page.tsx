@@ -74,6 +74,7 @@ interface Contrato {
   seña_pagada?: number | null;
   saldo_pendiente?: number | null;
   metodo_pago?: string | null;
+  contrato_generado_at?: string | null;
 }
 
 type EstadoColaEtiqueta = "pendiente" | "imprimiendo" | "ok" | "error";
@@ -294,7 +295,7 @@ export default function ReportesPage() {
       {
         key: "contratos_por_fecha",
         title: "Contratos por fecha",
-        desc: "Listado de contratos",
+        desc: "Contratos firmados de mercadería entregada",
         icon: FileText,
       },
       {
@@ -854,8 +855,7 @@ export default function ReportesPage() {
         fecha_desde: fechaDesdeContratos,
         fecha_hasta: fechaHastaContratos,
         filtro_fecha: "fecha_creacion",
-        // Solo órdenes: con tipo "todos" el backend sumaba presupuesto+orden y
-        // el toast decía 10 mientras el listado (solo órdenes) mostraba 5.
+        // Solo órdenes con contrato firmado (el backend excluye seña sola).
         tipo: "ordenes_trabajo",
       });
 
@@ -945,7 +945,7 @@ export default function ReportesPage() {
 
     const rows = contratosFiltrados.map((c) => [
       c.numero,
-      formatearFecha(c.fecha_creacion),
+      formatearFecha(c.contrato_generado_at || c.fecha_creacion),
       c.cliente_nombre || "N/A",
       c.cliente_dni ? String(c.cliente_dni) : "N/A",
       formatearFecha(c.fecha_evento),
@@ -3213,7 +3213,7 @@ export default function ReportesPage() {
               Contratos por Fecha
             </h5>
             <p className="text-muted small mb-0">
-              Listado de órdenes de trabajo (contratos) en un rango de fechas
+              Contratos firmados de mercadería entregada. No incluye órdenes solo con seña.
             </p>
           </div>
           <div className="card-body">
@@ -3308,7 +3308,7 @@ export default function ReportesPage() {
                       {filtroBusquedaContratos.trim()
                         ? "No se encontraron contratos que coincidan con la búsqueda."
                         : me?.role === "ADMIN" || me?.role === "SUPER_ADMIN"
-                          ? "No hay órdenes de trabajo en el rango de fechas."
+                          ? "No hay contratos firmados de mercadería entregada en el rango de fechas."
                           : "Solo se pueden ver contratos de órdenes de trabajo con saldo pendiente cero."}
                     </p>
                   </div>
@@ -3349,8 +3349,8 @@ export default function ReportesPage() {
                             <i className="bi bi-info-circle me-2"></i>
                             <span className="small">
                               {me?.role === "ADMIN" || me?.role === "SUPER_ADMIN"
-                                ? "Órdenes de trabajo del período (incluye con saldo pendiente)"
-                                : "Órdenes de trabajo con saldo pendiente cero"}
+                                ? "Contratos firmados del período (incluye con saldo pendiente)"
+                                : "Contratos firmados con saldo pendiente cero"}
                               {filtroBusquedaContratos.trim()
                                 ? ` (filtrado de ${contratos.filter((c) => c.tipo === "orden_trabajo").length})`
                                 : ""}
@@ -3393,7 +3393,10 @@ export default function ReportesPage() {
                                       {contrato.numero}
                                     </td>
                                     <td>
-                                      {formatearFecha(contrato.fecha_creacion)}
+                                      {formatearFecha(
+                                        contrato.contrato_generado_at ||
+                                          contrato.fecha_creacion
+                                      )}
                                     </td>
                                     <td>{contrato.cliente_nombre || "N/A"}</td>
                                     <td>

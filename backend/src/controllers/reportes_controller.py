@@ -95,9 +95,8 @@ def obtener_contratos_por_fecha(
     tipo: str = Query("todos", description="Tipo de contrato: 'todos', 'presupuestos', 'ordenes_trabajo'"),
     current_user=Depends(get_current_user)
 ):
-    """
-    Obtener reporte de contratos (presupuestos y órdenes de trabajo) por rango de fechas.
-    Filtra automáticamente por la sucursal del usuario logueado.
+    """Obtener reporte de contratos firmados de mercadería entregada por rango de fechas.
+    No incluye órdenes que solo tienen seña. Filtra por sucursal del usuario logueado.
     """
     try:
         # Obtener la sucursal del usuario actual (es obligatoria según el modelo)

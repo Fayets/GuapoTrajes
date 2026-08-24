@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import List, Dict, Optional
 import re
 from src.descripcion_producto import format_descripcion_producto
-from src.fechas_ar import isoformat_ar
+from src.fechas_ar import instante_a_fecha_ar, isoformat_ar
 from src.presupuesto_observaciones import observaciones_presupuesto_para_mostrar
 from src.models import Presupuesto, OrdenTrabajo, ItemPresupuesto, Producto, Cliente, CajaMovimiento, Venta, TipoMovimiento, EstadoProducto, ProductoReservado, ProductoLavanderia, ProductoModista, DetalleVenta, DetalleVenta
 
@@ -374,8 +374,11 @@ class ReportesServices:
         tipo: str = "todos"  # "todos", "presupuestos", "ordenes_trabajo"
     ) -> List[Dict]:
         """
-        Obtener contratos (presupuestos y órdenes de trabajo) filtrados por rango de fechas.
-        
+        Obtener contratos firmados de mercadería entregada, filtrados por rango de fechas.
+
+        Solo incluye órdenes con contrato_generado_at (seña sola no aparece).
+        Con filtro_fecha="fecha_creacion" se usa la fecha del contrato firmado.
+
         Args:
             fecha_desde: Fecha inicial del rango
             fecha_hasta: Fecha final del rango
@@ -391,8 +394,10 @@ class ReportesServices:
             
             contratos = []
             
-            # Procesar presupuestos si corresponde
-            if tipo in ["todos", "presupuestos"]:
+            # Presupuestos (cotizaciones / seña) no son contratos firmados.
+            # El reporte de contratos por fecha solo los incluye si se piden
+            # explícitamente; "todos" equivale a órdenes con contrato firmado.
+            if tipo == "presupuestos":
                 todos_presupuestos = list(Presupuesto.select())
                 print(f"🔍 DEBUG: Total presupuestos en BD: {len(todos_presupuestos)}")
                 
@@ -496,11 +501,17 @@ class ReportesServices:
                         if not presupuesto:
                             continue
                         
+                        # Solo contratos firmados (mercadería entregada al generar el contrato).
+                        # Una orden con seña todavía no es contrato.
+                        if not getattr(orden, "contrato_generado_at", None):
+                            continue
+
                         # Determinar qué fecha usar para filtrar
                         if filtro_fecha == "fecha_evento":
                             fecha_filtro = orden.fecha_evento
-                        else:  # Por defecto usar fecha_creacion
-                            fecha_filtro = orden.fecha_creacion.date() if isinstance(orden.fecha_creacion, datetime) else orden.fecha_creacion
+                        else:
+                            # Fecha del contrato firmado, no la de creación/seña de la orden
+                            fecha_filtro = instante_a_fecha_ar(orden.contrato_generado_at)
                         
                         # Filtrar por rango de fechas
                         if fecha_filtro < fecha_desde or fecha_filtro > fecha_hasta:
@@ -560,7 +571,8 @@ class ReportesServices:
                             "observaciones": presupuesto.observaciones or "",
                             "seña_pagada": float(orden.seña_pagada),
                             "saldo_pendiente": float(orden.saldo_pendiente),
-                            "metodo_pago": orden.metodo_pago or "N/A"
+                            "metodo_pago": orden.metodo_pago or "N/A",
+                            "contrato_generado_at": isoformat_ar(orden.contrato_generado_at),
                         }
                         
                         contratos.append(contrato)
@@ -570,8 +582,11 @@ class ReportesServices:
                         traceback.print_exc()
                         continue
             
-            # Ordenar por fecha de creación descendente (más recientes primero)
-            contratos.sort(key=lambda x: x["fecha_creacion"], reverse=True)
+            # Ordenar por fecha del contrato firmado (más recientes primero)
+            contratos.sort(
+                key=lambda x: x.get("contrato_generado_at") or x["fecha_creacion"],
+                reverse=True,
+            )
             
             print(f"🔍 DEBUG: Contratos encontrados: {len(contratos)}")
             
