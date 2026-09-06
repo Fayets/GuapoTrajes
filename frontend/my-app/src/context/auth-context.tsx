@@ -11,6 +11,11 @@ type Me = {
   id: number;
   email: string;
   role: Rol;
+  username?: string | null;
+  nombre?: string | null;
+  apellido?: string | null;
+  /** Nombre visible en UI (nombre + apellido, o username). */
+  displayName?: string | null;
   sucursalNombre?: string | null;
   sucursalId?: number | null;
 };
@@ -40,10 +45,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const res = await apiFetch("/auth/me", { token: tkn });
     if (!res.ok) throw new Error("Unauthorized");
     const raw = await res.json();
+    const nombre = (raw.nombre ?? "").trim();
+    const apellido = (raw.apellido ?? "").trim();
+    const username = (raw.username ?? "").trim();
+    const displayName =
+      [nombre, apellido].filter(Boolean).join(" ") ||
+      username ||
+      raw.email ||
+      "Usuario";
     const normalized: Me = {
       id: raw.id,
       email: raw.email,
       role: (raw.role ?? raw.rol) as Rol,
+      username: username || null,
+      nombre: nombre || null,
+      apellido: apellido || null,
+      displayName,
       sucursalNombre:
         raw.sucursal?.nombre ??
         raw.sucursal_nombre ??

@@ -178,13 +178,22 @@ def _item_presupuesto_a_producto_orden_dict(
 def _productos_de_orden_para_api(
     orden: OrdenTrabajo, incluir_detalle: bool = True
 ) -> list:
-    """Productos activos reservados o, si ya se devolvieron, ítems del presupuesto."""
+    """Productos aún reservados en la orden (pendientes de devolución).
+
+    Si no quedan reservas y la orden sigue abierta (parcial / revisión),
+    devolver lista vacía: no rehidratar ítems del presupuesto (eso hacía
+    reaparecer prendas ya ingresadas). Solo en Completada/Cancelada se
+    rellenan los ítems del presupuesto para consulta histórica.
+    """
     reservados = list(orden.productos_reservados)
     if reservados:
         return [
             _producto_reservado_a_dict(pr, incluir_detalle=incluir_detalle)
             for pr in reservados
         ]
+    estado = (orden.estado or "").strip().lower()
+    if estado not in ("completada", "cancelada"):
+        return []
     presupuesto = orden.presupuesto
     if not presupuesto:
         return []

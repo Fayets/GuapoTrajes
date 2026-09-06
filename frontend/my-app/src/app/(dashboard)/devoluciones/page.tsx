@@ -54,12 +54,19 @@ function ordenCoincideBusquedaDevoluciones(
   );
   const terminoSinEspacios = termino.replace(/\s/g, "");
 
+  const firmanteDniSinEspacios = normalizarParaBusqueda(
+    (orden.firmante_dni ?? "").toString().replace(/\s/g, "")
+  );
+
   const camposOrden = [
     orden.cliente_nombre,
     orden.cliente_dni,
     dniSinEspacios,
     orden.cliente_direccion,
     orden.cliente_celular,
+    orden.firmante_nombre,
+    orden.firmante_dni,
+    firmanteDniSinEspacios,
     orden.presupuesto_numero,
     String(orden.id ?? ""),
     String(orden.presupuesto_id ?? ""),
@@ -471,7 +478,7 @@ export default function DevolucionesPage() {
     <style>
         @media print {
             @page {
-                size: legal;
+                size: A4;
                 margin: 0.8cm 1.5cm;
             }
             body { 
@@ -715,11 +722,34 @@ export default function DevolucionesPage() {
             <h1>PAGARÉ</h1>
         </div>
         <div class="clausula">
-            La Rioja, <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Vence el <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Pagaré $ <span class="underline">${valorPagareFormateado}</span> Sin Protesto (Art. 50 D. Ley 5965/63). A señor Schmira Ariel Fernando o a su orden. La cantidad de pesos <span class="underline">${valorPagareFormateado}</span>. Por igual valor recibido en prendas de vestir a su entera satisfacción. Pagadero en Santiago del Estero 83 de la Ciudad de La Rioja.
+            <div style="text-align: right; margin-bottom: 8px;">
+                Vence el <span class="underline espacio-dia">&nbsp;</span> de
+                <span class="underline espacio-mes">&nbsp;</span> de
+                <span class="underline espacio-anio">&nbsp;</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                La Rioja, <span class="underline espacio-mes">&nbsp;</span> de
+                <span class="underline espacio-anio">&nbsp;</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                PAGARÉ a la vista la cantidad de $
+                <span class="underline" style="display:inline-block;min-width:10em;">&nbsp;</span>
+                &nbsp;&nbsp;Sin Protesto (Art. 50, D. Ley 5965/63)
+            </div>
+            <div style="margin-bottom: 8px;">
+                Al señor Schmira Ariel Fernando o a su orden, la cantidad de pesos:
+                <span class="underline" style="display:inline-block;min-width:22em;">&nbsp;</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                Por igual valor recibido en prendas de vestir a su entera satisfacción.
+            </div>
+            <div style="margin-bottom: 12px;">
+                Pagadero en Santiago del Estero 83, Ciudad de La Rioja.
+            </div>
             <div style="margin-top: 12px;">
-                <div style="margin-bottom: 6px;">Firmante: <span class="underline espacio-firma">${firmante}</span></div>
-                <div style="margin-bottom: 6px;">Aclaración: <span class="underline espacio-firma">${aclaracion}</span></div>
-                <div>Celular: <span class="underline espacio-firma">${celular}</span></div>
+                <div style="margin-bottom: 6px;">Firmante: <span class="underline espacio-firma">&nbsp;</span></div>
+                <div style="margin-bottom: 6px;">Aclaración: <span class="underline espacio-firma">&nbsp;</span></div>
+                <div>Celular: <span class="underline espacio-firma">&nbsp;</span></div>
             </div>
         </div>
     </div>
@@ -1031,7 +1061,10 @@ export default function DevolucionesPage() {
 
   const abrirModalCompletada = (orden: OrdenTrabajo) => {
     const init: Record<number, AsignacionDevolucionCompleta> = {};
-    (orden.productos_reservados || []).forEach((p) => {
+    const prendasPendientes = (orden.productos_reservados || []).filter(
+      (p) => !(p as { es_historico?: boolean }).es_historico
+    );
+    prendasPendientes.forEach((p) => {
       init[p.producto_id] = {
         incluido: true,
         destino: "LAVANDERIA",
@@ -1040,12 +1073,21 @@ export default function DevolucionesPage() {
       };
     });
     setAsignacionesCompletada(init);
-    setOrdenSeleccionada(orden);
+    setOrdenSeleccionada({
+      ...orden,
+      productos_reservados: prendasPendientes,
+    });
     setShowCompletadaModal(true);
   };
 
   const abrirModalParcial = (orden: OrdenTrabajo) => {
-    setOrdenSeleccionada(orden);
+    const prendasPendientes = (orden.productos_reservados || []).filter(
+      (p) => !(p as { es_historico?: boolean }).es_historico
+    );
+    setOrdenSeleccionada({
+      ...orden,
+      productos_reservados: prendasPendientes,
+    });
     setPrendasSeleccionadas([]);
     setDescripcionParcial("");
     setShowParcialModal(true);
@@ -1090,7 +1132,7 @@ export default function DevolucionesPage() {
                 <input
                   type="search"
                   className="form-control"
-                  placeholder="Buscar cliente, orden o prenda..."
+                  placeholder="Buscar cliente, firmante, orden o prenda..."
                   value={filtroBusqueda}
                   onChange={(e) => setFiltroBusqueda(e.target.value)}
                   onKeyDown={(e) => {
@@ -1101,8 +1143,8 @@ export default function DevolucionesPage() {
                 />
               </div>
               <p className="text-muted small mb-0 mt-2">
-                Podés buscar aunque no recuerdes el nombre: usá el código de barra o la
-                descripción de la prenda que traen.
+                Podés buscar por cliente, por quien retiró (firmante), DNI, código de
+                barra o descripción de la prenda.
               </p>
             </div>
             <div className="table-responsive">
@@ -1112,6 +1154,7 @@ export default function DevolucionesPage() {
                     <th>Orden ID</th>
                     <th>Presupuesto</th>
                     <th>Cliente</th>
+                    <th>Firmante</th>
                     <th>Fecha Evento</th>
                     <th>Fecha Devolución</th>
                     <th className="text-center">Acciones</th>
@@ -1120,7 +1163,7 @@ export default function DevolucionesPage() {
                 <tbody>
                   {ordenesAbiertasFiltradas.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center text-muted py-4">
+                      <td colSpan={7} className="text-center text-muted py-4">
                         <i className="bi bi-search me-2"></i>
                         No se encontraron órdenes que coincidan con la búsqueda
                       </td>
@@ -1141,6 +1184,7 @@ export default function DevolucionesPage() {
                           { locale: es }
                         )
                       : "N/A";
+                    const firmanteVisible = (orden.firmante_nombre || "").trim();
 
                     return (
                       <tr key={orden.id}>
@@ -1155,6 +1199,7 @@ export default function DevolucionesPage() {
                           )}
                         </td>
                         <td>{orden.cliente_nombre}</td>
+                        <td>{firmanteVisible || "—"}</td>
                         <td>{fechaEventoFormateada}</td>
                         <td>{fechaDevolucionFormateada}</td>
                         <td className="text-center">

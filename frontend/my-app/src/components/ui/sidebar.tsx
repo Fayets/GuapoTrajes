@@ -216,6 +216,8 @@ export function Sidebar({ collapsed, toggleSidebar, mobileOpen = false, onMobile
   );
 
   const userBranch = me?.sucursalNombre || "Sucursal no asignada";
+  const userDisplayName = me?.displayName || "Usuario";
+  const userInitial = (userDisplayName.trim().charAt(0) || "U").toUpperCase();
 
   return (
     <aside
@@ -381,11 +383,15 @@ export function Sidebar({ collapsed, toggleSidebar, mobileOpen = false, onMobile
       </nav>
 
       <div className="sidebar-modern-footer">
-        <div className="sidebar-modern-user">
-          <span className="sidebar-modern-bullet">
-            <i className="bi bi-building"></i>
+        <div
+          className="sidebar-modern-user"
+          title={`Sesión: ${userDisplayName}`}
+        >
+          <span className="sidebar-modern-bullet" aria-hidden>
+            {collapsed ? userInitial : <i className="bi bi-person-fill"></i>}
           </span>
           <div className="sidebar-modern-user-details">
+            <p className="sidebar-modern-user-name">{userDisplayName}</p>
             <p className="sidebar-modern-user-branch">{userBranch}</p>
             <p className="sidebar-modern-user-role">{me?.role || ""}</p>
           </div>

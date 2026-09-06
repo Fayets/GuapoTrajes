@@ -1015,9 +1015,23 @@ export default function ReportesPage() {
       const data = await response.json();
       const ordenCompleta = data.data || data;
 
-      if (ordenCompleta.es_precliente || !ordenCompleta.cliente_dni || !ordenCompleta.cliente_direccion) {
+      // Precliente sin DNI del titular: se puede ver si hay firmante (quien retira)
+      // o si el contrato ya fue generado. No bloquear la reimpresión desde el reporte.
+      const tieneFirmante =
+        ordenCompleta.tiene_firmante_anexo === true ||
+        Boolean((ordenCompleta.firmante_nombre || "").trim());
+      const titularCompleto =
+        Boolean((ordenCompleta.cliente_dni || "").trim()) &&
+        Boolean((ordenCompleta.cliente_direccion || "").trim());
+      const yaGenerado = Boolean(
+        ordenCompleta.contrato_generado_at || contrato.contrato_generado_at
+      );
+
+      if (!tieneFirmante && !titularCompleto && !yaGenerado) {
         toast.error(
-          "Este presupuesto pertenece a un precliente. Para generar el contrato se requiere DNI y Dirección."
+          ordenCompleta.es_precliente
+            ? "Este contrato es de precliente y no tiene firmante anexado. Completalo desde Órdenes."
+            : "Para ver el contrato se requiere DNI y Dirección del cliente."
         );
         return;
       }
@@ -1284,11 +1298,34 @@ export default function ReportesPage() {
             <h1>PAGARÉ</h1>
         </div>
         <div class="clausula">
-            La Rioja, <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Vence el <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Pagaré $ <span class="underline">${valorPagareFormateado}</span> Sin Protesto (Art. 50 D. Ley 5965/63). A señor Schmira Ariel Fernando o a su orden. La cantidad de pesos <span class="underline">${valorPagareFormateado}</span>. Por igual valor recibido en prendas de vestir a su entera satisfacción. Pagadero en Santiago del Estero 83 de la Ciudad de La Rioja.
+            <div style="text-align: right; margin-bottom: 8px;">
+                Vence el <span class="underline espacio-dia">&nbsp;</span> de
+                <span class="underline espacio-mes">&nbsp;</span> de
+                <span class="underline espacio-anio">&nbsp;</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                La Rioja, <span class="underline espacio-mes">&nbsp;</span> de
+                <span class="underline espacio-anio">&nbsp;</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                PAGARÉ a la vista la cantidad de $
+                <span class="underline" style="display:inline-block;min-width:10em;">&nbsp;</span>
+                &nbsp;&nbsp;Sin Protesto (Art. 50, D. Ley 5965/63)
+            </div>
+            <div style="margin-bottom: 8px;">
+                Al señor Schmira Ariel Fernando o a su orden, la cantidad de pesos:
+                <span class="underline" style="display:inline-block;min-width:22em;">&nbsp;</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                Por igual valor recibido en prendas de vestir a su entera satisfacción.
+            </div>
+            <div style="margin-bottom: 12px;">
+                Pagadero en Santiago del Estero 83, Ciudad de La Rioja.
+            </div>
             <div style="margin-top: 12px;">
-                <div style="margin-bottom: 6px;">Firmante: <span class="underline espacio-firma">${firmante}</span></div>
-                <div style="margin-bottom: 6px;">Aclaración: <span class="underline espacio-firma">${aclaracion}</span></div>
-                <div>Celular: <span class="underline espacio-firma">${celular}</span></div>
+                <div style="margin-bottom: 6px;">Firmante: <span class="underline espacio-firma">&nbsp;</span></div>
+                <div style="margin-bottom: 6px;">Aclaración: <span class="underline espacio-firma">&nbsp;</span></div>
+                <div>Celular: <span class="underline espacio-firma">&nbsp;</span></div>
             </div>
         </div>
     </div>

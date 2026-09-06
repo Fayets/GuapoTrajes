@@ -731,7 +731,7 @@ function OrdenesTrabajoContent() {
     <style>
         @media print {
             @page {
-                size: legal;
+                size: A4;
                 margin: 0.8cm 1.5cm;
             }
             body { 
@@ -974,11 +974,34 @@ function OrdenesTrabajoContent() {
             <h1>PAGARÉ</h1>
         </div>
         <div class="clausula">
-            La Rioja, <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Vence el <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Pagaré $ <span class="underline">${valorPagareFormateado}</span> Sin Protesto (Art. 50 D. Ley 5965/63). A señor Schmira Ariel Fernando o a su orden. La cantidad de pesos <span class="underline">${valorPagareFormateado}</span>. Por igual valor recibido en prendas de vestir a su entera satisfacción. Pagadero en Santiago del Estero 83 de la Ciudad de La Rioja.
+            <div style="text-align: right; margin-bottom: 8px;">
+                Vence el <span class="underline espacio-dia">&nbsp;</span> de
+                <span class="underline espacio-mes">&nbsp;</span> de
+                <span class="underline espacio-anio">&nbsp;</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                La Rioja, <span class="underline espacio-mes">&nbsp;</span> de
+                <span class="underline espacio-anio">&nbsp;</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                PAGARÉ a la vista la cantidad de $
+                <span class="underline" style="display:inline-block;min-width:10em;">&nbsp;</span>
+                &nbsp;&nbsp;Sin Protesto (Art. 50, D. Ley 5965/63)
+            </div>
+            <div style="margin-bottom: 8px;">
+                Al señor Schmira Ariel Fernando o a su orden, la cantidad de pesos:
+                <span class="underline" style="display:inline-block;min-width:22em;">&nbsp;</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                Por igual valor recibido en prendas de vestir a su entera satisfacción.
+            </div>
+            <div style="margin-bottom: 12px;">
+                Pagadero en Santiago del Estero 83, Ciudad de La Rioja.
+            </div>
             <div style="margin-top: 12px;">
-                <div style="margin-bottom: 6px;">Firmante: <span class="underline espacio-firma">${firmante}</span></div>
-                <div style="margin-bottom: 6px;">Aclaración: <span class="underline espacio-firma">${aclaracion}</span></div>
-                <div>Celular: <span class="underline espacio-firma">${celular}</span></div>
+                <div style="margin-bottom: 6px;">Firmante: <span class="underline espacio-firma">&nbsp;</span></div>
+                <div style="margin-bottom: 6px;">Aclaración: <span class="underline espacio-firma">&nbsp;</span></div>
+                <div>Celular: <span class="underline espacio-firma">&nbsp;</span></div>
             </div>
         </div>
     </div>
@@ -1747,14 +1770,9 @@ function OrdenesTrabajoContent() {
                           </button>
                           <button
                             type="button"
-                            className={`btn-action ${orden.etiquetas_armado_impresas_at ? "btn-action--loden-solid" : "btn-action--ver"}`}
-                            onClick={() => void abrirModalEtiquetasArmado(orden)}
-                            disabled={!!orden.etiquetas_armado_impresas_at}
-                            title={
-                              orden.etiquetas_armado_impresas_at
-                                ? "Etiquetas ya impresas al crear la orden"
-                                : "Imprimir etiquetas 100×50 para armar"
-                            }
+                            className="btn-action btn-action--ver"
+                            onClick={() => void abrirModalRecibo(orden)}
+                            title="Ver e imprimir resumen de la orden"
                           >
                             <Printer size={16} strokeWidth={1.75} aria-hidden />
                           </button>
