@@ -4,6 +4,7 @@
  * Separada de las etiquetas individuales por prenda (con código de barras).
  */
 
+import { formatDdMmYyyyDesdeIso } from "@/lib/fecha-calendario";
 import { imprimirEtiquetaConRouting } from "@/lib/imprimir-etiqueta-routing";
 
 /** Etiqueta física 100×50 mm impresa en vertical → 50 mm ancho × 100 mm alto */
@@ -171,6 +172,40 @@ export function formatearLineaPrendaCompacta(prenda: PrendaResumenEntrada): stri
   const base = (prenda.descripcion || "").trim() || "Prenda";
   const cant = prenda.cantidad > 1 ? ` ×${prenda.cantidad}` : "";
   return `${base}${cant}`;
+}
+
+export function construirEtiquetaResumenDesdeOrden(orden: {
+  id: number;
+  cliente_nombre?: string | null;
+  fecha_retiro?: string | null;
+  fecha_evento?: string | null;
+  categoria_evento?: string | null;
+  lugar_evento?: string | null;
+  observaciones?: string | null;
+  productos_reservados?: Array<{
+    linea?: string | null;
+    talle?: string | null;
+    color?: string | null;
+    producto_descripcion?: string | null;
+    cantidad?: number | null;
+  }>;
+}): ItemEtiquetaResumenConjunto {
+  return construirEtiquetaResumenConjunto({
+    ordenId: orden.id,
+    clienteNombre: orden.cliente_nombre || "Cliente",
+    fechaRetiro: formatDdMmYyyyDesdeIso(orden.fecha_retiro || "") || "—",
+    fechaEvento: formatDdMmYyyyDesdeIso(orden.fecha_evento || "") || "—",
+    categoriaEvento: (orden.categoria_evento || "").trim(),
+    lugarEvento: (orden.lugar_evento || "").trim(),
+    productos: (orden.productos_reservados || []).map((pr) => ({
+      linea: pr.linea || null,
+      talle: pr.talle || null,
+      color: pr.color || null,
+      descripcion: pr.producto_descripcion || "Prenda",
+      cantidad: pr.cantidad ?? 1,
+    })),
+    observacionesArreglos: (orden.observaciones || "").trim() || undefined,
+  });
 }
 
 export function construirEtiquetaResumenConjunto(input: {

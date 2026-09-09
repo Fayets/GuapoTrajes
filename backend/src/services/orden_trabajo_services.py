@@ -83,6 +83,13 @@ def _campos_trazabilidad_orden(o) -> dict:
     }
 
 
+def _campos_evento_presupuesto(presupuesto) -> dict:
+    return {
+        "categoria_evento": (getattr(presupuesto, "categoria_evento", None) or "").strip(),
+        "lugar_evento": (getattr(presupuesto, "lugar_evento", None) or "").strip(),
+    }
+
+
 def _origen_caja_liga_presupuesto_o_orden(origen: Optional[str], presupuesto_numero: str, orden_id: int) -> bool:
     """Solo movimientos creados explícitamente para esta orden/presupuesto (evita falsos positivos por substring)."""
     if not origen:
@@ -532,6 +539,7 @@ class OrdenTrabajoServices:
                         "fecha_creacion": isoformat_ar(o.fecha_creacion) if o.fecha_creacion else "",
                         "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
                         "fecha_devolucion": presupuesto.fecha_devolucion.isoformat() if presupuesto.fecha_devolucion else None,
+                        **_campos_evento_presupuesto(presupuesto),
                         "seña_pagada": round_pesos(o.seña_pagada),
                         "saldo_pendiente": round_pesos(o.saldo_pendiente),
                         "total": total_orden,  # Total de la orden (con descuento si aplica)
@@ -605,6 +613,7 @@ class OrdenTrabajoServices:
                     "fecha_creacion": isoformat_ar(orden.fecha_creacion) if orden.fecha_creacion else "",
                     "fecha_retiro": presupuesto.fecha_retiro.isoformat() if presupuesto.fecha_retiro else None,
                     "fecha_devolucion": presupuesto.fecha_devolucion.isoformat() if presupuesto.fecha_devolucion else None,
+                    **_campos_evento_presupuesto(presupuesto),
                     "seña_pagada": orden.seña_pagada,
                     "saldo_pendiente": orden.saldo_pendiente,
                     "total": total_orden,  # Total de la orden (con descuento si aplica)

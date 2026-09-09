@@ -32,20 +32,16 @@ import {
   EnviarModistaDialog,
   type EnviarModistaContext,
 } from "@/components/modales/enviar-modista-dialog";
-import { imprimirEtiquetas100x50Lote } from "@/lib/imprimir-etiqueta-100x50";
+import { type FirmanteContratoPayload } from "@/lib/contrato-locatario";
+import { abrirImpresionContratoDesdeOrden } from "@/lib/generar-html-contrato";
 import {
-  resolverLocatarioContrato,
-  type FirmanteContratoPayload,
-} from "@/lib/contrato-locatario";
+  construirEtiquetaResumenDesdeOrden,
+  imprimirEtiquetaResumenConjunto,
+} from "@/lib/imprimir-etiqueta-conjunto-completo";
 import { scheduleUndoableDelete } from "@/lib/undoable-delete";
 import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
 import { formatPesosAr, formatMoneyAr, parseMontoInput, roundPesos } from "@/lib/money";
-import {
-  ahoraArgentinaPartes,
-  formatDateTimeArgentina,
-  parseDateTimeArgentina,
-  formatDdMmYyyyDesdeIso,
-} from "@/lib/fecha-calendario";
+import { formatDateTimeArgentina } from "@/lib/fecha-calendario";
 import { abrirWhatsAppEnvio, normalizarTelefonoWhatsapp } from "@/lib/whatsapp";
 
 // Tipos
@@ -90,6 +86,8 @@ type OrdenTrabajo = {
   fecha_evento: string;
   fecha_creacion: string;
   fecha_retiro?: string | null;
+  categoria_evento?: string | null;
+  lugar_evento?: string | null;
   seña_pagada: number;
   saldo_pendiente: number;
   estado: string;
@@ -183,11 +181,7 @@ function OrdenesTrabajoContent() {
     "titular" | "tercero" | null
   >(null);
   const [generandoContrato, setGenerandoContrato] = useState(false);
-  const [modalEtiquetasArmadoAbierto, setModalEtiquetasArmadoAbierto] =
-    useState(false);
-  const [ordenEtiquetasArmado, setOrdenEtiquetasArmado] =
-    useState<OrdenTrabajo | null>(null);
-  const [imprimiendoEtiquetasArmado, setImprimiendoEtiquetasArmado] =
+  const [imprimiendoEtiquetaResumen, setImprimiendoEtiquetaResumen] =
     useState(false);
   const [enviarModistaProd, setEnviarModistaProd] =
     useState<ProductoReservado | null>(null);
@@ -623,379 +617,8 @@ function OrdenesTrabajoContent() {
 
   const abrirVentanaContrato = (orden: OrdenTrabajo) => {
     try {
-      // Obtener información de la orden
-      const idContrato = orden.id.toString().padStart(6, "0");
-      const locatario = resolverLocatarioContrato(orden);
-      const clienteNombre = locatario.nombre;
-      const clienteDNI = locatario.dni;
-      const clienteDireccion = locatario.direccion;
-      const fechaEvento = orden.fecha_evento
-        ? format(
-            new Date(orden.fecha_evento + "T00:00:00"),
-            "dd/MM/yyyy",
-            { locale: es }
-          )
-        : "";
-      const fechaCreacion = orden.fecha_creacion
-        ? formatDateTimeArgentina(orden.fecha_creacion, {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          })
-        : formatDateTimeArgentina(new Date(), {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          });
-
-      const fechaContratoFuente = orden.contrato_generado_at
-        ? parseDateTimeArgentina(orden.contrato_generado_at)
-        : new Date();
-      const partesContrato = orden.contrato_generado_at
-        ? (() => {
-            const p = new Intl.DateTimeFormat("es-AR", {
-              timeZone: "America/Argentina/Buenos_Aires",
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            }).formatToParts(fechaContratoFuente ?? new Date());
-            return {
-              dia: Number(p.find((x) => x.type === "day")?.value ?? "1"),
-              mes: p.find((x) => x.type === "month")?.value ?? "",
-              año: Number(p.find((x) => x.type === "year")?.value ?? "2000"),
-            };
-          })()
-        : ahoraArgentinaPartes();
-      const dia = partesContrato.dia;
-      const mes = partesContrato.mes;
-      const año = partesContrato.año;
-
-      // Calcular días de vigencia (diferencia entre fecha evento y fecha de creación de la orden)
-      const fechaCreacionOrden = orden.fecha_creacion
-        ? parseDateTimeArgentina(orden.fecha_creacion) ?? new Date()
-        : new Date();
-      const fechaEventoDate = orden.fecha_evento
-        ? new Date(orden.fecha_evento + "T00:00:00")
-        : new Date();
-      const diasVigencia = Math.max(
-        1,
-        Math.ceil(
-          (fechaEventoDate.getTime() - fechaCreacionOrden.getTime()) /
-            (1000 * 60 * 60 * 24)
-        )
-      );
-
-      // Precio total del alquiler (para la tercera vigencia)
-      const precioTotal =
-        orden.total_presupuesto ||
-        orden.total ||
-        orden.seña_pagada + orden.saldo_pendiente;
-      const precioFormateado = precioTotal.toLocaleString("es-AR", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-
-      // Segunda vigencia - debe quedar vacía
-      const segundaVigencia = "";
-
-      // Tercera vigencia - total alquiler para usar en el texto
-      const terceraVigenciaTotal = precioFormateado;
-
-      // Calcular valor del pagaré: precio del alquiler multiplicado por 5
-      const valorPagare = precioTotal * 5;
-      const valorPagareFormateado = valorPagare.toLocaleString("es-AR", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-
-      // Lista de prendas
-      const listaPrendas = (orden.productos_reservados || [])
-        .map((prod: any, index: number) => `${index + 1}. ${prod.producto_descripcion || prod.producto_nombre || "Producto"}`)
-        .join("<br>");
-
-      // Fechas del pagaré: en blanco para rellenar manualmente (evitar vencimiento y ejecución)
-      // No se calculan diaVencimiento/mesVencimiento/añoVencimiento; se dejan vacíos en el HTML.
-
-      // Locatario del contrato = firmante del pagaré (titular o anexado)
-      const firmante = locatario.nombre;
-      const aclaracion = locatario.nombre;
-      const celular = locatario.celular;
-
-    const contenidoContrato = `
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contrato de Alquiler - ID ${idContrato}</title>
-    <style>
-        @media print {
-            @page {
-                size: legal;
-                margin: 0.8cm 1.5cm;
-            }
-            body { 
-                margin: 0;
-                padding: 0;
-            }
-            .no-print { display: none; }
-        }
-        body {
-            font-family: 'Times New Roman', serif;
-            max-width: 100%;
-            margin: 0 auto;
-            padding: 15px 20px;
-            line-height: 1.5;
-            font-size: 11pt;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
-        }
-        .header h1 {
-            font-size: 14pt;
-            font-weight: bold;
-            margin-bottom: 6px;
-        }
-        .numero-contrato {
-            font-size: 11pt;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .clausula {
-            margin-bottom: 10px;
-            text-align: justify;
-            padding: 4px 0;
-            line-height: 1.5;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            white-space: normal;
-            orphans: 3;
-            widows: 3;
-            text-indent: 0;
-        }
-        .clausula:first-of-type {
-            text-align: left;
-            word-spacing: normal;
-            letter-spacing: normal;
-            text-indent: 0;
-            margin-top: 0;
-            padding-top: 0;
-            line-break: auto;
-            overflow-wrap: normal;
-            word-break: normal;
-            display: block;
-        }
-        .clausula:first-of-type::first-line {
-            text-indent: 0;
-        }
-        .clausula:first-of-type::first-letter {
-            float: none;
-            margin: 0;
-            padding: 0;
-        }
-        .clausula:first-of-type strong,
-        .clausula:first-of-type span {
-            display: inline !important;
-            white-space: normal !important;
-            word-break: keep-all !important;
-        }
-        .clausula:first-of-type::before {
-            content: "";
-            display: none;
-        }
-        .clausula:first-of-type > *:first-child {
-            display: inline !important;
-        }
-        .texto-continuo {
-            display: inline;
-            white-space: normal;
-            word-break: normal;
-            overflow-wrap: normal;
-        }
-        .texto-continuo * {
-            display: inline !important;
-            white-space: normal !important;
-        }
-        .clausula strong {
-            font-weight: bold;
-            font-size: 11.5pt;
-            display: inline;
-            white-space: normal;
-            word-break: normal;
-            line-height: inherit;
-        }
-        .clausula > strong:first-child {
-            display: block;
-            margin-bottom: 0;
-            margin-top: 2px;
-            white-space: normal;
-        }
-        .clausula br {
-            margin-bottom: 0;
-            display: block;
-            line-height: 0;
-        }
-        .lista-prendas {
-            margin: 6px 0;
-            padding-left: 20px;
-            padding-top: 4px;
-            padding-bottom: 4px;
-            font-size: 10.5pt;
-            line-height: 1.6;
-        }
-        .firma {
-            margin-top: 18px;
-            padding-top: 14px;
-        }
-        .firma div {
-            margin-bottom: 10px;
-            line-height: 1.8;
-        }
-        .firma div div {
-            margin-bottom: 6px;
-            font-size: 11pt;
-        }
-        .pagare {
-            margin-top: 12px;
-            padding-top: 10px;
-            border-top: 1px solid #000;
-        }
-        .pagare .header {
-            margin-bottom: 8px;
-        }
-        .pagare .header h1 {
-            font-size: 12pt;
-            font-weight: bold;
-        }
-        .pagare .clausula {
-            padding: 6px 0;
-        }
-        .pagare div[style*="margin-top"] {
-            margin-top: 8px !important;
-        }
-        .pagare div[style*="margin-bottom"] {
-            margin-bottom: 4px !important;
-            line-height: 1.6;
-            font-size: 11pt;
-        }
-        .botones {
-            text-align: center;
-            margin-top: 15px;
-        }
-        button {
-            padding: 10px 20px;
-            margin: 0 10px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-        .underline {
-            border-bottom: 1px solid #000;
-            display: inline;
-            padding-bottom: 2px;
-            text-decoration: none;
-            white-space: normal;
-            word-break: normal;
-            line-height: inherit;
-        }
-        .pagare .underline.espacio-dia { display: inline-block; min-width: 3.5em; }
-        .pagare .underline.espacio-mes { display: inline-block; min-width: 11em; }
-        .pagare .underline.espacio-anio { display: inline-block; min-width: 4.5em; }
-        .pagare .underline.espacio-firma { display: inline-block; min-width: 20em; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>Contrato Alquiler de Prendas de Vestir</h1>
-        <div class="numero-contrato">ID Contrato: ${idContrato}</div>
-    </div>
-
-    <div class="clausula"><span class="texto-continuo">Entre <strong>Schmira Ariel Fernando</strong>, local Guapo Trajes, por una parte, en adelante <strong>EL LOCADOR</strong>, y <span class="underline">${clienteNombre}</span>, DNI <span class="underline">${clienteDNI}</span>, con domicilio en <span class="underline">${clienteDireccion}</span> de la Ciudad de La Rioja, por la otra parte, en adelante <strong>EL LOCATARIO</strong>, convienen de común acuerdo en celebrar el presente contrato, el que se regirá por las siguientes cláusulas, sin perjuicio de la de Ley, a saber:</span></div>
-
-    <div class="clausula">
-        <strong>PRIMERA: OBJETO</strong><br>
-        EL LOCADOR da en locación al LOCATARIO las prendas que se detallan:
-        <div class="lista-prendas">
-            ${listaPrendas}
-        </div>
-        Las cuales se reciben en perfecto estado de conservación y uso, a entera satisfacción del LOCATARIO, quien ha probado y verificado las prendas objeto del mismo, y ha constatado su excelente estado de conservación.
-    </div>
-
-    <div class="clausula">
-        <strong>SEGUNDA: VIGENCIA</strong><br>
-        El presente contrato tendrá una vigencia de <span class="underline">${diasVigencia}</span> días corridos a partir de la firma del mismo. <span class="underline">${segundaVigencia}</span> El plazo de la locación quedará automáticamente prorrogado a su vencimiento, hasta la real restitución de la totalidad de las prendas. Las mismas deberán ser devueltas en el local Guapo sito en Santiago del Estero 83 de la ciudad de La Rioja.
-    </div>
-
-    <div class="clausula">
-        <strong>TERCERA: PRECIO</strong><br>
-        El precio pactado de común acuerdo del presente contrato se fija en PESOS $ <span class="underline">${terceraVigenciaTotal}</span>. El pago deberá integrarse en un 100% antes del retiro de las prendas del local Guapo. La prórroga obliga al LOCATARIO a abonar una suma equivalente al CINCO POR CIENTO (5%) del precio total del alquiler por cada día de demora, hasta la restitución total de las prendas al LOCADOR. En garantía de la totalidad de las prendas alquiladas se firma un pagaré de aval, presente al pie, el cual integra y es parte del presente contrato.
-    </div>
-
-    <div class="clausula">
-        <strong>CUARTA</strong><br>
-        Las prendas han sido probadas por el LOCATARIO quien las recibe a su entera y total satisfacción. El LOCATARIO se obliga a devolverlas al LOCADOR en el mismo estado en que las recibe, prevaleciendo ante cualquier eventualidad el criterio del LOCADOR sobre el estado de las prendas devueltas. EL LOCADOR no asume ningún tipo de responsabilidad por el uso y destino de las mismas.
-    </div>
-
-    <div class="clausula">
-        <strong>QUINTA: OBLIGACIONES DEL LOCATARIO</strong><br>
-        EL LOCATARIO, además de las mencionadas precedentemente, asume las siguientes obligaciones: • No realizar modificaciones o arreglos de ninguna naturaleza a las prendas. • No realizar lavado de las prendas alquiladas. En caso de incumplimiento de alguna de las obligaciones a cargo del LOCATARIO, se producirá la mora en forma automática y el LOCADOR quedará facultado para declarar rescindida la locación, sin necesidad de interpelación extrajudicial o judicial previa.
-    </div>
-
-    <div class="clausula">
-        <strong>SEXTA</strong><br>
-        En caso de rotura, mancha, deterioro o extravío de las prendas alquiladas, el LOCADOR realizará la reparación, reposición o lo que estime necesario, según su absoluto y único criterio, para garantizar el buen estado de las mismas, debiendo soportar los cargos que la gestión demande enteramente el LOCATARIO.
-    </div>
-
-    <div class="clausula">
-        <strong>SÉPTIMA: CANCELACIÓN</strong><br>
-        De cancelarse el evento motivo del presente contrato, el LOCATARIO deberá abonar al LOCADOR: a) Si las prendas estuvieran en el local y no han sido retiradas para el evento, el cargo por seña que hubiera abonado; en tal caso el LOCATARIO no podrá pretender la devolución de lo ya abonado, quedando para el LOCADOR en concepto de indemnización. b) Si las prendas han sido retiradas rige el contrato en todas sus cláusulas.
-    </div>
-
-    <div class="clausula">
-        <strong>OCTAVA: JURISDICCIÓN</strong><br>
-        Para todos los efectos legales emergentes del presente, las partes se someten al fuero y jurisdicción ordinarios de los Tribunales Civiles de la Ciudad de La Rioja, con renuncia expresa a todo otro que pudiera corresponderles, constituyendo domicilios especiales y legales en los enunciados en este contrato.
-    </div>
-
-    <div class="clausula">
-        <strong>NOVENA</strong><br>
-        En conformidad del presente contrato se firma un ejemplar en la ciudad de La Rioja a los <span class="underline">${dia}</span> días del mes de <span class="underline">${mes}</span> de ${año}.
-    </div>
-
-    <div class="firma">
-        <div>
-            <div>Firma: <span class="underline"></span></div>
-            <div>D.N.I.: <span class="underline"></span></div>
-        </div>
-    </div>
-
-    <div class="pagare">
-        <div class="header">
-            <h1>PAGARÉ</h1>
-        </div>
-        <div class="clausula">
-            La Rioja, <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Vence el <span class="underline espacio-dia">&nbsp;</span> de <span class="underline espacio-mes">&nbsp;</span> de <span class="underline espacio-anio">&nbsp;</span>. Pagaré $ <span class="underline">${valorPagareFormateado}</span> Sin Protesto (Art. 50 D. Ley 5965/63). A señor Schmira Ariel Fernando o a su orden. La cantidad de pesos <span class="underline">${valorPagareFormateado}</span>. Por igual valor recibido en prendas de vestir a su entera satisfacción. Pagadero en Santiago del Estero 83 de la Ciudad de La Rioja.
-            <div style="margin-top: 12px;">
-                <div style="margin-bottom: 6px;">Firmante: <span class="underline espacio-firma">${firmante}</span></div>
-                <div style="margin-bottom: 6px;">Aclaración: <span class="underline espacio-firma">${aclaracion}</span></div>
-                <div>Celular: <span class="underline espacio-firma">${celular}</span></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="botones no-print">
-        <button onclick="window.print()" style="padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Imprimir</button>
-        <button onclick="window.close()" style="padding: 8px 15px; background-color: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cerrar</button>
-    </div>
-</body>
-</html>
-    `;
-
-      const ventanaContrato = window.open("", "_blank", "width=1000,height=1400");
-      if (ventanaContrato) {
-        ventanaContrato.document.write(contenidoContrato);
-        ventanaContrato.document.close();
-      } else {
+      const ok = abrirImpresionContratoDesdeOrden(orden);
+      if (!ok) {
         toast.error("No se pudo abrir la ventana de contrato. Permití ventanas emergentes.");
       }
     } catch (error) {
@@ -1112,70 +735,36 @@ function OrdenesTrabajoContent() {
     }
   };
 
-  const abrirModalEtiquetasArmado = async (orden: OrdenTrabajo) => {
-    if (orden.etiquetas_armado_impresas_at) {
-      toast.info("Las etiquetas de esta orden ya se imprimieron al crearla.");
-      return;
-    }
-    let ordenCompleta = orden;
-    if (!orden.productos_reservados?.length) {
-      try {
-        const res = await fetch(`${getApiBaseUrl()}/ordenes/${orden.id}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        if (res.ok) ordenCompleta = await res.json();
-      } catch {
-        toast.error("No se pudo cargar la orden.");
-        return;
-      }
-    }
-    if (!ordenCompleta.productos_reservados?.length) {
-      toast.error("La orden no tiene prendas para imprimir etiquetas.");
-      return;
-    }
-    setOrdenEtiquetasArmado(ordenCompleta);
-    setModalEtiquetasArmadoAbierto(true);
-  };
-
-  const imprimirEtiquetasArmadoOrden = async () => {
-    if (!ordenEtiquetasArmado) return;
-    setImprimiendoEtiquetasArmado(true);
+  const imprimirEtiquetaResumenOrden = async (orden: OrdenTrabajo) => {
+    setImprimiendoEtiquetaResumen(true);
     try {
-      const payload = ordenEtiquetasArmado.productos_reservados.map((pr) => ({
-        codigoBarra: pr.codigo_barra || "0",
-        clienteNombre: ordenEtiquetasArmado.cliente_nombre || "Cliente",
-        prendaDescripcion: pr.producto_descripcion || "Prenda para armar",
-      }));
-      const { porIndice } = await imprimirEtiquetas100x50Lote(payload);
-      const ok = porIndice.filter((s) => s === "ok").length;
-      if (ok === 0) {
-        toast.error("No se pudo generar ninguna etiqueta.");
+      let ordenCompleta = orden;
+      const res = await fetch(`${getApiBaseUrl()}/ordenes/${orden.id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      if (res.ok) ordenCompleta = await res.json();
+      if (!ordenCompleta.productos_reservados?.length) {
+        toast.error("La orden no tiene prendas para la etiqueta grande.");
         return;
       }
-      const reg = await fetch(
-        `${getApiBaseUrl()}/ordenes/${ordenEtiquetasArmado.id}/registrar-etiquetas-armado`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-      if (!reg.ok) {
-        const err = await reg.json().catch(() => ({}));
-        throw new Error(err.detail || "No se pudo registrar la impresión");
+      const payload = construirEtiquetaResumenDesdeOrden(ordenCompleta);
+      const resultado = await imprimirEtiquetaResumenConjunto(payload);
+      if (resultado.resultado === "ok") {
+        const msg =
+          resultado.metodo === "qz" && resultado.impresora
+            ? `Etiqueta grande enviada a ${resultado.impresora}.`
+            : resultado.mensajeAyuda ||
+              `Etiqueta de la orden #${ordenCompleta.id} enviada a impresión.`;
+        toast.success(msg);
+      } else {
+        toast.error("No se pudo abrir la impresión de la etiqueta grande.");
       }
-      toast.success(`${ok} etiqueta(s) enviadas a impresión.`);
-      setModalEtiquetasArmadoAbierto(false);
-      setOrdenEtiquetasArmado(null);
-      fetchOrdenes();
     } catch (e: unknown) {
       toast.error(
-        e instanceof Error ? e.message : "Error al imprimir etiquetas"
+        e instanceof Error ? e.message : "Error al imprimir la etiqueta grande"
       );
     } finally {
-      setImprimiendoEtiquetasArmado(false);
+      setImprimiendoEtiquetaResumen(false);
     }
   };
 
@@ -1566,11 +1155,24 @@ function OrdenesTrabajoContent() {
     }
     if (!busqueda.trim()) return true;
     const filtro = busqueda.trim().toLowerCase();
+    const filtroCompacto = filtro.replace(/\s/g, "");
+    const filtroNro = filtroCompacto
+      .replace(/^#/, "")
+      .replace(/^n[°ºo]?/, "")
+      .replace(/^orden/, "");
     const nombreCliente = (orden.cliente_nombre || "").toLowerCase();
     const dniCliente = orden.cliente_dni
       ? String(orden.cliente_dni).toLowerCase().replace(/\s/g, "")
       : "";
-    return nombreCliente.includes(filtro) || dniCliente.includes(filtro);
+    const nroOrden = String(orden.id);
+    const nroPresupuesto = (orden.presupuesto_numero || "").toLowerCase();
+    return (
+      nombreCliente.includes(filtro) ||
+      dniCliente.includes(filtroCompacto) ||
+      (filtroNro !== "" && nroOrden.includes(filtroNro)) ||
+      nroPresupuesto.includes(filtro) ||
+      nroPresupuesto.includes(filtroCompacto)
+    );
   });
 
   const totalPaginas = Math.max(1, Math.ceil(ordenesFiltradas.length / ORDENES_POR_PAGINA));
@@ -1612,7 +1214,7 @@ function OrdenesTrabajoContent() {
             <input
               type="text"
               className="form-control"
-              placeholder="Buscar por nombre del cliente o DNI..."
+              placeholder="Buscar por nombre, DNI o N° de orden..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
@@ -1747,14 +1349,10 @@ function OrdenesTrabajoContent() {
                           </button>
                           <button
                             type="button"
-                            className={`btn-action ${orden.etiquetas_armado_impresas_at ? "btn-action--loden-solid" : "btn-action--ver"}`}
-                            onClick={() => void abrirModalEtiquetasArmado(orden)}
-                            disabled={!!orden.etiquetas_armado_impresas_at}
-                            title={
-                              orden.etiquetas_armado_impresas_at
-                                ? "Etiquetas ya impresas al crear la orden"
-                                : "Imprimir etiquetas 100×50 para armar"
-                            }
+                            className="btn-action btn-action--ver"
+                            onClick={() => void imprimirEtiquetaResumenOrden(orden)}
+                            disabled={imprimiendoEtiquetaResumen}
+                            title="Imprimir etiqueta grande (orden, cliente, evento y productos)"
                           >
                             <Printer size={16} strokeWidth={1.75} aria-hidden />
                           </button>
@@ -2092,70 +1690,6 @@ function OrdenesTrabajoContent() {
                 </button>
               </>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={modalEtiquetasArmadoAbierto}
-        onOpenChange={(open) => {
-          if (!open && !imprimiendoEtiquetasArmado) {
-            setModalEtiquetasArmadoAbierto(false);
-            setOrdenEtiquetasArmado(null);
-          }
-        }}
-      >
-        <DialogContent
-          className="w-full border-0"
-          dialogClassName="modal-dialog-centered"
-          dialogStyle={{ maxWidth: "480px", width: "95%" }}
-        >
-          <DialogHeader className="border-bottom pb-3">
-            <DialogTitle>Etiquetas para armar (100×50)</DialogTitle>
-            <DialogDescription className="mb-0">
-              Orden #{ordenEtiquetasArmado?.id} · {ordenEtiquetasArmado?.cliente_nombre}
-              <br />
-              <span className="small">
-                Si imprimís ahora, no podrás reimprimir desde Reportes → Prendas a
-                armar.
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="modal-body py-3">
-            <p className="mb-0 small text-muted">
-              {ordenEtiquetasArmado?.productos_reservados?.length ?? 0} prenda(s).
-            </p>
-          </div>
-          <DialogFooter className="border-top pt-3 d-flex justify-content-end gap-2">
-            <button
-              type="button"
-              className="btn btn-light border"
-              onClick={() => {
-                setModalEtiquetasArmadoAbierto(false);
-                setOrdenEtiquetasArmado(null);
-              }}
-              disabled={imprimiendoEtiquetasArmado}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void imprimirEtiquetasArmadoOrden()}
-              disabled={imprimiendoEtiquetasArmado}
-            >
-              {imprimiendoEtiquetasArmado ? (
-                <>
-                  <i className="bi bi-arrow-clockwise spin me-2"></i>
-                  Imprimiendo...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-printer me-2"></i>
-                  Imprimir etiquetas
-                </>
-              )}
-            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

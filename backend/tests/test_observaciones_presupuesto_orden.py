@@ -77,6 +77,8 @@ def test_orden_api_incluye_observaciones_presupuesto(orden_con_observaciones_mod
     svc = OrdenTrabajoServices()
     orden = svc.obtener_orden_por_id(x.orden_id)
     assert orden["observaciones"] == x.notas
+    assert orden["categoria_evento"] == "Casamiento"
+    assert orden["lugar_evento"] == "Salón"
 
 
 def test_prendas_a_armar_incluye_observaciones_y_arreglos(orden_con_observaciones_modista):
