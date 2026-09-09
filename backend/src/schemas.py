@@ -10,6 +10,9 @@ class UsuarioOut(BaseModel):
     id: int
     email: str
     rol: Role
+    username: Optional[str] = None
+    nombre: Optional[str] = None
+    apellido: Optional[str] = None
     sucursal_nombre: Optional[str] = None
     sucursal_id: Optional[int] = None
 

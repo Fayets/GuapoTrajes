@@ -127,6 +127,9 @@ def read_me(user=Depends(get_current_user)):
         "id": usuario.id,
         "email": usuario.email,
         "rol": usuario.rol,
+        "username": usuario.username,
+        "nombre": usuario.nombre,
+        "apellido": usuario.apellido,
         "sucursal_nombre": sucursal_nombre,
         "sucursal_id": sucursal_id,
     }

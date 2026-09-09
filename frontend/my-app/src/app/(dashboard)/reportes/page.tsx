@@ -74,6 +74,7 @@ interface Contrato {
   seña_pagada?: number | null;
   saldo_pendiente?: number | null;
   metodo_pago?: string | null;
+  contrato_generado_at?: string | null;
 }
 
 type EstadoColaEtiqueta = "pendiente" | "imprimiendo" | "ok" | "error";
@@ -294,7 +295,7 @@ export default function ReportesPage() {
       {
         key: "contratos_por_fecha",
         title: "Contratos por fecha",
-        desc: "Listado de contratos",
+        desc: "Contratos firmados de mercadería entregada",
         icon: FileText,
       },
       {
@@ -854,8 +855,7 @@ export default function ReportesPage() {
         fecha_desde: fechaDesdeContratos,
         fecha_hasta: fechaHastaContratos,
         filtro_fecha: "fecha_creacion",
-        // Solo órdenes: con tipo "todos" el backend sumaba presupuesto+orden y
-        // el toast decía 10 mientras el listado (solo órdenes) mostraba 5.
+        // Solo órdenes con contrato firmado (el backend excluye seña sola).
         tipo: "ordenes_trabajo",
       });
 
@@ -945,7 +945,7 @@ export default function ReportesPage() {
 
     const rows = contratosFiltrados.map((c) => [
       c.numero,
-      formatearFecha(c.fecha_creacion),
+      formatearFecha(c.contrato_generado_at || c.fecha_creacion),
       c.cliente_nombre || "N/A",
       c.cliente_dni ? String(c.cliente_dni) : "N/A",
       formatearFecha(c.fecha_evento),
@@ -1015,9 +1015,23 @@ export default function ReportesPage() {
       const data = await response.json();
       const ordenCompleta = data.data || data;
 
-      if (ordenCompleta.es_precliente || !ordenCompleta.cliente_dni || !ordenCompleta.cliente_direccion) {
+      // Precliente sin DNI del titular: se puede ver si hay firmante (quien retira)
+      // o si el contrato ya fue generado. No bloquear la reimpresión desde el reporte.
+      const tieneFirmante =
+        ordenCompleta.tiene_firmante_anexo === true ||
+        Boolean((ordenCompleta.firmante_nombre || "").trim());
+      const titularCompleto =
+        Boolean((ordenCompleta.cliente_dni || "").trim()) &&
+        Boolean((ordenCompleta.cliente_direccion || "").trim());
+      const yaGenerado = Boolean(
+        ordenCompleta.contrato_generado_at || contrato.contrato_generado_at
+      );
+
+      if (!tieneFirmante && !titularCompleto && !yaGenerado) {
         toast.error(
-          "Este presupuesto pertenece a un precliente. Para generar el contrato se requiere DNI y Dirección."
+          ordenCompleta.es_precliente
+            ? "Este contrato es de precliente y no tiene firmante anexado. Completalo desde Órdenes."
+            : "Para ver el contrato se requiere DNI y Dirección del cliente."
         );
         return;
       }
@@ -2927,7 +2941,7 @@ export default function ReportesPage() {
               Contratos por Fecha
             </h5>
             <p className="text-muted small mb-0">
-              Listado de órdenes de trabajo (contratos) en un rango de fechas
+              Contratos firmados de mercadería entregada. No incluye órdenes solo con seña.
             </p>
           </div>
           <div className="card-body">
@@ -3022,7 +3036,7 @@ export default function ReportesPage() {
                       {filtroBusquedaContratos.trim()
                         ? "No se encontraron contratos que coincidan con la búsqueda."
                         : me?.role === "ADMIN" || me?.role === "SUPER_ADMIN"
-                          ? "No hay órdenes de trabajo en el rango de fechas."
+                          ? "No hay contratos firmados de mercadería entregada en el rango de fechas."
                           : "Solo se pueden ver contratos de órdenes de trabajo con saldo pendiente cero."}
                     </p>
                   </div>
@@ -3063,8 +3077,8 @@ export default function ReportesPage() {
                             <i className="bi bi-info-circle me-2"></i>
                             <span className="small">
                               {me?.role === "ADMIN" || me?.role === "SUPER_ADMIN"
-                                ? "Órdenes de trabajo del período (incluye con saldo pendiente)"
-                                : "Órdenes de trabajo con saldo pendiente cero"}
+                                ? "Contratos firmados del período (incluye con saldo pendiente)"
+                                : "Contratos firmados con saldo pendiente cero"}
                               {filtroBusquedaContratos.trim()
                                 ? ` (filtrado de ${contratos.filter((c) => c.tipo === "orden_trabajo").length})`
                                 : ""}
@@ -3107,7 +3121,10 @@ export default function ReportesPage() {
                                       {contrato.numero}
                                     </td>
                                     <td>
-                                      {formatearFecha(contrato.fecha_creacion)}
+                                      {formatearFecha(
+                                        contrato.contrato_generado_at ||
+                                          contrato.fecha_creacion
+                                      )}
                                     </td>
                                     <td>{contrato.cliente_nombre || "N/A"}</td>
                                     <td>

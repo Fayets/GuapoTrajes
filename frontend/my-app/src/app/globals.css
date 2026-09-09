@@ -195,6 +195,17 @@ body {
   font-weight: 600;
 }
 
+.sidebar-modern-user-name {
+  color: #f8fafc;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sidebar-modern-user-role {
   color: #9ca3af;
   font-size: 0.7rem;

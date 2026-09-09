@@ -8,12 +8,14 @@ from typing import List
 router = APIRouter()
 service = ConfigProductosServices()
 
-# Todas las rutas requieren ADMIN o SUPER_ADMIN (igual que Ajustes en el frontend)
-_dep = [Depends(get_current_user), Depends(require_role("ADMIN", "SUPER_ADMIN"))]
+# Lectura: cualquier usuario autenticado (empleados usan los catálogos para filtrar productos).
+# Escritura: solo ADMIN o SUPER_ADMIN (igual que Ajustes en el frontend).
+_dep_auth = [Depends(get_current_user)]
+_dep_admin = [Depends(get_current_user), Depends(require_role("ADMIN", "SUPER_ADMIN"))]
 
 
 # ----- Líneas -----
-@router.get("/productos/lineas", response_model=List[schemas.ProductoLineaResponse], dependencies=_dep)
+@router.get("/productos/lineas", response_model=List[schemas.ProductoLineaResponse], dependencies=_dep_auth)
 def get_lineas(current_user=Depends(get_current_user)):
     try:
         items = service.get_lineas()
@@ -22,7 +24,7 @@ def get_lineas(current_user=Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/productos/lineas", response_model=schemas.ProductoLineaResponse, status_code=201, dependencies=_dep)
+@router.post("/productos/lineas", response_model=schemas.ProductoLineaResponse, status_code=201, dependencies=_dep_admin)
 def create_linea(data: schemas.ProductoLineaCreate, current_user=Depends(get_current_user)):
     try:
         return service.create_linea(data)
@@ -32,13 +34,13 @@ def create_linea(data: schemas.ProductoLineaCreate, current_user=Depends(get_cur
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/productos/lineas/{id}", status_code=204, dependencies=_dep)
+@router.delete("/productos/lineas/{id}", status_code=204, dependencies=_dep_admin)
 def delete_linea(id: int, current_user=Depends(get_current_user)):
     service.delete_linea(id)
 
 
 # ----- Talles -----
-@router.get("/productos/talles", response_model=List[schemas.ProductoTalleResponse], dependencies=_dep)
+@router.get("/productos/talles", response_model=List[schemas.ProductoTalleResponse], dependencies=_dep_auth)
 def get_talles(current_user=Depends(get_current_user)):
     try:
         items = service.get_talles()
@@ -47,7 +49,7 @@ def get_talles(current_user=Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/productos/talles", response_model=schemas.ProductoTalleResponse, status_code=201, dependencies=_dep)
+@router.post("/productos/talles", response_model=schemas.ProductoTalleResponse, status_code=201, dependencies=_dep_admin)
 def create_talle(data: schemas.ProductoTalleCreate, current_user=Depends(get_current_user)):
     try:
         return service.create_talle(data)
@@ -57,13 +59,13 @@ def create_talle(data: schemas.ProductoTalleCreate, current_user=Depends(get_cur
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/productos/talles/{id}", status_code=204, dependencies=_dep)
+@router.delete("/productos/talles/{id}", status_code=204, dependencies=_dep_admin)
 def delete_talle(id: int, current_user=Depends(get_current_user)):
     service.delete_talle(id)
 
 
 # ----- Telas -----
-@router.get("/productos/telas", response_model=List[schemas.ProductoTelaResponse], dependencies=_dep)
+@router.get("/productos/telas", response_model=List[schemas.ProductoTelaResponse], dependencies=_dep_auth)
 def get_telas(current_user=Depends(get_current_user)):
     try:
         items = service.get_telas()
@@ -72,7 +74,7 @@ def get_telas(current_user=Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/productos/telas", response_model=schemas.ProductoTelaResponse, status_code=201, dependencies=_dep)
+@router.post("/productos/telas", response_model=schemas.ProductoTelaResponse, status_code=201, dependencies=_dep_admin)
 def create_tela(data: schemas.ProductoTelaCreate, current_user=Depends(get_current_user)):
     try:
         return service.create_tela(data)
@@ -82,13 +84,13 @@ def create_tela(data: schemas.ProductoTelaCreate, current_user=Depends(get_curre
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/productos/telas/{id}", status_code=204, dependencies=_dep)
+@router.delete("/productos/telas/{id}", status_code=204, dependencies=_dep_admin)
 def delete_tela(id: int, current_user=Depends(get_current_user)):
     service.delete_tela(id)
 
 
 # ----- Colores -----
-@router.get("/productos/colores", response_model=List[schemas.ProductoColorResponse], dependencies=_dep)
+@router.get("/productos/colores", response_model=List[schemas.ProductoColorResponse], dependencies=_dep_auth)
 def get_colores(current_user=Depends(get_current_user)):
     try:
         items = service.get_colores()
@@ -97,7 +99,7 @@ def get_colores(current_user=Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/productos/colores", response_model=schemas.ProductoColorResponse, status_code=201, dependencies=_dep)
+@router.post("/productos/colores", response_model=schemas.ProductoColorResponse, status_code=201, dependencies=_dep_admin)
 def create_color(data: schemas.ProductoColorCreate, current_user=Depends(get_current_user)):
     try:
         return service.create_color(data)
@@ -107,6 +109,6 @@ def create_color(data: schemas.ProductoColorCreate, current_user=Depends(get_cur
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/productos/colores/{id}", status_code=204, dependencies=_dep)
+@router.delete("/productos/colores/{id}", status_code=204, dependencies=_dep_admin)
 def delete_color(id: int, current_user=Depends(get_current_user)):
     service.delete_color(id)

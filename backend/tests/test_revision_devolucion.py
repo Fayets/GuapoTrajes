@@ -220,6 +220,39 @@ def test_listar_incluye_orden_solo_con_revision(orden_dos_productos_contrato):
     with db_session:
         o = OrdenTrabajo.get(id=x.orden_id)
         assert len(list(o.productos_reservados)) == 0
+    # API no debe rehidratar saco/pantalón ya ingresados desde el presupuesto
+    assert found["productos_reservados"] == []
+
+
+def test_api_no_reaparece_prendas_ya_devueltas_con_revision(orden_dos_productos_contrato):
+    """Regresión: OK + revisión → al listar/obtener no vuelven las prendas OK."""
+    x = orden_dos_productos_contrato
+    svc = OrdenTrabajoServices()
+    svc.completar_devolucion(
+        x.orden_id,
+        usuario_id=x.usuario_id,
+        envios=[
+            DevolucionEnvioBatchSchema(productos_ids=[x.id_ok], destino="SALON"),
+        ],
+    )
+    svc.registrar_devolucion_parcial(
+        x.orden_id,
+        productos_ids=[x.id_rev],
+        descripcion="Camisa manchada",
+        usuario_id=x.usuario_id,
+        destino="SALON",
+    )
+
+    lista = svc.listar_ordenes_trabajo()
+    found = next(row for row in lista if row["id"] == x.orden_id)
+    ids_api = {p["producto_id"] for p in found["productos_reservados"]}
+    assert x.id_ok not in ids_api
+    assert found["productos_reservados"] == []
+
+    detalle = svc.obtener_orden_por_id(x.orden_id)
+    ids_det = {p["producto_id"] for p in detalle["productos_reservados"]}
+    assert x.id_ok not in ids_det
+    assert detalle["productos_reservados"] == []
 
 
 def test_regreso_lavanderia_alerta_revision(orden_dos_productos_contrato):

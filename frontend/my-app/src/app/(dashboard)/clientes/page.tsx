@@ -835,7 +835,7 @@ export default function ClientesPage() {
                           >
                             <Eye size={16} strokeWidth={1.75} aria-hidden />
                           </Link>
-                          <RoleGate allow={["ADMIN", "SUPER_ADMIN"]}>
+                          <RoleGate allow={["ADMIN", "SUPER_ADMIN", "EMPLEADO"]}>
                             <button
                               type="button"
                               className="btn-action btn-action--credito"

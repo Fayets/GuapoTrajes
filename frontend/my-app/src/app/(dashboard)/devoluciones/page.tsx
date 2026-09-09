@@ -54,12 +54,19 @@ function ordenCoincideBusquedaDevoluciones(
   );
   const terminoSinEspacios = termino.replace(/\s/g, "");
 
+  const firmanteDniSinEspacios = normalizarParaBusqueda(
+    (orden.firmante_dni ?? "").toString().replace(/\s/g, "")
+  );
+
   const camposOrden = [
     orden.cliente_nombre,
     orden.cliente_dni,
     dniSinEspacios,
     orden.cliente_direccion,
     orden.cliente_celular,
+    orden.firmante_nombre,
+    orden.firmante_dni,
+    firmanteDniSinEspacios,
     orden.presupuesto_numero,
     String(orden.id ?? ""),
     String(orden.presupuesto_id ?? ""),
@@ -667,7 +674,10 @@ export default function DevolucionesPage() {
 
   const abrirModalCompletada = (orden: OrdenTrabajo) => {
     const init: Record<number, AsignacionDevolucionCompleta> = {};
-    (orden.productos_reservados || []).forEach((p) => {
+    const prendasPendientes = (orden.productos_reservados || []).filter(
+      (p) => !(p as { es_historico?: boolean }).es_historico
+    );
+    prendasPendientes.forEach((p) => {
       init[p.producto_id] = {
         incluido: true,
         destino: "LAVANDERIA",
@@ -676,12 +686,21 @@ export default function DevolucionesPage() {
       };
     });
     setAsignacionesCompletada(init);
-    setOrdenSeleccionada(orden);
+    setOrdenSeleccionada({
+      ...orden,
+      productos_reservados: prendasPendientes,
+    });
     setShowCompletadaModal(true);
   };
 
   const abrirModalParcial = (orden: OrdenTrabajo) => {
-    setOrdenSeleccionada(orden);
+    const prendasPendientes = (orden.productos_reservados || []).filter(
+      (p) => !(p as { es_historico?: boolean }).es_historico
+    );
+    setOrdenSeleccionada({
+      ...orden,
+      productos_reservados: prendasPendientes,
+    });
     setPrendasSeleccionadas([]);
     setDescripcionParcial("");
     setShowParcialModal(true);
@@ -726,7 +745,7 @@ export default function DevolucionesPage() {
                 <input
                   type="search"
                   className="form-control"
-                  placeholder="Buscar cliente, orden o prenda..."
+                  placeholder="Buscar cliente, firmante, orden o prenda..."
                   value={filtroBusqueda}
                   onChange={(e) => setFiltroBusqueda(e.target.value)}
                   onKeyDown={(e) => {
@@ -737,8 +756,8 @@ export default function DevolucionesPage() {
                 />
               </div>
               <p className="text-muted small mb-0 mt-2">
-                Podés buscar aunque no recuerdes el nombre: usá el código de barra o la
-                descripción de la prenda que traen.
+                Podés buscar por cliente, por quien retiró (firmante), DNI, código de
+                barra o descripción de la prenda.
               </p>
             </div>
             <div className="table-responsive">
@@ -748,6 +767,7 @@ export default function DevolucionesPage() {
                     <th>Orden ID</th>
                     <th>Presupuesto</th>
                     <th>Cliente</th>
+                    <th>Firmante</th>
                     <th>Fecha Evento</th>
                     <th>Fecha Devolución</th>
                     <th className="text-center">Acciones</th>
@@ -756,7 +776,7 @@ export default function DevolucionesPage() {
                 <tbody>
                   {ordenesAbiertasFiltradas.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center text-muted py-4">
+                      <td colSpan={7} className="text-center text-muted py-4">
                         <i className="bi bi-search me-2"></i>
                         No se encontraron órdenes que coincidan con la búsqueda
                       </td>
@@ -777,6 +797,7 @@ export default function DevolucionesPage() {
                           { locale: es }
                         )
                       : "N/A";
+                    const firmanteVisible = (orden.firmante_nombre || "").trim();
 
                     return (
                       <tr key={orden.id}>
@@ -791,6 +812,7 @@ export default function DevolucionesPage() {
                           )}
                         </td>
                         <td>{orden.cliente_nombre}</td>
+                        <td>{firmanteVisible || "—"}</td>
                         <td>{fechaEventoFormateada}</td>
                         <td>{fechaDevolucionFormateada}</td>
                         <td className="text-center">
