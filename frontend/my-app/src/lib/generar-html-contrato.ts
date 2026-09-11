@@ -26,6 +26,10 @@ export type OrdenParaContratoImpreso = {
   seña_pagada?: number | null;
   saldo_pendiente?: number | null;
   contrato_generado_at?: string | null;
+  productos_reservados?: Array<{
+    producto_descripcion?: string | null;
+    producto_nombre?: string | null;
+  }> | null;
 };
 
 function esc(text: string): string {
@@ -75,6 +79,16 @@ function partesFechaFirma(orden: OrdenParaContratoImpreso): {
   return ahoraArgentinaPartes();
 }
 
+function nombresPrendasOracion(orden: OrdenParaContratoImpreso): string {
+  const nombres = (orden.productos_reservados || [])
+    .map((p) =>
+      (p.producto_descripcion || p.producto_nombre || "").trim()
+    )
+    .filter(Boolean)
+    .map((nombre) => `• ${nombre}`);
+  return nombres.join(", ");
+}
+
 function linea(valor: string, minEm: number): string {
   const v = (valor || "").trim();
   return `<span class="u" style="min-width:${minEm}em">${v ? esc(v) : "&nbsp;"}</span>`;
@@ -90,6 +104,8 @@ export function generarHtmlContratoAlquiler(
   const valorPagare = formatPrecioAr(precioAlquiler * 5);
   const anio = String(fecha.año);
   const ordenNro = String(orden.id).padStart(6, "0");
+  const prendas = nombresPrendasOracion(orden);
+  const menciónPrendas = prendas ? `: ${esc(prendas)}.` : ".";
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -116,23 +132,32 @@ export function generarHtmlContratoAlquiler(
       max-width: 100%;
       overflow: hidden;
     }
-    h1 {
+    .cabecera {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin: 0 0 1px;
+    }
+    .cabecera h1 {
+      flex: 1;
       font-size: 14pt;
       font-weight: 700;
       text-align: center;
       letter-spacing: 0.4px;
-      margin: 0 0 1px;
+      margin: 0;
+      line-height: 1.15;
+    }
+    .cabecera .orden {
+      flex-shrink: 0;
+      font-size: 13pt;
+      font-weight: 700;
+      white-space: nowrap;
       line-height: 1.15;
     }
     .sub {
       text-align: center;
       font-size: 11pt;
       font-weight: 700;
-      margin: 0 0 1px;
-    }
-    .orden {
-      text-align: center;
-      font-size: 9pt;
       margin: 0 0 8px;
     }
     .cl { margin: 0 0 6px; text-align: justify; }
@@ -148,19 +173,25 @@ export function generarHtmlContratoAlquiler(
       word-wrap: break-word;
     }
     .firma-loc {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
       margin: 10px 0 8px;
-    }
-    .firma-loc .row {
-      display: flex;
-      align-items: flex-end;
-      gap: 8px;
-      margin-top: 8px;
       font-size: 11pt;
-      text-align: left;
     }
-    .firma-loc .u {
-      flex: 1;
-      min-width: 0;
+    .firma-loc td {
+      padding: 8px 0 0;
+      vertical-align: bottom;
+    }
+    .firma-loc .spacer { width: 50%; }
+    .firma-loc .etiq {
+      width: 1%;
+      white-space: nowrap;
+      padding-right: 8px;
+    }
+    .firma-loc .campo {
+      border-bottom: 1px solid #000;
+      height: 1.25em;
     }
     .u {
       display: inline-block;
@@ -181,6 +212,8 @@ export function generarHtmlContratoAlquiler(
     }
     .pagare h1 {
       font-size: 16pt;
+      font-weight: 700;
+      text-align: center;
       letter-spacing: 5px;
       margin: 0 0 8px;
     }
@@ -198,17 +231,31 @@ export function generarHtmlContratoAlquiler(
       overflow-wrap: anywhere;
       word-wrap: break-word;
     }
-    .pagare .firmas {
-      display: flex;
-      gap: 16px;
-      margin-top: 16px;
-      font-size: 12pt;
+    .pagare p.monto-vista {
+      white-space: nowrap;
+      overflow-wrap: normal;
+      word-wrap: normal;
     }
-    .pagare .firmas .col { flex: 1; min-width: 0; }
-    .pagare .cel {
-      margin-top: 10px;
-      text-align: right;
-      font-size: 12pt;
+    .pagare p.monto-vista .u {
+      min-width: 6.5em !important;
+    }
+    .pagare .firma-unica {
+      margin-top: 18px;
+      display: flex;
+      justify-content: flex-end;
+    }
+    .pagare .firma-unica .bloque {
+      width: 58%;
+      text-align: center;
+    }
+    .pagare .firma-unica .raya {
+      border-bottom: 1px solid #000;
+      min-height: 1.35em;
+      margin-bottom: 3px;
+    }
+    .pagare .firma-unica .leyenda {
+      font-size: 9.5pt;
+      line-height: 1.2;
     }
     .no-print { text-align: center; margin-top: 12px; }
     .no-print button {
@@ -230,13 +277,15 @@ export function generarHtmlContratoAlquiler(
 </head>
 <body>
   <div class="sheet">
-    <h1>CONTRATO DE ALQUILER DE PRENDAS</h1>
+    <div class="cabecera">
+      <h1>CONTRATO DE ALQUILER DE PRENDAS</h1>
+      <div class="orden">Orden N° ${esc(ordenNro)}</div>
+    </div>
     <div class="sub">GUAPO TRAJES — La Rioja</div>
-    <div class="orden">Orden N° ${esc(ordenNro)}</div>
 
     <div class="cl">
       <h2>1. PARTES</h2>
-      <p>El LOCADOR Schmira Ariel Fernando, local Guapo Trajes, alquila prendas al LOCATARIO, ${linea(locatario.nombre, 12)}, con domicilio en ${linea(locatario.direccion, 14)}, quien las recibe habiéndolas probado y verificado, en perfecto estado.</p>
+      <p>El LOCADOR Schmira Ariel Fernando, local Guapo Trajes, alquila prendas al LOCATARIO, ${linea(locatario.nombre, 12)}, con domicilio en ${linea(locatario.direccion, 14)}, quien las recibe habiéndolas probado y verificado, en perfecto estado${menciónPrendas}</p>
     </div>
 
     <div class="cl">
@@ -277,24 +326,29 @@ export function generarHtmlContratoAlquiler(
     <div class="cl">
       <h2>9. FIRMA</h2>
       <p>Se firma un ejemplar en la ciudad de La Rioja, a los ${linea(String(fecha.dia), 3)} días del mes de ${linea(fecha.mes, 8)} de ${esc(anio)}, dejando constancia de la fecha, firma y DNI del LOCATARIO.</p>
-      <div class="firma-loc">
-        <div class="row">Firma: ${linea("", 28)}</div>
-      </div>
+      <table class="firma-loc">
+        <tr>
+          <td class="spacer"></td>
+          <td class="etiq">Firma:</td>
+          <td class="campo">&nbsp;</td>
+        </tr>
+      </table>
     </div>
 
     <div class="pagare">
       <h1>PAGARÉ</h1>
       <div class="vence">Vence el ${linea("", 3.2)} de ${linea("", 9)} de ${linea(anio, 4)}</div>
       <p>La Rioja, ${linea("", 14)} de ${esc(anio)}</p>
-      <p>PAGARÉ a la vista la cantidad de $ ${linea(valorPagare, 10)}&nbsp;&nbsp;Sin Protesto (Art. 50, D. Ley 5965/63)</p>
-      <p>Al señor Schmira Ariel Fernando o a su orden, la cantidad de pesos: ${linea(valorPagare, 14)}</p>
+      <p class="monto-vista">PAGARÉ a la vista la cantidad de $ ${linea(valorPagare, 6.5)} Sin Protesto (Art. 50, D. Ley 5965/63)</p>
+      <p>Al señor Schmira Ariel Fernando o a su orden, la cantidad de pesos: ${linea("", 18)}</p>
       <p>Por igual valor recibido en prendas de vestir a su entera satisfacción.</p>
       <p>Pagadero en Santiago del Estero 83, Ciudad de La Rioja.</p>
-      <div class="firmas">
-        <div class="col">Firmante: ${linea("", 16)}</div>
-        <div class="col">Aclaración: ${linea("", 16)}</div>
+      <div class="firma-unica">
+        <div class="bloque">
+          <div class="raya">&nbsp;</div>
+          <div class="leyenda">(Firma, aclaración y celular)</div>
+        </div>
       </div>
-      <div class="cel">Celular: ${linea("", 16)}</div>
     </div>
   </div>
 
