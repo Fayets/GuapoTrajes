@@ -264,8 +264,10 @@ class ProductResponse(ProductBase):
     destino_cliente_celular: Optional[str] = None
     # Si el cliente envía fecha_retiro + fecha_devolucion en GET /productos/all
     disponible_en_fechas: Optional[bool] = None
+    conflicto_disponibilidad: Optional[dict] = None
     # Si incluir_ventana_reserva=1: hoy está en [R-5,R] (presupuesto u orden)
     en_ventana_reserva_hoy: Optional[bool] = None
+    reserva_venta: Optional[dict] = None
     # Migración única: fecha en que se imprimió la etiqueta 50×25 de inventario
     etiqueta_inventario_impresa_at: Optional[datetime] = None
 
@@ -384,6 +386,11 @@ class ConvertirPreclienteRequest(BaseModel):
     direccion: str
     dni: str
     fecha_nacimiento: Optional[date] = None
+    usar_cliente_id: Optional[int] = Field(
+        None,
+        description="Si hay un cliente existente, confirmar vincular a este ID en lugar de crear otro.",
+    )
+    confirmar_existente: bool = False
 
 #Evento
 class EventoCreate(BaseModel):
@@ -762,6 +769,10 @@ class CompletarDevolucionSchema(BaseModel):
     envios: Optional[List[DevolucionEnvioBatchSchema]] = Field(
         None,
         description="Varios lotes (un remito por lote). Si viene con ítems, reemplaza destino/lavanderia/modista legacy.",
+    )
+    cerrar_revisiones_ok: bool = Field(
+        False,
+        description="Si no quedan prendas en la orden, resuelve revisiones abiertas y completa.",
     )
 
     @model_validator(mode="after")

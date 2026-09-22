@@ -35,8 +35,28 @@ from src.services.auditoria_services import nombre_usuario, registrar_auditoria
 
 logger = logging.getLogger(__name__)
 
+CONTRATO_NUMERO_INICIAL = 500
+
 # Prefijo en notas de taller para prendas con revisión pendiente (devolución parcial).
 from src.revision_devolucion import PREFIJO_REVISION_NOTA
+
+
+def _siguiente_numero_contrato() -> int:
+    """Próximo número secuencial de contrato (por orden de primera impresión)."""
+    numeros = [
+        o.numero_contrato
+        for o in OrdenTrabajo.select()
+        if getattr(o, "numero_contrato", None) is not None
+    ]
+    if not numeros:
+        return CONTRATO_NUMERO_INICIAL
+    return max(numeros) + 1
+
+
+def _asignar_numero_contrato_si_corresponde(orden: OrdenTrabajo) -> None:
+    if getattr(orden, "numero_contrato", None) is not None:
+        return
+    orden.numero_contrato = _siguiente_numero_contrato()
 
 
 def _revisiones_abiertas_orden(orden) -> list:
@@ -566,6 +586,7 @@ class OrdenTrabajoServices:
                         "extra_discount_applied_by_nombre": f"{descuento_applied_by.nombre} {descuento_applied_by.apellido}" if descuento_applied_by else None,
                         "extra_discount_created_at": isoformat_ar(descuento_created_at),
                         "contrato_generado_at": isoformat_ar(o.contrato_generado_at),
+                        "numero_contrato": getattr(o, "numero_contrato", None),
                         "etiquetas_armado_impresas_at": (
                         isoformat_ar(o.etiquetas_armado_impresas_at)
                             if getattr(o, "etiquetas_armado_impresas_at", None)
@@ -642,6 +663,7 @@ class OrdenTrabajoServices:
                     "extra_discount_applied_by_nombre": f"{descuento_applied_by.nombre} {descuento_applied_by.apellido}" if descuento_applied_by else None,
                     "extra_discount_created_at": isoformat_ar(descuento_created_at),
                     "contrato_generado_at": isoformat_ar(orden.contrato_generado_at),
+                    "numero_contrato": getattr(orden, "numero_contrato", None),
                     "etiquetas_armado_impresas_at": (
                         isoformat_ar(orden.etiquetas_armado_impresas_at)
                         if getattr(orden, "etiquetas_armado_impresas_at", None)
@@ -1524,6 +1546,7 @@ class OrdenTrabajoServices:
                         "success": True,
                         "data": {
                             "orden_id": orden.id,
+                            "numero_contrato": getattr(orden, "numero_contrato", None),
                             "contrato_generado_at": isoformat_ar(orden.contrato_generado_at),
                             "reimpresion": True,
                             **firmante_payload,
@@ -1536,6 +1559,7 @@ class OrdenTrabajoServices:
                     if uid is not None:
                         usuario_db = Usuario.get(id=int(uid))
                 orden.contrato_generado_at = ahora_ar()
+                _asignar_numero_contrato_si_corresponde(orden)
                 if usuario_db:
                     orden.contrato_generado_por = usuario_db
                 for pr in list(orden.productos_reservados):
@@ -1543,7 +1567,10 @@ class OrdenTrabajoServices:
                     if prod:
                         prod.estado = EstadoProducto.CLIENTE
                 flush()
-                detalle_auditoria = {"presupuesto_numero": orden.presupuesto.numero}
+                detalle_auditoria = {
+                    "presupuesto_numero": orden.presupuesto.numero,
+                    "numero_contrato": orden.numero_contrato,
+                }
                 if es_precliente:
                     detalle_auditoria["titular_precliente"] = True
                 if firmante_payload.get("tiene_firmante_anexo"):
@@ -1554,7 +1581,7 @@ class OrdenTrabajoServices:
                     AccionAuditoria.CONTRATO_GENERADO,
                     "orden",
                     orden.id,
-                    f"Contrato generado — orden #{orden.id}",
+                    f"Contrato N° {orden.numero_contrato} generado — orden #{orden.id}",
                     detalle_auditoria,
                 )
                 return {
@@ -1562,6 +1589,7 @@ class OrdenTrabajoServices:
                     "success": True,
                     "data": {
                         "orden_id": orden.id,
+                        "numero_contrato": orden.numero_contrato,
                         "contrato_generado_at": isoformat_ar(orden.contrato_generado_at),
                         "contrato_generado_por_id": usuario_db.id if usuario_db else None,
                         "contrato_generado_por_nombre": nombre_usuario(usuario_db),
@@ -1621,6 +1649,7 @@ class OrdenTrabajoServices:
                         ]
                         resultado.append({
                             "orden_id": o.id,
+                            "numero_contrato": getattr(o, "numero_contrato", None),
                             "presupuesto_numero": getattr(presupuesto, "numero", "") or "",
                             "cliente_nombre": cliente_nombre,
                             "cliente_dni": cliente_dni,
@@ -2021,6 +2050,7 @@ class OrdenTrabajoServices:
         lavanderia_id: Optional[int] = None,
         modista_id: Optional[int] = None,
         envios: Optional[List[Any]] = None,
+        cerrar_revisiones_ok: bool = False,
     ) -> dict:
         """Completar la devolución. Modo legacy: un destino para todos los productos.
         Modo envíos: varios lotes (remitos) con destino/lavandería/modista por lote;
@@ -2044,17 +2074,32 @@ class OrdenTrabajoServices:
                 productos_en_orden = {pr.producto.id: pr for pr in orden.productos_reservados}
                 revisiones_abiertas = _revisiones_abiertas_orden(orden)
 
-                # Sin prendas reservadas: solo se puede finalizar si no hay revisiones abiertas.
+                if cerrar_revisiones_ok and productos_en_orden:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "No se puede cerrar la revisión y el contrato mientras queden "
+                            "prendas en el cliente."
+                        ),
+                    )
+
+                # Sin prendas reservadas: solo se puede finalizar si no hay revisiones abiertas
+                # (salvo cierre explícito de revisión).
                 if not productos_en_orden:
                     if revisiones_abiertas:
-                        raise HTTPException(
-                            status_code=403,
-                            detail=(
-                                "Hay prendas en revisión. No se puede dar de baja el contrato "
-                                "ni marcar la devolución como completada. No romper el pagaré "
-                                "hasta finalizar la revisión."
-                            ),
-                        )
+                        if not cerrar_revisiones_ok:
+                            raise HTTPException(
+                                status_code=403,
+                                detail=(
+                                    "Hay prendas en revisión. No se puede dar de baja el contrato "
+                                    "ni marcar la devolución como completada. No romper el pagaré "
+                                    "hasta finalizar la revisión."
+                                ),
+                            )
+                        for rev in revisiones_abiertas:
+                            rev.estado = EstadoRevisionDevolucion.RESUELTA.value
+                            rev.resuelta_at = ahora_ar()
+                            rev.resuelta_por = usuario
                     orden.estado = "Completada"
                     orden.devolucion_recibida_por = usuario
                     orden.devolucion_recibida_at = ahora_ar()

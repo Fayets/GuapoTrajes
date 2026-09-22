@@ -288,3 +288,58 @@ def test_regreso_lavanderia_alerta_revision(orden_dos_productos_contrato):
     with db_session:
         p = Producto.get(id=x.id_rev)
         assert p.estado == EstadoProducto.SALON
+
+
+def _dejar_solo_revision(x):
+    svc = OrdenTrabajoServices()
+    svc.completar_devolucion(
+        x.orden_id,
+        usuario_id=x.usuario_id,
+        envios=[
+            DevolucionEnvioBatchSchema(productos_ids=[x.id_ok], destino="SALON")
+        ],
+    )
+    svc.registrar_devolucion_parcial(
+        x.orden_id,
+        productos_ids=[x.id_rev],
+        descripcion="Revisión atajo",
+        usuario_id=x.usuario_id,
+        destino="SALON",
+    )
+    return svc
+
+
+def test_cerrar_revisiones_ok_finaliza(orden_dos_productos_contrato):
+    x = orden_dos_productos_contrato
+    svc = _dejar_solo_revision(x)
+    out = svc.completar_devolucion(
+        x.orden_id,
+        usuario_id=x.usuario_id,
+        destino="SALON",
+        cerrar_revisiones_ok=True,
+    )
+    assert out["data"]["orden_completada"] is True
+    with db_session:
+        o = OrdenTrabajo.get(id=x.orden_id)
+        assert o.estado == "Completada"
+        abiertas = [
+            r
+            for r in list(RevisionDevolucion.select())
+            if r.orden.id == x.orden_id
+            and r.estado == EstadoRevisionDevolucion.ABIERTA.value
+        ]
+        assert abiertas == []
+
+
+def test_cerrar_revisiones_ok_con_prendas_pendientes_400(orden_dos_productos_contrato):
+    x = orden_dos_productos_contrato
+    svc = OrdenTrabajoServices()
+    with pytest.raises(HTTPException) as ei:
+        svc.completar_devolucion(
+            x.orden_id,
+            usuario_id=x.usuario_id,
+            destino="SALON",
+            cerrar_revisiones_ok=True,
+        )
+    assert ei.value.status_code == 400
+

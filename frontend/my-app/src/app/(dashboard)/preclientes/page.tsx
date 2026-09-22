@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { scheduleUndoableDelete } from "@/lib/undoable-delete";
 import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
+import { parseClienteExistenteDetail } from "@/lib/cliente-existente";
 
 type Precliente = {
   id: string;
@@ -291,43 +292,50 @@ export default function PreclientesPage() {
     }
 
     try {
-      const res = await fetch(
-        `${API_BASE}/preclientes/convertir/${preclienteIdConvertir}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            dni: formDataCliente.dni.trim(),
-            direccion: formDataCliente.direccion.trim(),
-            fecha_nacimiento: formDataCliente.fecha_nacimiento?.trim() || null,
-          }),
+      const enviar = async (usarClienteId?: number) => {
+        const res = await fetch(
+          `${API_BASE}/preclientes/convertir/${preclienteIdConvertir}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              dni: formDataCliente.dni.trim(),
+              direccion: formDataCliente.direccion.trim(),
+              fecha_nacimiento: formDataCliente.fecha_nacimiento?.trim() || null,
+              usar_cliente_id: usarClienteId ?? null,
+            }),
+          }
+        );
+        const result = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          const parsed = parseClienteExistenteDetail(result);
+          const ok = window.confirm(
+            `${parsed?.mensaje || "Este precliente ya está registrado como cliente."}\n\n¿Continuar con ese cliente?`
+          );
+          if (ok && parsed?.cliente?.id) {
+            return enviar(parsed.cliente.id);
+          }
+          return;
         }
-      );
-
-      const result = await res.json();
-      console.log("Respuesta del servidor:", result);
-
-      if (!res.ok || !result.success) {
-        let errorMessage = result.detail || result.message || "No se pudo convertir el precliente";
-        
-        // Mensajes más específicos para diferentes tipos de error
-        if (errorMessage.includes("celular")) {
-          errorMessage = "Ya existe un cliente con el mismo celular. El precliente no puede ser convertido.";
-        } else if (errorMessage.includes("DNI")) {
-          errorMessage = "Ya existe un cliente con el mismo DNI. Por favor, use un DNI diferente.";
+        if (!res.ok || !result.success) {
+          alert(
+            `Error: ${
+              typeof result.detail === "string"
+                ? result.detail
+                : result.message || "No se pudo convertir el precliente"
+            }`
+          );
+          return;
         }
-        
-        alert(`Error: ${errorMessage}`);
-        return;
-      }
-
-      setShowClienteModal(false);
-      setPreclienteIdConvertir(null);
-      fetchClientes(); // 🔁 recarga preclientes
-      alert("Precliente convertido exitosamente");
+        setShowClienteModal(false);
+        setPreclienteIdConvertir(null);
+        fetchClientes();
+        toast.success("Precliente convertido a cliente.");
+      };
+      await enviar();
     } catch (err) {
       console.error("Error al convertir precliente", err);
       alert("Error inesperado al convertir precliente");

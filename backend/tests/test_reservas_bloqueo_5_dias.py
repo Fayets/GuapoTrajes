@@ -224,8 +224,10 @@ def test_segundo_presupuesto_rechazado_si_solapa(mundo_solo_presupuesto_sin_sena
             ),
         ],
     )
-    with pytest.raises(HTTPException):
+    with pytest.raises(HTTPException) as exc:
         pres.crear_presupuesto(payload, cu)
+    assert exc.value.status_code == 400
+    assert "PRES-" in str(exc.value.detail)
 
 
 def test_escenario_usuario_evento_agosto_vs_julio():

@@ -177,6 +177,37 @@ def ensure_firmante_contrato_columns() -> None:
     )
 
 
+def ensure_numero_contrato_column() -> None:
+    """Número secuencial impreso en contratos (independiente de orden/presupuesto)."""
+    if not _is_postgres():
+        return
+    from src.models import OrdenTrabajo
+
+    table_name = getattr(OrdenTrabajo, "_table_", "OrdenesTrabajo")
+    for name in (table_name, table_name.lower()):
+        try:
+            with db_session:
+                db.execute(
+                    f'ALTER TABLE "{name}" ADD COLUMN IF NOT EXISTS "numero_contrato" INTEGER'
+                )
+                db.execute(
+                    f'CREATE UNIQUE INDEX IF NOT EXISTS "idx_{name.lower()}_numero_contrato" '
+                    f'ON "{name}" ("numero_contrato") WHERE "numero_contrato" IS NOT NULL'
+                )
+            logger.debug("Columna numero_contrato OK en tabla '%s'", name)
+            return
+        except Exception as e:
+            err = str(e).lower()
+            if "does not exist" in err or "no existe" in err:
+                continue
+            logger.debug("Error añadiendo numero_contrato en '%s': %s", name, e)
+    logger.debug(
+        "No se pudo añadir numero_contrato (probados: %s, %s)",
+        table_name,
+        table_name.lower(),
+    )
+
+
 def ensure_notas_productos_lavanderias() -> None:
     """Asegura que la tabla de productos en lavandería tenga columna notas (motivo de devolución)."""
     if not _is_postgres():

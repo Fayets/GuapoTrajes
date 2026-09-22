@@ -80,6 +80,12 @@ interface Producto {
   precio_de_venta_medio_uso?: number;
   precio_venta?: number;
   precio_liquidacion?: number;
+  reserva_venta?: {
+    orden_id?: number;
+    presupuesto_numero?: string | null;
+    cliente_nombre?: string | null;
+    fecha_retiro?: string | null;
+  } | null;
 }
 
 const tiposPrecios = [
@@ -235,7 +241,9 @@ export default function VentasPage() {
       try {
         const token = localStorage.getItem("token");
         if (!token) return;
-        const data = (await fetchAllProductos(token)) as typeof productos;
+        const data = (await fetchAllProductos(token, {
+          incluir_reserva_venta: true,
+        })) as typeof productos;
         setProductos(data);
       } catch {
         toast.error("Error al cargar productos");
@@ -504,28 +512,32 @@ export default function VentasPage() {
       const result = await response.json();
       if (!response.ok || result.success === false) {
         // Verificar si es un error específico de estado del producto
+        const msg =
+          (typeof result.message === "string" && result.message) ||
+          (typeof result.detail === "string" && result.detail) ||
+          "Error al guardar venta.";
         if (
-          result.message &&
-          result.message.includes("no se puede vender porque está en estado")
+          msg.includes("no se puede vender porque está en estado")
         ) {
           // Extraer el estado del producto del mensaje de error
-          const estadoMatch = result.message.match(/estado '([^']+)'/);
+          const estadoMatch = msg.match(/estado '([^']+)'/);
           const estado = estadoMatch ? estadoMatch[1] : "desconocido";
 
           // Mostrar alerta específica para estado del producto
           toast.error(
             `❌ No se puede vender el producto porque está en estado "${estado}". Solo se pueden vender productos en estado "SALON".`,
             {
-              duration: 5000, // Mostrar por más tiempo
+              duration: 5000,
               action: {
                 label: "Entendido",
                 onClick: () => {},
               },
             }
           );
+        } else if (msg.toLowerCase().includes("reservado")) {
+          toast.error(msg, { duration: 6000 });
         } else {
-          // Otros tipos de errores
-          throw new Error(result.message || "Error al guardar venta.");
+          throw new Error(msg);
         }
         return; // No continuar si hay error
       }
@@ -786,7 +798,8 @@ export default function VentasPage() {
     !!nuevoItem.productoId &&
     !!tipoPrecioActivo &&
     !!productoSeleccionado &&
-    (!productoSeleccionado.estado || productoSeleccionado.estado === "SALON");
+    (!productoSeleccionado.estado || productoSeleccionado.estado === "SALON") &&
+    !productoSeleccionado.reserva_venta;
 
   // Normaliza fechas tipo 'YYYY-MM-DD' para evitar 'Invalid Date'
   function parseFecha(fecha: string | Date | undefined): Date {
@@ -1309,8 +1322,15 @@ export default function VentasPage() {
                       >
                         <option value="">Seleccionar</option>
                         {productosFiltrados.map((p) => (
-                          <option key={p.id} value={p.id}>
+                          <option key={p.id} value={p.id} disabled={!!p.reserva_venta}>
                             {formatDescripcionProducto(p.descripcion, p.descripcion_extra)} — {codigoProducto(p)}
+                            {p.reserva_venta
+                              ? ` (reservado orden #${p.reserva_venta.orden_id}${
+                                  p.reserva_venta.presupuesto_numero
+                                    ? ` ${p.reserva_venta.presupuesto_numero}`
+                                    : ""
+                                })`
+                              : ""}
                           </option>
                         ))}
                       </select>
@@ -1345,6 +1365,20 @@ export default function VentasPage() {
                           </span>
                         </>
                       )}
+                    </div>
+                  )}
+
+                  {productoSeleccionado?.reserva_venta && (
+                    <div className="text-danger small mt-2">
+                      No se puede vender: está reservado en la orden #
+                      {productoSeleccionado.reserva_venta.orden_id}
+                      {productoSeleccionado.reserva_venta.presupuesto_numero
+                        ? ` (${productoSeleccionado.reserva_venta.presupuesto_numero})`
+                        : ""}
+                      {productoSeleccionado.reserva_venta.cliente_nombre
+                        ? ` · ${productoSeleccionado.reserva_venta.cliente_nombre}`
+                        : ""}
+                      .
                     </div>
                   )}
 

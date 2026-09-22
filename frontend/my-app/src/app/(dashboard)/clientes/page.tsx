@@ -25,6 +25,7 @@ import { formatMoneyAr, parseMontoInput } from "@/lib/money";
 import { abrirWhatsAppEnvio, normalizarTelefonoWhatsapp } from "@/lib/whatsapp";
 import { scheduleUndoableDelete } from "@/lib/undoable-delete";
 import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-deletes";
+import { parseClienteExistenteDetail } from "@/lib/cliente-existente";
 
 type Cliente = {
   id: number;
@@ -484,6 +485,42 @@ export default function ClientesPage() {
         },
         body,
       });
+
+      if (res.status === 409) {
+        const errorData = await res.json().catch(() => ({}));
+        const parsed = parseClienteExistenteDetail(errorData);
+        const ok = window.confirm(
+          `${parsed?.mensaje || "Este precliente ya está registrado como cliente."}\n\n¿Continuar con ese cliente?`
+        );
+        if (ok && parsed?.cliente?.id && preclienteSeleccionadoId) {
+          const retry = await fetch(
+            `${API_BASE}/preclientes/convertir/${preclienteSeleccionadoId}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                direccion: datosFormateados.direccion,
+                dni: datosFormateados.dni,
+                fecha_nacimiento: datosFormateados.fecha_nacimiento,
+                usar_cliente_id: parsed.cliente.id,
+              }),
+            }
+          );
+          const retryJson = await retry.json().catch(() => ({}));
+          if (!retry.ok || retryJson.success === false) {
+            alert("❌ No se pudo vincular el cliente existente.");
+            return;
+          }
+          toast.success("Se vinculó el cliente existente.");
+          setShowModal(false);
+          fetchClientes();
+          return;
+        }
+        return;
+      }
 
       if (!res.ok) {
         let errorMessage = "";

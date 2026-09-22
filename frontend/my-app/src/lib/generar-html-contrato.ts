@@ -26,6 +26,7 @@ export type OrdenParaContratoImpreso = {
   seña_pagada?: number | null;
   saldo_pendiente?: number | null;
   contrato_generado_at?: string | null;
+  numero_contrato?: number | null;
   productos_reservados?: Array<{
     producto_descripcion?: string | null;
     producto_nombre?: string | null;
@@ -103,7 +104,10 @@ export function generarHtmlContratoAlquiler(
   const precio = formatPrecioAr(precioAlquiler);
   const valorPagare = formatPrecioAr(precioAlquiler * 5);
   const anio = String(fecha.año);
-  const ordenNro = String(orden.id).padStart(6, "0");
+  const contratoNro =
+    orden.numero_contrato != null
+      ? String(orden.numero_contrato)
+      : String(orden.id).padStart(6, "0");
   const prendas = nombresPrendasOracion(orden);
   const menciónPrendas = prendas ? `: ${esc(prendas)}.` : ".";
 
@@ -111,7 +115,7 @@ export function generarHtmlContratoAlquiler(
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
-  <title>Contrato de Alquiler — Orden ${esc(ordenNro)}</title>
+  <title>Contrato de Alquiler — Contrato N° ${esc(contratoNro)}</title>
   <style>
     @page { size: A4; margin: 10mm 18mm; }
     * { box-sizing: border-box; }
@@ -279,7 +283,7 @@ export function generarHtmlContratoAlquiler(
   <div class="sheet">
     <div class="cabecera">
       <h1>CONTRATO DE ALQUILER DE PRENDAS</h1>
-      <div class="orden">Orden N° ${esc(ordenNro)}</div>
+      <div class="orden">Contrato N° ${esc(contratoNro)}</div>
     </div>
     <div class="sub">GUAPO TRAJES — La Rioja</div>
 

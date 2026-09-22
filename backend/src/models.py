@@ -276,6 +276,7 @@ class OrdenTrabajo(db.Entity):
     extra_discount_applied_by = Optional(Usuario, reverse="ordenes_con_descuento_extra")
     extra_discount_created_at = Optional(datetime)
     contrato_generado_at = Optional(datetime)  # Fecha en que se generó el contrato (manual)
+    numero_contrato = Optional(int, unique=True)  # Número secuencial impreso en el contrato (desde 500)
     etiquetas_armado_impresas_at = Optional(datetime)  # Etiquetas 100x50 impresas al crear la orden
     conjunto_separado = Required(bool, default=False)  # Conjunto ya separado en perchero al crear la orden
     # Snapshot opcional del firmante del contrato/pagaré (quien retira; no es Cliente)

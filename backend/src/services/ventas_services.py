@@ -6,6 +6,7 @@ from src.models import EstadoProducto, CuentaDestino
 from datetime import datetime, date
 from src.fechas_ar import ahora_ar
 from src.descuento_trazabilidad import descuento_maximo_estandar, registrar_descuento_venta
+from src.services.disponibilidad_services import reserva_activa_para_venta
 from pony.orm import flush
 
 class VentasServices:
@@ -115,6 +116,31 @@ class VentasServices:
                         raise HTTPException(
                             status_code=400,
                             detail=f"Stock insuficiente para '{format_descripcion_producto(producto.descripcion, producto.descripcion_extra)}'"
+                        )
+
+                    reserva = reserva_activa_para_venta(producto.id)
+                    if reserva:
+                        desc = format_descripcion_producto(
+                            producto.descripcion, producto.descripcion_extra
+                        )
+                        fecha_txt = reserva.get("fecha_retiro") or "fecha no definida"
+                        if fecha_txt and len(str(fecha_txt)) >= 10:
+                            try:
+                                fecha_txt = date.fromisoformat(str(fecha_txt)[:10]).strftime("%d/%m/%Y")
+                            except ValueError:
+                                pass
+                        extra = []
+                        if reserva.get("presupuesto_numero"):
+                            extra.append(str(reserva["presupuesto_numero"]))
+                        if reserva.get("cliente_nombre"):
+                            extra.append(str(reserva["cliente_nombre"]))
+                        extra_txt = f" ({', '.join(extra)})" if extra else ""
+                        raise HTTPException(
+                            status_code=400,
+                            detail=(
+                                f'No se puede vender "{desc}": está reservado en la orden '
+                                f'#{reserva["orden_id"]}{extra_txt} para retiro el {fecha_txt}.'
+                            ),
                         )
 
                     # 4) Precio según tipo de precio

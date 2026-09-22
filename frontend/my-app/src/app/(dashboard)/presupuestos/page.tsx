@@ -6,8 +6,13 @@ import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import PresupuestoModal from "@/components/modales/presupuestoModal";
+import { ClienteYaRegistradoDialog } from "@/components/modales/clienteYaRegistradoDialog";
+import {
+  parseClienteExistenteDetail,
+  type ClienteExistenteInfo,
+} from "@/lib/cliente-existente";
 import { getApiBaseUrl } from "@/lib/api-config";
-import { fetchAllProductos } from "@/lib/fetch-productos";
+import { fetchProductosPage } from "@/lib/fetch-productos";
 import { formatDescripcionProducto } from "@/lib/descripcion-producto";
 import {
   inferirTipoPrecioProducto,
@@ -90,6 +95,14 @@ type Producto = {
   estado?: string;
   /** false = no disponible por ventana de reserva (backend); null/undefined = sin evaluar fechas */
   disponible_en_fechas?: boolean | null;
+  conflicto_disponibilidad?: {
+    tipo?: string;
+    id?: number;
+    numero?: string | null;
+    cliente?: string | null;
+    fecha_retiro?: string | null;
+    fecha_devolucion?: string | null;
+  } | null;
 };
 
 type ItemPresupuesto = {
@@ -161,6 +174,24 @@ type PresupuestoResponse = {
   actualizado_por_nombre?: string | null;
 };
 
+function textoConflictoDisponibilidad(
+  conflicto?: Producto["conflicto_disponibilidad"],
+  mensajeApi?: string | null
+): string {
+  if (mensajeApi) return mensajeApi;
+  if (!conflicto) return "reservado en otro presupuesto u orden";
+  const numero = conflicto.numero || (conflicto.id != null ? `#${conflicto.id}` : "");
+  const cliente = conflicto.cliente ? ` (${conflicto.cliente})` : "";
+  const fechas =
+    conflicto.fecha_retiro || conflicto.fecha_devolucion
+      ? ` del ${conflicto.fecha_retiro || "?"} al ${conflicto.fecha_devolucion || "?"}`
+      : "";
+  if (conflicto.tipo === "orden") {
+    return `ocupado por orden #${conflicto.id}${numero ? ` / ${numero}` : ""}${cliente}${fechas}`;
+  }
+  return `ocupado por ${numero || "otro presupuesto"}${cliente}${fechas}`;
+}
+
 export default function PresupuestosPage() {
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [busqueda, setBusqueda] = useState("");
@@ -219,6 +250,9 @@ export default function PresupuestosPage() {
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [resultadosBusqueda, setResultadosBusqueda] = useState<Producto[]>([]);
+  const [buscandoProductos, setBuscandoProductos] = useState(false);
+  const [productoFiltroDebounced, setProductoFiltroDebounced] = useState("");
   const [formData, setFormData] = useState<{
     clienteId: string;
     preclienteId?: number | null;
@@ -276,6 +310,7 @@ export default function PresupuestosPage() {
     cliente_nombre: string;
     total: number;
     cliente_id?: number | null;
+    precliente_id?: number | null;
     es_precliente?: boolean;
     items: ItemPresupuesto[];
     fecha_evento: string;
@@ -284,6 +319,14 @@ export default function PresupuestosPage() {
     lugar_evento: string;
   } | null>(null);
   const [saldoClienteSenia, setSaldoClienteSenia] = useState(0);
+  const [clienteExistenteSenia, setClienteExistenteSenia] =
+    useState<ClienteExistenteInfo | null>(null);
+  const [mensajeClienteExistente, setMensajeClienteExistente] = useState<string | null>(
+    null
+  );
+  const [confianzaClienteExistente, setConfianzaClienteExistente] = useState<
+    string | null
+  >(null);
   const [metodoPagoComplementoSenia, setMetodoPagoComplementoSenia] =
     useState<MetodoPagoComplemento | null>(null);
   const [modalEtiquetaResumenOrdenAbierto, setModalEtiquetaResumenOrdenAbierto] =
@@ -372,7 +415,6 @@ export default function PresupuestosPage() {
 
   useEffect(() => {
     fetchClientes();
-    fetchProductos();
     fetchPresupuestos();
   }, []);
 
@@ -445,35 +487,16 @@ export default function PresupuestosPage() {
     }
   };
 
-  const fetchProductos = useCallback(
-    async (opts?: {
-      fechaRetiro?: string;
-      fechaDevolucion?: string;
-      ordenExcluirId?: number;
-      presupuestoExcluirId?: number;
-    }) => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-        const params: Record<string, string | number> = {};
-        if (opts?.fechaRetiro && opts?.fechaDevolucion) {
-          params.fecha_retiro = opts.fechaRetiro;
-          params.fecha_devolucion = opts.fechaDevolucion;
-        }
-        if (opts?.ordenExcluirId != null) {
-          params.orden_excluir_id = opts.ordenExcluirId;
-        }
-        if (opts?.presupuestoExcluirId != null) {
-          params.presupuesto_excluir_id = opts.presupuestoExcluirId;
-        }
-        const data = (await fetchAllProductos(token, params)) as Producto[];
-        setProductos(data);
-      } catch (error) {
-        console.error("Error fetching productos:", error);
+  const mergeProductosEnCache = useCallback((incoming: Producto[]) => {
+    setProductos((prev) => {
+      const byId = new Map(prev.map((p) => [p.id, p]));
+      for (const p of incoming) {
+        const prevP = byId.get(p.id);
+        byId.set(p.id, prevP ? { ...prevP, ...p } : p);
       }
-    },
-    []
-  );
+      return Array.from(byId.values());
+    });
+  }, []);
 
   const fechasAlquilerEfectivas = useCallback(() => {
     const fechaEvento = fechaNegocioYmd(formData.fechaEvento);
@@ -485,30 +508,67 @@ export default function PresupuestosPage() {
   }, [formData.fechaEvento, formData.fechaRetiro, formData.fechaDevolucion]);
 
   useEffect(() => {
+    const t = setTimeout(() => setProductoFiltroDebounced(productoFiltro.trim()), 300);
+    return () => clearTimeout(t);
+  }, [productoFiltro]);
+
+  useEffect(() => {
     if (!showModal || verModoLectura) return;
-    const { fechaRetiro, fechaDevolucion } = fechasAlquilerEfectivas();
-    const ordenExcluirId = presupuestoSeleccionado?.orden_id ?? undefined;
-    const presupuestoExcluirId = presupuestoSeleccionado?.id ?? undefined;
-    if (fechaRetiro && fechaDevolucion) {
-      void fetchProductos({
-        fechaRetiro,
-        fechaDevolucion,
-        ordenExcluirId,
-        presupuestoExcluirId,
-      });
-    } else {
-      void fetchProductos({ ordenExcluirId, presupuestoExcluirId });
+    const q = productoFiltroDebounced;
+    if (q.length < 2) {
+      setResultadosBusqueda([]);
+      setBuscandoProductos(false);
+      return;
     }
+    const ac = new AbortController();
+    const run = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      setBuscandoProductos(true);
+      try {
+        const { fechaRetiro, fechaDevolucion } = fechasAlquilerEfectivas();
+        const extra: Record<string, string | number> = { q };
+        if (fechaRetiro && fechaDevolucion) {
+          extra.fecha_retiro = fechaRetiro;
+          extra.fecha_devolucion = fechaDevolucion;
+        }
+        if (presupuestoSeleccionado?.orden_id != null) {
+          extra.orden_excluir_id = presupuestoSeleccionado.orden_id;
+        }
+        if (presupuestoSeleccionado?.id != null) {
+          extra.presupuesto_excluir_id = presupuestoSeleccionado.id;
+        }
+        const { items } = await fetchProductosPage(token, 1, 30, extra, {
+          signal: ac.signal,
+        });
+        if (ac.signal.aborted) return;
+        const list = (Array.isArray(items) ? items : []).map((raw) =>
+          normalizarProductoDesdeApi(raw as Record<string, unknown>)
+        );
+        setResultadosBusqueda(list);
+        mergeProductosEnCache(list);
+      } catch (error) {
+        if (ac.signal.aborted) return;
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("Error buscando productos:", error);
+        setResultadosBusqueda([]);
+      } finally {
+        if (!ac.signal.aborted) setBuscandoProductos(false);
+      }
+    };
+    void run();
+    return () => ac.abort();
   }, [
     showModal,
     verModoLectura,
+    productoFiltroDebounced,
     formData.fechaEvento,
     formData.fechaRetiro,
     formData.fechaDevolucion,
     presupuestoSeleccionado?.orden_id,
     presupuestoSeleccionado?.id,
-    fetchProductos,
     fechasAlquilerEfectivas,
+    mergeProductosEnCache,
   ]);
 
   const fetchPreclientes = async () => {
@@ -568,12 +628,6 @@ export default function PresupuestosPage() {
     const { nombre, apellido, telefono } = preclienteForm;
     if (!nombre.trim() || !apellido.trim() || !telefono.trim()) {
       toast.error("Completá nombre, apellido y teléfono del precliente.");
-      return;
-    }
-    const telNorm = telefono.replace(/\s/g, "");
-    const yaExiste = preclientes.some((p) => (p.celular || "").replace(/\s/g, "") === telNorm);
-    if (yaExiste) {
-      toast.error("Ya existe un precliente con este teléfono. Seleccionalo del listado.");
       return;
     }
     try {
@@ -673,6 +727,10 @@ export default function PresupuestosPage() {
         : raw.disponible_en_fechas === false
           ? false
           : null,
+    conflicto_disponibilidad:
+      raw.conflicto_disponibilidad && typeof raw.conflicto_disponibilidad === "object"
+        ? (raw.conflicto_disponibilidad as Producto["conflicto_disponibilidad"])
+        : null,
   });
 
   const validarProductoParaAgregar = useCallback(async (
@@ -709,13 +767,14 @@ export default function PresupuestosPage() {
     }
 
     if (producto.disponible_en_fechas === false) {
+      const motivo = textoConflictoDisponibilidad(producto.conflicto_disponibilidad);
       if (!esAdmin) {
-        return `El producto ${nombre} no está disponible en las fechas elegidas (reservado en otro presupuesto u orden).`;
+        return `El producto ${nombre} no está disponible en las fechas elegidas (${motivo}).`;
       }
       if (
         !ignorarConflictosReservaRef.current &&
         !window.confirm(
-          `${nombre} está dentro de la ventana de seguridad de otra reserva.\n\n` +
+          `${nombre} no está disponible: ${motivo}.\n\n` +
             "Como administrador podés omitir este bloqueo. ¿Agregarlo de todos modos?"
         )
       ) {
@@ -736,15 +795,20 @@ export default function PresupuestosPage() {
       if (!res.ok) {
         return "No se pudo verificar la disponibilidad. Intentá de nuevo.";
       }
-      const data = (await res.json()) as { disponible?: boolean };
+      const data = (await res.json()) as {
+        disponible?: boolean;
+        mensaje?: string;
+        conflicto?: Producto["conflicto_disponibilidad"];
+      };
       if (!data.disponible) {
+        const motivo = textoConflictoDisponibilidad(data.conflicto, data.mensaje);
         if (!esAdmin) {
-          return `El producto ${nombre} no está disponible en las fechas elegidas (conflicto con otra reserva).`;
+          return `El producto ${nombre} no está disponible en las fechas elegidas (${motivo}).`;
         }
         if (
           !ignorarConflictosReservaRef.current &&
           !window.confirm(
-            `${nombre} está dentro de la ventana de seguridad de otra reserva.\n\n` +
+            `${nombre} no está disponible: ${motivo}.\n\n` +
               "Como administrador podés omitir este bloqueo. ¿Agregarlo de todos modos?"
           )
         ) {
@@ -1041,6 +1105,7 @@ export default function PresupuestosPage() {
     setTipoPrecioPresupuesto("precio_alquiler_lista");
     setAvisoAgregarProducto(null);
     setProductoFiltro("");
+    setResultadosBusqueda([]);
     setNuevoItem({ productoId: "", porcentaje: "" });
     setTotalConDescuento(null);
     setPorcentajeDescuento(null);
@@ -1426,6 +1491,17 @@ export default function PresupuestosPage() {
     );
     setTotalConDescuento(null);
     setPorcentajeDescuento(null);
+    setProductoFiltro("");
+    setResultadosBusqueda([]);
+    mergeProductosEnCache(
+      pr.items.map((item) => ({
+        id: item.productoId,
+        descripcion: item.productoNombre,
+        codigo_barra: item.codigoBarra || "",
+        precio_alquiler_lista: item.precioUnitario,
+        inmovilizado: false,
+      }))
+    );
     setVerModoLectura(verLectura);
     setShowModal(true);
   };
@@ -1550,7 +1626,7 @@ export default function PresupuestosPage() {
     setModalEtiquetaResumenOrdenAbierto(true);
   };
 
-  const confirmarSenia = async () => {
+  const confirmarSenia = async (opts?: { omitirDeteccionCliente?: boolean }) => {
     if (!presupuestoAConvertir) return;
 
     const monto = parseMontoInput(senia);
@@ -1593,6 +1669,31 @@ export default function PresupuestosPage() {
     if (montoCaja > 1e-9 && !cuentaDestinoId) {
       alert("Debes seleccionar una cuenta destino.");
       return;
+    }
+
+    if (
+      !opts?.omitirDeteccionCliente &&
+      presupuestoAConvertir.es_precliente &&
+      presupuestoAConvertir.precliente_id
+    ) {
+      try {
+        const token = localStorage.getItem("token");
+        const detRes = await fetch(
+          `${API_BASE}/preclientes/${presupuestoAConvertir.precliente_id}/detectar-cliente`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (detRes.ok) {
+          const det = await detRes.json();
+          if (det.encontrado && det.cliente) {
+            setClienteExistenteSenia(det.cliente);
+            setMensajeClienteExistente(det.mensaje || null);
+            setConfianzaClienteExistente(det.confianza || null);
+            return;
+          }
+        }
+      } catch {
+        /* si falla la detección, se intenta crear la orden igual */
+      }
     }
 
     try {
@@ -2005,6 +2106,7 @@ export default function PresupuestosPage() {
                                   cliente_nombre: p.cliente_nombre,
                                   total: p.total,
                                   cliente_id: p.cliente_id ?? null,
+                                  precliente_id: p.precliente_id ?? null,
                                   es_precliente: !!p.es_precliente,
                                   items: p.items ?? [],
                                   fecha_evento: p.fecha_evento,
@@ -2129,6 +2231,8 @@ export default function PresupuestosPage() {
           setPreclienteNombreSeleccionado(null);
         }}
         productos={productos}
+        resultadosBusqueda={resultadosBusqueda}
+        buscandoProductos={buscandoProductos}
         productoFiltro={productoFiltro}
         setProductoFiltro={handleProductoFiltroChange}
         avisoAgregarProducto={avisoAgregarProducto}
@@ -2151,6 +2255,8 @@ export default function PresupuestosPage() {
           setVerModoLectura(false);
           setPresupuestoSeleccionado(null);
           setAvisoAgregarProducto(null);
+          setProductoFiltro("");
+          setResultadosBusqueda([]);
         }}
       />
 
@@ -2316,7 +2422,7 @@ export default function PresupuestosPage() {
             </button>
             <button
               className="btn btn-primary"
-              onClick={confirmarSenia}
+              onClick={() => void confirmarSenia()}
               disabled={(() => {
                 const mt = parseMontoInput(senia || "0") || 0;
                 const totalMax = roundPesos(presupuestoAConvertir?.total ?? 0);
@@ -2413,6 +2519,67 @@ export default function PresupuestosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ClienteYaRegistradoDialog
+        open={!!clienteExistenteSenia}
+        cliente={clienteExistenteSenia}
+        mensaje={mensajeClienteExistente}
+        confianza={confianzaClienteExistente}
+        onCancel={() => {
+          setClienteExistenteSenia(null);
+          setMensajeClienteExistente(null);
+          setConfianzaClienteExistente(null);
+        }}
+        onContinuar={async () => {
+          if (!clienteExistenteSenia || !presupuestoAConvertir?.precliente_id) return;
+          try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(
+              `${API_BASE}/preclientes/convertir/${presupuestoAConvertir.precliente_id}`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  dni: clienteExistenteSenia.dni || "0",
+                  direccion: clienteExistenteSenia.direccion || "-",
+                  usar_cliente_id: clienteExistenteSenia.id,
+                }),
+              }
+            );
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.success === false) {
+              const parsed = parseClienteExistenteDetail(data);
+              toast.error(
+                parsed?.mensaje ||
+                  (typeof data.detail === "string" ? data.detail : data.message) ||
+                  "No se pudo vincular el cliente existente."
+              );
+              return;
+            }
+            setPresupuestoAConvertir((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    es_precliente: false,
+                    cliente_id: clienteExistenteSenia.id,
+                    precliente_id: null,
+                    cliente: `${clienteExistenteSenia.apellido} ${clienteExistenteSenia.nombre}`,
+                    cliente_nombre: `${clienteExistenteSenia.apellido} ${clienteExistenteSenia.nombre}`,
+                  }
+                : prev
+            );
+            setClienteExistenteSenia(null);
+            setMensajeClienteExistente(null);
+            setConfianzaClienteExistente(null);
+            await confirmarSenia({ omitirDeteccionCliente: true });
+          } catch {
+            toast.error("Error al vincular el cliente existente.");
+          }
+        }}
+      />
 
       {/* Modal de motivo para descuento extra */}
       <Dialog

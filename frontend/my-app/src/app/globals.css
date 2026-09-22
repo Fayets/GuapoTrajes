@@ -1203,6 +1203,10 @@ body .gt-select:focus {
   }
 
   /* Target táctil más cómodo */
+  .gt-table tbody td.gt-table-acciones {
+    white-space: normal;
+  }
+
   .btn-action {
     width: 38px;
     height: 38px;

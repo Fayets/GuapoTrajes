@@ -32,14 +32,18 @@ export async function fetchProductosPage(
   token: string,
   page: number,
   size: number,
-  extraParams: FetchProductosParams = {}
+  extraParams: FetchProductosParams = {},
+  init?: { signal?: AbortSignal }
 ): Promise<{ items: unknown[]; total: number }> {
   const params: FetchProductosParams = {
     page,
     size,
     ...extraParams,
   };
-  const res = await apiFetch(buildProductosUrl(params), { token });
+  const res = await apiFetch(buildProductosUrl(params), {
+    token,
+    signal: init?.signal,
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `Error ${res.status} al obtener productos`);

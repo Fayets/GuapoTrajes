@@ -4,10 +4,12 @@ from pony.orm.core import TransactionIntegrityError, ConstraintError
 from src import models, schemas
 from src.models import Producto, EstadoProducto, Sucursal, Roles
 from src.services.disponibilidad_services import (
-    verificar_disponibilidad,
     producto_ids_en_ventana_reserva_el_dia,
+    reservas_activas_para_venta_por_producto,
+    explicar_conflicto_disponibilidad,
 )
 from src.db import db
+from decouple import config
 from datetime import datetime, date
 from typing import Optional, Tuple, List, Dict
 import traceback
@@ -45,7 +47,9 @@ def _producto_to_response_dict(p: "models.Producto") -> dict:
         "color_id": p.color.id if p.color else None,
         "color_nombre": p.color.nombre if p.color else None,
         "disponible_en_fechas": None,
+        "conflicto_disponibilidad": None,
         "en_ventana_reserva_hoy": None,
+        "reserva_venta": None,
         "etiqueta_inventario_impresa_at": getattr(p, "etiqueta_inventario_impresa_at", None),
     }
     return d
@@ -110,15 +114,18 @@ def _build_productos_where_conditions(
     search_term = (q or "").strip()
     if search_term:
         pattern = _sql_ilike_pattern(search_term)
+        provider = (config("DB_PROVIDER", default="postgres") or "postgres").lower()
+        op = "LIKE" if provider == "sqlite" else "ILIKE"
+        escape = "ESCAPE '\\'" if provider == "sqlite" else "ESCAPE E'\\\\'"
         conditions.append(
             "("
-            f"p.codigo_barra ILIKE '{pattern}' ESCAPE E'\\\\' OR "
-            f"p.descripcion ILIKE '{pattern}' ESCAPE E'\\\\' OR "
-            f"COALESCE(p.descripcion_extra, '') ILIKE '{pattern}' ESCAPE E'\\\\' OR "
-            f"COALESCE(pl.nombre, '') ILIKE '{pattern}' ESCAPE E'\\\\' OR "
-            f"COALESCE(pt.nombre, '') ILIKE '{pattern}' ESCAPE E'\\\\' OR "
-            f"COALESCE(ptel.nombre, '') ILIKE '{pattern}' ESCAPE E'\\\\' OR "
-            f"COALESCE(pc.nombre, '') ILIKE '{pattern}' ESCAPE E'\\\\'"
+            f"p.codigo_barra {op} '{pattern}' {escape} OR "
+            f"p.descripcion {op} '{pattern}' {escape} OR "
+            f"COALESCE(p.descripcion_extra, '') {op} '{pattern}' {escape} OR "
+            f"COALESCE(pl.nombre, '') {op} '{pattern}' {escape} OR "
+            f"COALESCE(pt.nombre, '') {op} '{pattern}' {escape} OR "
+            f"COALESCE(ptel.nombre, '') {op} '{pattern}' {escape} OR "
+            f"COALESCE(pc.nombre, '') {op} '{pattern}' {escape}"
             ")"
         )
 
@@ -165,7 +172,9 @@ def _row_to_producto_dict(row) -> dict:
         "destino_cliente_nombre": None,
         "destino_cliente_celular": None,
         "disponible_en_fechas": None,
+        "conflicto_disponibilidad": None,
         "en_ventana_reserva_hoy": None,
+        "reserva_venta": None,
         "etiqueta_inventario_impresa_at": row[27] if len(row) > 27 else None,
     }
 
@@ -341,6 +350,8 @@ class ProductoServices:
 
                 return _producto_to_response_dict(producto)
 
+            except HTTPException:
+                raise
             except Exception as e:
                 traceback.print_exc()
                 raise HTTPException(status_code=500, detail=f"Error al obtener el producto: {str(e)}")
@@ -365,6 +376,7 @@ class ProductoServices:
         ventana_reserva_filtro: Optional[str] = None,
         q: Optional[str] = None,
         etiqueta_impresa_filtro: Optional[str] = None,
+        incluir_reserva_venta: bool = False,
     ) -> Tuple[List[Dict], int]:
         with db_session:
             try:
@@ -502,16 +514,19 @@ class ProductoServices:
                                 r["destino_cliente_celular"] = getattr(pm, "cliente_celular", None)
                 if fecha_retiro is not None and fecha_devolucion is not None:
                     for r in result:
-                        r["disponible_en_fechas"] = verificar_disponibilidad(
+                        conflicto = explicar_conflicto_disponibilidad(
                             r["id"],
                             fecha_retiro,
                             fecha_devolucion,
                             presupuesto_excluir_id,
                             orden_excluir_id,
                         )
+                        r["disponible_en_fechas"] = conflicto is None
+                        r["conflicto_disponibilidad"] = conflicto
                 else:
                     for r in result:
                         r["disponible_en_fechas"] = None
+                        r["conflicto_disponibilidad"] = None
 
                 if incluir_ventana_reserva or vf in ("si", "no"):
                     for r in result:
@@ -519,6 +534,14 @@ class ProductoServices:
                 else:
                     for r in result:
                         r["en_ventana_reserva_hoy"] = None
+
+                if incluir_reserva_venta:
+                    reservas_venta = reservas_activas_para_venta_por_producto()
+                    for r in result:
+                        r["reserva_venta"] = reservas_venta.get(r["id"])
+                else:
+                    for r in result:
+                        r["reserva_venta"] = None
 
                 return result, total
 

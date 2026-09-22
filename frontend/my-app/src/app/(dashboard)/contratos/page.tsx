@@ -8,6 +8,7 @@ import { formatDateTimeArgentina } from "@/lib/fecha-calendario";
 
 type Contrato = {
   orden_id: number;
+  numero_contrato?: number | null;
   presupuesto_numero: string;
   cliente_nombre: string;
   cliente_dni?: string | null;
@@ -77,6 +78,7 @@ export default function ContratosPage() {
       const nombre = partes.slice(1).join(" ") ?? "";
       if (normalizarParaBusqueda(apellido).includes(termino)) return true;
       if (normalizarParaBusqueda(nombre).includes(termino)) return true;
+      if (c.numero_contrato != null && String(c.numero_contrato).includes(termino)) return true;
       return false;
     });
   }, [contratos, busqueda]);
@@ -137,6 +139,7 @@ export default function ContratosPage() {
             <table className="table gt-table align-middle mb-0">
               <thead>
                 <tr>
+                  <th>Contrato N°</th>
                   <th>Orden N°</th>
                   <th>Presupuesto</th>
                   <th>Cliente</th>
@@ -148,7 +151,7 @@ export default function ContratosPage() {
               <tbody>
                 {contratosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-muted py-4">
+                    <td colSpan={7} className="text-center text-muted py-4">
                       {contratos.length === 0
                         ? "No hay contratos generados."
                         : "Ningún contrato coincide con la búsqueda."}
@@ -157,7 +160,10 @@ export default function ContratosPage() {
                 ) : (
                   contratosPaginados.map((c) => (
                     <tr key={c.orden_id}>
-                      <td className="fw-semibold">{c.orden_id}</td>
+                      <td className="fw-semibold">
+                        {c.numero_contrato != null ? c.numero_contrato : "—"}
+                      </td>
+                      <td className="text-muted">{c.orden_id}</td>
                       <td className="text-uppercase text-muted">
                         {c.presupuesto_numero}
                       </td>

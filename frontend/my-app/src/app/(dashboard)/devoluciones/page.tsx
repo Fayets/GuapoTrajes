@@ -542,6 +542,49 @@ export default function DevolucionesPage() {
     }
   };
 
+  const handleCerrarRevisionesYContrato = async (orden?: OrdenTrabajo) => {
+    const target = orden || ordenSeleccionada;
+    if (!target) return;
+    if (
+      !window.confirm(
+        "Confirmás que las prendas en revisión están bien. Se cierra el contrato (recién ahí se puede romper el pagaré)."
+      )
+    ) {
+      return;
+    }
+    setProcesando(true);
+    try {
+      const res = await fetch(
+        `${getApiBaseUrl()}/ordenes/${target.id}/completar-devolucion`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ destino: "SALON", cerrar_revisiones_ok: true }),
+        }
+      );
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof error.detail === "string"
+            ? error.detail
+            : error.message || "Error al finalizar devolución"
+        );
+      }
+      const result = await res.json();
+      toast.success(result.message || "Contrato cerrado");
+      setShowCompletadaModal(false);
+      setOrdenSeleccionada(null);
+      fetchOrdenes();
+    } catch (error: any) {
+      toast.error(error.message || "Error al finalizar devolución");
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const handleResolverRevision = async (revision: RevisionAbierta) => {
     if (!ordenSeleccionada) return;
     setProcesando(true);
@@ -799,6 +842,11 @@ export default function DevolucionesPage() {
                       : "N/A";
                     const firmanteVisible = (orden.firmante_nombre || "").trim();
 
+                    const tieneRevisiones =
+                      orden.tiene_revisiones_abiertas ||
+                      (orden.revisiones_abiertas?.length ?? 0) > 0;
+                    const hayPrendas = (orden.productos_reservados?.length ?? 0) > 0;
+
                     return (
                       <tr key={orden.id}>
                         <td className="fw-semibold">{orden.id}</td>
@@ -815,7 +863,7 @@ export default function DevolucionesPage() {
                         <td>{firmanteVisible || "—"}</td>
                         <td>{fechaEventoFormateada}</td>
                         <td>{fechaDevolucionFormateada}</td>
-                        <td className="text-center">
+                        <td className="text-center gt-table-acciones">
                           <div className="d-flex justify-content-center gap-2 flex-wrap">
                             <button
                               className="btn-action btn-action--wide btn-action--ver"
@@ -828,7 +876,7 @@ export default function DevolucionesPage() {
                               <FileText size={16} strokeWidth={1.75} aria-hidden />
                               Contrato
                             </button>
-                            {(orden.productos_reservados?.length ?? 0) > 0 ? (
+                            {hayPrendas ? (
                               <button
                                 className="btn-action btn-action--wide btn-action--credito"
                                 onClick={() => abrirModalCompletada(orden)}
@@ -837,21 +885,26 @@ export default function DevolucionesPage() {
                                 <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden />
                                 Normal (OK)
                               </button>
+                            ) : tieneRevisiones ? (
+                              <button
+                                className="btn-action btn-action--wide btn-action--brass"
+                                onClick={() => abrirModalCompletada(orden)}
+                                title="Ver y resolver revisión"
+                              >
+                                <ClipboardCheck size={16} strokeWidth={1.75} aria-hidden />
+                                Ver revisión
+                              </button>
                             ) : (
                               <button
                                 className="btn-action btn-action--wide btn-action--credito"
                                 onClick={() => abrirModalCompletada(orden)}
                                 title="Finalizar devolución / cerrar contrato"
-                                disabled={
-                                  orden.tiene_revisiones_abiertas ||
-                                  (orden.revisiones_abiertas?.length ?? 0) > 0
-                                }
                               >
                                 <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden />
                                 Finalizar
                               </button>
                             )}
-                            {(orden.productos_reservados?.length ?? 0) > 0 && (
+                            {hayPrendas && (
                               <button
                                 className="btn-action btn-action--wide btn-action--brass"
                                 onClick={() => abrirModalParcial(orden)}
@@ -859,6 +912,17 @@ export default function DevolucionesPage() {
                               >
                                 <ClipboardCheck size={16} strokeWidth={1.75} aria-hidden />
                                 Con revisión
+                              </button>
+                            )}
+                            {!hayPrendas && tieneRevisiones && (
+                              <button
+                                className="btn-action btn-action--wide btn-action--credito"
+                                onClick={() => void handleCerrarRevisionesYContrato(orden)}
+                                title="Marcar revisión OK y cerrar contrato"
+                                disabled={procesando}
+                              >
+                                <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden />
+                                Todo OK, cerrar
                               </button>
                             )}
                           </div>
@@ -953,7 +1017,7 @@ export default function DevolucionesPage() {
                           </div>
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-dark mt-1"
+                            className="btn btn-sm btn-outline-dark mt-1 me-2"
                             disabled={procesando}
                             onClick={() => handleResolverRevision(r)}
                           >
@@ -962,6 +1026,20 @@ export default function DevolucionesPage() {
                         </li>
                       ))}
                     </ul>
+                    {(ordenSeleccionada.productos_reservados?.length ?? 0) === 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-success"
+                        disabled={procesando}
+                        onClick={() => void handleCerrarRevisionesYContrato()}
+                      >
+                        Todo OK, cerrar contrato
+                      </button>
+                    )}
+                    <p className="mb-0 mt-2">
+                      Lavar o volver del taller no cierra este estado: hay que marcar la
+                      revisión acá.
+                    </p>
                   </div>
                 )}
                 {(ordenSeleccionada.productos_reservados?.length ?? 0) === 0 ? (

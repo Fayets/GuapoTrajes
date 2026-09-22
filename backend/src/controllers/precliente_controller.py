@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pony.orm import db_session
 from src import schemas
 from src.services.precliente_services import PreclientServices
@@ -83,6 +83,15 @@ def eliminar_cliente(precliente_id: int, current_user=Depends(get_current_user))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error al eliminar el cliente")
     
+@router.get("/{precliente_id}/detectar-cliente")
+def detectar_cliente_existente(
+    precliente_id: int,
+    dni: Optional[str] = Query(None),
+    current_user=Depends(get_current_user),
+):
+    return servicio.detectar_cliente_existente(precliente_id, dni)
+
+
 @router.post("/convertir/{precliente_id}")
 def convertir_precliente(
     precliente_id: int,
@@ -91,7 +100,12 @@ def convertir_precliente(
 ):
     try:
         return servicio.convertir_a_cliente(
-            precliente_id, datos.direccion, datos.dni, datos.fecha_nacimiento
+            precliente_id,
+            datos.direccion,
+            datos.dni,
+            datos.fecha_nacimiento,
+            usar_cliente_id=datos.usar_cliente_id,
+            confirmar_existente=datos.confirmar_existente,
         )
     except HTTPException as e:
-        return {"message": e.detail, "success": False, "data": None}
+        raise e

@@ -43,6 +43,11 @@ import { useFlushUndoableDeletesOnLeave } from "@/hooks/use-flush-undoable-delet
 import { formatPesosAr, formatMoneyAr, parseMontoInput, roundPesos } from "@/lib/money";
 import { formatDateTimeArgentina } from "@/lib/fecha-calendario";
 import { abrirWhatsAppEnvio, normalizarTelefonoWhatsapp } from "@/lib/whatsapp";
+import { ClienteYaRegistradoDialog } from "@/components/modales/clienteYaRegistradoDialog";
+import {
+  parseClienteExistenteDetail,
+  type ClienteExistenteInfo,
+} from "@/lib/cliente-existente";
 
 // Tipos
 
@@ -169,6 +174,13 @@ function OrdenesTrabajoContent() {
   const [dniCompletar, setDniCompletar] = useState("");
   const [direccionCompletar, setDireccionCompletar] = useState("");
   const [procesandoContrato, setProcesandoContrato] = useState(false);
+  const [clienteExistenteContrato, setClienteExistenteContrato] =
+    useState<ClienteExistenteInfo | null>(null);
+  const [mensajeClienteExistenteContrato, setMensajeClienteExistenteContrato] =
+    useState<string | null>(null);
+  const [confianzaClienteExistenteContrato, setConfianzaClienteExistenteContrato] =
+    useState<string | null>(null);
+  const usarClienteIdContratoRef = useRef<number | null>(null);
   const [showConfirmGenerarContrato, setShowConfirmGenerarContrato] =
     useState(false);
   const [ordenConfirmarContrato, setOrdenConfirmarContrato] =
@@ -850,14 +862,31 @@ function OrdenesTrabajoContent() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${localStorage.getItem("token")}`,
             },
-            body: JSON.stringify({ dni, direccion }),
+            body: JSON.stringify({
+              dni,
+              direccion,
+              usar_cliente_id: usarClienteIdContratoRef.current,
+            }),
           }
         );
         const dataConvert = await resConvert.json().catch(() => ({}));
-        if (!resConvert.ok || !dataConvert.success) {
-          toast.error(dataConvert.message || "Error al convertir precliente a cliente.");
+        if (!resConvert.ok || dataConvert.success === false) {
+          const parsed = parseClienteExistenteDetail(dataConvert);
+          if (resConvert.status === 409 && parsed?.cliente) {
+            setClienteExistenteContrato(parsed.cliente);
+            setMensajeClienteExistenteContrato(parsed.mensaje || null);
+            setConfianzaClienteExistenteContrato(parsed.confianza || null);
+            return;
+          }
+          const msg =
+            parsed?.mensaje ||
+            (typeof dataConvert.detail === "string" ? dataConvert.detail : null) ||
+            dataConvert.message ||
+            "Error al convertir precliente a cliente.";
+          toast.error(msg);
           return;
         }
+        usarClienteIdContratoRef.current = null;
       } else if (ordenParaContrato.cliente_id) {
         const resCliente = await fetch(
           `${getApiBaseUrl()}/clientes/get_by_id/${ordenParaContrato.cliente_id}`,
@@ -1758,6 +1787,26 @@ function OrdenesTrabajoContent() {
         }
         description="Se anularán en caja la seña y los pagos asociados (y se devolverá saldo de cuenta corriente si se usó). Los productos reservados se liberan."
         onConfirm={confirmarEliminarOrden}
+      />
+
+      <ClienteYaRegistradoDialog
+        open={!!clienteExistenteContrato}
+        cliente={clienteExistenteContrato}
+        mensaje={mensajeClienteExistenteContrato}
+        confianza={confianzaClienteExistenteContrato}
+        procesando={procesandoContrato}
+        onCancel={() => {
+          setClienteExistenteContrato(null);
+          setMensajeClienteExistenteContrato(null);
+          setConfianzaClienteExistenteContrato(null);
+          usarClienteIdContratoRef.current = null;
+        }}
+        onContinuar={() => {
+          if (!clienteExistenteContrato) return;
+          usarClienteIdContratoRef.current = clienteExistenteContrato.id;
+          setClienteExistenteContrato(null);
+          void completarDatosYGenerarContrato();
+        }}
       />
 
       {/* Modal: Completar DNI/dirección o firmante de tercero (precliente) */}

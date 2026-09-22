@@ -7,7 +7,10 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 from src.schemas import ProductUpdateResponse
 from datetime import date
-from src.services.disponibilidad_services import verificar_disponibilidad
+from src.services.disponibilidad_services import (
+    explicar_conflicto_disponibilidad,
+    texto_conflicto_disponibilidad,
+)
 
 
 # Product controller
@@ -154,6 +157,10 @@ def get_all_products(
         None,
         description='Filtrar por etiqueta de inventario impresa: "si" = impresas, "no" = pendientes',
     ),
+    incluir_reserva_venta: bool = Query(
+        False,
+        description="Si true, agrega reserva_venta (orden activa con seña, cualquier fecha)",
+    ),
 ):
     try:
         if (fecha_retiro is None) ^ (fecha_devolucion is None):
@@ -190,6 +197,7 @@ def get_all_products(
             ventana_reserva_filtro=vf or None,
             q=q,
             etiqueta_impresa_filtro=ei or None,
+            incluir_reserva_venta=incluir_reserva_venta,
         )
         # Headers de paginación
         response.headers["X-Total-Count"] = str(total)
@@ -397,7 +405,7 @@ def disponibilidad(
     current_user=Depends(get_current_user),
 ):
     try:
-        disponible = verificar_disponibilidad(
+        conflicto = explicar_conflicto_disponibilidad(
             producto_id,
             fecha_retiro,
             fecha_devolucion,
@@ -408,7 +416,11 @@ def disponibilidad(
             "producto_id": producto_id,
             "fecha_retiro": fecha_retiro,
             "fecha_devolucion": fecha_devolucion,
-            "disponible": disponible
+            "disponible": conflicto is None,
+            "conflicto": conflicto,
+            "mensaje": None
+            if conflicto is None
+            else texto_conflicto_disponibilidad(conflicto),
         }
     except Exception as e:
         import traceback

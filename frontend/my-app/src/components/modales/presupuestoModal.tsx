@@ -142,6 +142,8 @@ type Props = {
   onClearPrecliente?: () => void;
   onActualizarListas?: () => void | Promise<void>;
   productos: Producto[];
+  resultadosBusqueda?: Producto[];
+  buscandoProductos?: boolean;
   productoFiltro: string;
   setProductoFiltro: (value: string) => void;
   avisoAgregarProducto?: string | null;
@@ -188,6 +190,8 @@ export default function PresupuestoModal({
   onClearPrecliente,
   onActualizarListas,
   productos,
+  resultadosBusqueda = [],
+  buscandoProductos = false,
   productoFiltro,
   setProductoFiltro,
   avisoAgregarProducto = null,
@@ -1004,26 +1008,20 @@ export default function PresupuestoModal({
                       </div>
                       <div className="col-12 col-md-6">
                         <label className="form-label fw-bold">Producto</label>
-                        <select
-                          className="form-select"
-                          value={nuevoItem.productoId}
-                          onChange={(e) => {
-                            const id = e.target.value;
-                            if (id && agregarProductoPorId) {
-                              void agregarProductoPorId(id);
-                            } else {
-                              handleItemChange("productoId", id);
-                            }
-                          }}
-                        >
-                          <option value="">Seleccionar producto</option>
-                          {productos
-                            .filter((p) =>
-                              `${formatDescripcionProducto(p.descripcion, p.descripcion_extra)}${p.codigo_barra}`
-                                .toLowerCase()
-                                .includes(productoFiltro.toLowerCase())
-                            )
-                            .map((p) => {
+                        {productoFiltro.trim().length < 2 && !buscandoProductos ? (
+                          <p className="text-muted small mb-0">
+                            Escribí al menos 2 letras o escaneá el código.
+                          </p>
+                        ) : buscandoProductos ? (
+                          <p className="text-muted small mb-0">Buscando…</p>
+                        ) : resultadosBusqueda.length === 0 ? (
+                          <p className="text-muted small mb-0">No hay coincidencias.</p>
+                        ) : (
+                          <div
+                            className="list-group"
+                            style={{ maxHeight: 220, overflowY: "auto" }}
+                          >
+                            {resultadosBusqueda.map((p) => {
                               const reservado =
                                 p.disponible_en_fechas === false;
                               const estadoUpper = (p.estado || "")
@@ -1049,21 +1047,30 @@ export default function PresupuestoModal({
                                 label = `${base} — en ${estadoUpper}`;
                               }
                               return (
-                                <option
+                                <button
                                   key={p.id}
-                                  value={p.id}
+                                  type="button"
+                                  className="list-group-item list-group-item-action py-2 text-start"
                                   disabled={noDisponible}
                                   style={
                                     noDisponible
                                       ? { color: "#c1121f", fontWeight: 600 }
                                       : undefined
                                   }
+                                  onClick={() => {
+                                    if (agregarProductoPorId) {
+                                      void agregarProductoPorId(String(p.id));
+                                    } else {
+                                      handleItemChange("productoId", String(p.id));
+                                    }
+                                  }}
                                 >
                                   {label}
-                                </option>
+                                </button>
                               );
                             })}
-                        </select>
+                          </div>
+                        )}
                         {avisoAgregarProducto ? (
                           <div
                             className="alert alert-warning border-warning py-2 px-3 mt-2 mb-0 small d-flex align-items-start gap-2"

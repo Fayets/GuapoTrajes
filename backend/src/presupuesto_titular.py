@@ -16,6 +16,14 @@ def _norm_nombre(texto: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
+def normalizar_nombre_persona(texto: str) -> str:
+    return _norm_nombre(texto)
+
+
+def normalizar_celular(texto: str) -> str:
+    return re.sub(r"\D+", "", texto or "")
+
+
 def titular_presupuesto(presupuesto) -> dict:
     """Devuelve datos de contacto del titular del presupuesto (cliente, precliente o huérfano)."""
     if presupuesto is None:
