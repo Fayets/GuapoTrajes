@@ -18,6 +18,29 @@ from src.services.disponibilidad_services import (
     reconstruir_productos_reservados_para_orden,
 )
 
+
+def _siguiente_numero_presupuesto() -> str:
+    """
+    Genera el próximo PRES-XXX único.
+    Usa el máximo numérico existente (no el count) para no reutilizar números
+    cuando hay huecos o cuando count+1 colisiona con un número ya asignado.
+    """
+    usados = set()
+    max_n = 0
+    for p in Presupuesto.select():
+        num = (p.numero or "").strip().upper()
+        usados.add(num)
+        if num.startswith("PRES-"):
+            try:
+                max_n = max(max_n, int(num.split("-", 1)[1]))
+            except (ValueError, IndexError):
+                continue
+    siguiente = max_n + 1
+    while f"PRES-{siguiente:03d}" in usados:
+        siguiente += 1
+    return f"PRES-{siguiente:03d}"
+
+
 def _presupuesto_cliente_info(p):
     """Devuelve cliente_id, precliente_id, cliente_nombre, es_precliente, cliente_dni, cliente_direccion, cliente_celular para un presupuesto."""
     if p.precliente:
@@ -170,9 +193,8 @@ class PresupuestosServices:
                     # El total ya está con el descuento aplicado (viene en los items)
                     total = total_base
 
-                # Generar número
-                cantidad_presupuestos = Presupuesto.select().count()
-                numero = f"PRES-{cantidad_presupuestos + 1:03d}"
+                # Generar número único (max+1, no count+1)
+                numero = _siguiente_numero_presupuesto()
 
                 # Asegurar que fecha_evento sea un objeto date puro
                 fecha_evento_presupuesto = data.fecha_evento

@@ -677,10 +677,16 @@ class ReportesServices:
                         concepto = "seña"
                         presupuesto_numero = numero_presupuesto
                         try:
-                            presupuesto = Presupuesto.get(numero=numero_presupuesto)
+                            candidatos = [
+                                p for p in Presupuesto.select() if p.numero == numero_presupuesto
+                            ]
+                            presupuesto = max(candidatos, key=lambda p: p.id) if candidatos else None
                             if presupuesto and presupuesto.cliente:
                                 cliente_nombre = f"{presupuesto.cliente.nombre} {presupuesto.cliente.apellido}".strip()
                                 cliente_dni = presupuesto.cliente.dni or "N/A"
+                            elif presupuesto and presupuesto.precliente:
+                                cliente_nombre = f"{presupuesto.precliente.nombre} {presupuesto.precliente.apellido}".strip()
+                                cliente_dni = "N/A"
                         except Exception as e:
                             print(f"⚠️ Error al obtener datos del presupuesto {numero_presupuesto}: {e}")
                     elif es_pago_adicional:
@@ -688,10 +694,16 @@ class ReportesServices:
                         concepto = "pago adicional"
                         presupuesto_numero = numero_presupuesto
                         try:
-                            presupuesto = Presupuesto.get(numero=numero_presupuesto)
+                            candidatos = [
+                                p for p in Presupuesto.select() if p.numero == numero_presupuesto
+                            ]
+                            presupuesto = max(candidatos, key=lambda p: p.id) if candidatos else None
                             if presupuesto and presupuesto.cliente:
                                 cliente_nombre = f"{presupuesto.cliente.nombre} {presupuesto.cliente.apellido}".strip()
                                 cliente_dni = presupuesto.cliente.dni or "N/A"
+                            elif presupuesto and presupuesto.precliente:
+                                cliente_nombre = f"{presupuesto.precliente.nombre} {presupuesto.precliente.apellido}".strip()
+                                cliente_dni = "N/A"
                         except Exception as e:
                             print(f"⚠️ Error al obtener datos del presupuesto {numero_presupuesto}: {e}")
                     elif es_anticipo:

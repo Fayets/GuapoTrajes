@@ -957,6 +957,17 @@ class CajaServices:
             return f"{presupuesto.precliente.apellido} {presupuesto.precliente.nombre}".strip()
         return ""
 
+    def _resolver_presupuesto_por_numero(self, numero: str):
+        """Busca presupuesto por número. Si hay duplicados, toma el de mayor id (más reciente)."""
+        if not numero:
+            return None
+        candidatos = [p for p in Presupuesto.select() if p.numero == numero]
+        if not candidatos:
+            return None
+        if len(candidatos) == 1:
+            return candidatos[0]
+        return max(candidatos, key=lambda p: p.id)
+
     def _origen_con_cliente(self, origen: str) -> str:
         """Si el origen es SEÑA_PRESUPUESTO o PAGO_ADICIONAL_ORDEN, devuelve 'número - Nombre cliente'. Sino, el origen tal cual."""
         if not origen or not isinstance(origen, str):
@@ -968,7 +979,7 @@ class CajaServices:
             numero = origen.replace("PAGO_ADICIONAL_ORDEN:", "").strip()
         if not numero:
             return origen
-        presupuesto = Presupuesto.get(numero=numero)
+        presupuesto = self._resolver_presupuesto_por_numero(numero)
         if not presupuesto:
             return origen
         nombre = self._nombre_cliente_presupuesto(presupuesto)
