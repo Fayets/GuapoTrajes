@@ -17,7 +17,6 @@ import {
 import {
   labelTipoPrecioProducto,
   normalizarTipoPrecioProducto,
-  resumenPreciosProducto,
   TIPOS_PRECIO_PRODUCTO,
   type TipoPrecioProducto,
 } from "@/lib/tipos-precio-producto";
@@ -1037,15 +1036,13 @@ export default function PresupuestoModal({
                                 p.descripcion,
                                 p.descripcion_extra
                               );
-                              const base = `${desc} (${p.codigo_barra}) - ${resumenPreciosProducto(p)}`;
-                              let label = base;
-                              if (reservado) {
-                                label = `${base} — RESERVADO`;
-                              } else if (vendido) {
-                                label = `${base} — VENDIDO`;
-                              } else if (enOtroSitio) {
-                                label = `${base} — en ${estadoUpper}`;
-                              }
+                              const estadoLabel = reservado
+                                ? "RESERVADO"
+                                : vendido
+                                  ? "VENDIDO"
+                                  : enOtroSitio
+                                    ? `en ${estadoUpper}`
+                                    : null;
                               return (
                                 <button
                                   key={p.id}
@@ -1065,7 +1062,15 @@ export default function PresupuestoModal({
                                     }
                                   }}
                                 >
-                                  {label}
+                                  <EtiquetaProductoPresupuesto
+                                    nombre={desc}
+                                    codigoBarra={p.codigo_barra}
+                                  />
+                                  {estadoLabel ? (
+                                    <span className="d-block small mt-1">
+                                      {estadoLabel}
+                                    </span>
+                                  ) : null}
                                 </button>
                               );
                             })}
