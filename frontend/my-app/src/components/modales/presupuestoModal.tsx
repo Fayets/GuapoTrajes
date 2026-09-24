@@ -17,7 +17,6 @@ import {
 import {
   labelTipoPrecioProducto,
   normalizarTipoPrecioProducto,
-  precioProductoPorTipo,
   TIPOS_PRECIO_PRODUCTO,
   type TipoPrecioProducto,
 } from "@/lib/tipos-precio-producto";
@@ -1006,32 +1005,6 @@ export default function PresupuestoModal({
                           autoFocus
                         />
                       </div>
-                      <div className="col-12 col-md-5">
-                        <label className="form-label fw-bold">
-                          Tipo de precio
-                        </label>
-                        <select
-                          className="form-select"
-                          value={normalizarTipoPrecioProducto(
-                            tipoPrecioPresupuesto
-                          )}
-                          onChange={(e) =>
-                            cambiarTipoPrecioPresupuesto(
-                              e.target.value as TipoPrecioProducto
-                            )
-                          }
-                          aria-label="Tipo de precio del presupuesto"
-                        >
-                          {TIPOS_PRECIO_PRODUCTO.map((tipo) => (
-                            <option key={tipo.value} value={tipo.value}>
-                              {tipo.label}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="text-muted small mt-1">
-                          Aplica a todos los productos del presupuesto
-                        </div>
-                      </div>
                       <div className="col-12">
                         <label className="form-label fw-bold">Producto</label>
                         {productoFiltro.trim().length < 2 && !buscandoProductos ? (
@@ -1063,9 +1036,6 @@ export default function PresupuestoModal({
                                 p.descripcion,
                                 p.descripcion_extra
                               );
-                              const precio = formatMoneyAr(
-                                precioProductoPorTipo(p, tipoPrecioPresupuesto)
-                              );
                               const estadoLabel = reservado
                                 ? "RESERVADO"
                                 : vendido
@@ -1073,21 +1043,19 @@ export default function PresupuestoModal({
                                   : enOtroSitio
                                     ? `en ${estadoUpper}`
                                     : null;
-                              const titulo = [desc, precio, estadoLabel]
-                                .filter(Boolean)
-                                .join(" · ");
                               return (
                                 <button
                                   key={p.id}
                                   type="button"
-                                  className="list-group-item list-group-item-action py-1 px-2 text-start d-flex align-items-center gap-2"
+                                  className="list-group-item list-group-item-action py-2 px-2 text-start"
                                   disabled={noDisponible}
-                                  title={titulo}
-                                  style={
-                                    noDisponible
+                                  title={desc}
+                                  style={{
+                                    whiteSpace: "normal",
+                                    ...(noDisponible
                                       ? { color: "#c1121f", fontWeight: 600 }
-                                      : undefined
-                                  }
+                                      : null),
+                                  }}
                                   onClick={() => {
                                     if (agregarProductoPorId) {
                                       void agregarProductoPorId(String(p.id));
@@ -1096,15 +1064,12 @@ export default function PresupuestoModal({
                                     }
                                   }}
                                 >
-                                  <span className="text-truncate">
-                                    {desc}
-                                    {estadoLabel ? (
-                                      <span className="ms-2 small">{estadoLabel}</span>
-                                    ) : null}
-                                  </span>
-                                  <span className="ms-auto text-nowrap fw-semibold">
-                                    {precio}
-                                  </span>
+                                  <span className="text-break">{desc}</span>
+                                  {estadoLabel ? (
+                                    <span className="d-block small mt-1">
+                                      {estadoLabel}
+                                    </span>
+                                  ) : null}
                                 </button>
                               );
                             })}
@@ -1132,12 +1097,33 @@ export default function PresupuestoModal({
 
                   {items.length > 0 && (
                     <div className="border rounded p-3 mb-3 bg-light">
-                      <h6 className="mb-3">
-                        Productos Seleccionados
-                        <span className="badge bg-secondary bg-opacity-25 text-secondary ms-2 fw-normal">
-                          {labelTipoPrecioProducto(tipoPrecioPresupuesto)}
-                        </span>
-                      </h6>
+                      <h6 className="mb-3">Productos Seleccionados</h6>
+                      <div className="mb-3" style={{ maxWidth: "18rem" }}>
+                        <label className="form-label fw-bold">
+                          Tipo de precio
+                        </label>
+                        <select
+                          className="form-select"
+                          value={normalizarTipoPrecioProducto(
+                            tipoPrecioPresupuesto
+                          )}
+                          onChange={(e) =>
+                            cambiarTipoPrecioPresupuesto(
+                              e.target.value as TipoPrecioProducto
+                            )
+                          }
+                          aria-label="Tipo de precio del presupuesto"
+                        >
+                          {TIPOS_PRECIO_PRODUCTO.map((tipo) => (
+                            <option key={tipo.value} value={tipo.value}>
+                              {tipo.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="text-muted small mt-1">
+                          Aplica a todos los productos del presupuesto
+                        </div>
+                      </div>
                       <div
                         className="text-muted small fw-semibold mb-2 d-none d-md-grid"
                         style={ITEMS_PRECIO_GRID_STYLE}
