@@ -143,7 +143,7 @@ def get_all_products(
     ),
     incluir_ventana_reserva: bool = Query(
         False,
-        description="Si true, agrega en_ventana_reserva_hoy (regla [R-5,R] y órden con reserva)",
+        description="Si true, agrega en_ventana_reserva_hoy (regla [R-2,R] y órden con reserva)",
     ),
     ventana_reserva: Optional[str] = Query(
         None,

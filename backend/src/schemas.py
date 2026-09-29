@@ -265,7 +265,7 @@ class ProductResponse(ProductBase):
     # Si el cliente envía fecha_retiro + fecha_devolucion en GET /productos/all
     disponible_en_fechas: Optional[bool] = None
     conflicto_disponibilidad: Optional[dict] = None
-    # Si incluir_ventana_reserva=1: hoy está en [R-5,R] (presupuesto u orden)
+    # Si incluir_ventana_reserva=1: hoy está en [R-2,R] (presupuesto u orden)
     en_ventana_reserva_hoy: Optional[bool] = None
     reserva_venta: Optional[dict] = None
     # Migración única: fecha en que se imprimió la etiqueta 50×25 de inventario

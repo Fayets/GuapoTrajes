@@ -13,6 +13,9 @@ from src.presupuesto_titular import titular_presupuesto
 
 _ORDEN_CERRADA = ("cancelada", "cancelado", "completada", "completado")
 
+# Días previos al retiro en los que la prenda sigue bloqueada (lavandería / modista).
+DIAS_VENTANA_SEGURIDAD = 2
+
 
 def _as_date(d: date | datetime) -> date:
     if isinstance(d, datetime):
@@ -44,12 +47,12 @@ def _presupuesto_tiene_orden_activa(presupuesto) -> bool:
 def _rango_bloqueo_presupuesto(presupuesto) -> tuple[date, date]:
     """
     Ventana de bloqueo de un presupuesto activo:
-    desde 5 días antes del retiro hasta la devolución (o evento si faltan fechas).
-    Misma ocupación que una orden con seña.
+    desde DIAS_VENTANA_SEGURIDAD antes del retiro hasta la devolución
+    (o evento si faltan fechas). Misma ocupación que una orden con seña.
     """
     retiro = _as_date(presupuesto.fecha_retiro or presupuesto.fecha_evento)
     fin = _as_date(presupuesto.fecha_devolucion or presupuesto.fecha_evento)
-    inicio = retiro - timedelta(days=5)
+    inicio = retiro - timedelta(days=DIAS_VENTANA_SEGURIDAD)
     if fin < inicio:
         fin = inicio
     return inicio, fin
@@ -57,18 +60,16 @@ def _rango_bloqueo_presupuesto(presupuesto) -> tuple[date, date]:
 
 def _rango_bloqueo_producto_reservado(producto_reservado) -> tuple[date, date]:
     """
-    Ocupación de una orden con seña: [fecha_bloqueo, devolución].
-    fecha_bloqueo es retiro−5; el fin es la devolución del presupuesto (no solo +5 días).
+    Ocupación de una orden con seña: [retiro−DIAS_VENTANA_SEGURIDAD, devolución].
+    El inicio se calcula con la fecha de retiro vigente, no con el
+    fecha_bloqueo guardado (ese valor puede ser de la ventana anterior).
     """
-    inicio = _as_date(producto_reservado.fecha_bloqueo)
     orden = producto_reservado.orden_trabajo
     presupuesto = getattr(orden, "presupuesto", None) if orden else None
     if presupuesto is not None:
-        fin = _as_date(presupuesto.fecha_devolucion or presupuesto.fecha_evento)
-        if fin < inicio:
-            fin = inicio
-        return inicio, fin
-    return inicio, inicio + timedelta(days=5)
+        return _rango_bloqueo_presupuesto(presupuesto)
+    inicio = _as_date(producto_reservado.fecha_bloqueo)
+    return inicio, inicio + timedelta(days=DIAS_VENTANA_SEGURIDAD)
 
 
 def _estado_producto_codigo(estado) -> str:
@@ -83,7 +84,7 @@ def _estado_producto_codigo(estado) -> str:
 def producto_ids_en_ventana_reserva_el_dia(ref: Optional[date] = None) -> set[int]:
     """
     IDs de productos que hoy (o `ref`) caen en ventana de bloqueo **solo tras seña**:
-    orden de trabajo con ProductoReservado y ref ∈ [fecha_bloqueo, fecha_bloqueo+5]
+    orden de trabajo con ProductoReservado y ref ∈ [retiro−DIAS_VENTANA_SEGURIDAD, retiro]
     (orden no cancelada).
 
     Un presupuesto pendiente **no** bloquea: la prenda se compromete al cobrar la seña
@@ -101,8 +102,14 @@ def producto_ids_en_ventana_reserva_el_dia(ref: Optional[date] = None) -> set[in
         oest = (orden.estado or "").strip().lower()
         if oest in ("cancelada", "cancelado"):
             continue
-        bi = _as_date(pr.fecha_bloqueo)
-        bf = bi + timedelta(days=5)
+        presupuesto = getattr(orden, "presupuesto", None)
+        if presupuesto is not None:
+            retiro = _as_date(presupuesto.fecha_retiro or presupuesto.fecha_evento)
+            bi = retiro - timedelta(days=DIAS_VENTANA_SEGURIDAD)
+            bf = retiro
+        else:
+            bi = _as_date(pr.fecha_bloqueo)
+            bf = bi + timedelta(days=DIAS_VENTANA_SEGURIDAD)
         if bi <= dia <= bf:
             out.add(pr.producto.id)
 
@@ -301,9 +308,10 @@ def verificar_disponibilidad(
 
     Bloquea por:
     1. **Presupuestos activos sin orden** (pendiente/aprobado): solapamiento con
-       [fecha_retiro−5, fecha_devolución] del presupuesto existente vs el solicitado.
+       [fecha_retiro−DIAS_VENTANA_SEGURIDAD, fecha_devolución] del presupuesto
+       existente vs el solicitado.
     2. **Órdenes con seña** (ProductoReservado): la misma ocupación
-       [fecha_bloqueo, fecha_devolución] (= [retiro−5, devolución]).
+       [retiro−DIAS_VENTANA_SEGURIDAD, devolución].
 
     No usa el estado físico actual (CLIENTE / MODISTA / LAVANDERÍA). Eso indica
     dónde está la prenda hoy, no si se puede comprometer para otra fecha.
@@ -388,7 +396,7 @@ def validar_producto_para_item_presupuesto(
 def reconstruir_productos_reservados_para_orden(orden, presupuesto) -> None:
     """
     Elimina ProductoReservado de la orden y los recrea según ítems del presupuesto
-    (fecha_bloqueo = fecha_retiro_reserva - 5 días), alineado con crear_orden_trabajo.
+    (fecha_bloqueo = fecha_retiro_reserva - DIAS_VENTANA_SEGURIDAD), alineado con crear_orden_trabajo.
     Ejecutar dentro del mismo db_session que la edición del presupuesto.
     """
     fecha_retiro_reserva = presupuesto.fecha_retiro or presupuesto.fecha_evento
@@ -396,7 +404,7 @@ def reconstruir_productos_reservados_para_orden(orden, presupuesto) -> None:
         pr.delete()
     for item in presupuesto.items:
         producto = item.producto
-        fecha_bloqueo = fecha_retiro_reserva - timedelta(days=5)
+        fecha_bloqueo = fecha_retiro_reserva - timedelta(days=DIAS_VENTANA_SEGURIDAD)
         if _estado_producto_codigo(producto.estado) in (
             EstadoProducto.LAVANDERIA.value,
             EstadoProducto.MODISTA.value,

@@ -18,7 +18,7 @@ def _crear_n_ordenes(w, n: int, total: float = 1000.0, seña: float = 1000.0):
     cu = fake_current_user(w.usuario.id)
     ids = []
     for i in range(n):
-        # Cada orden usa el mismo producto: fechas sin solapar [retiro−5, devolución].
+        # Cada orden usa el mismo producto: fechas sin solapar [retiro−2, devolución].
         R = date(2035, 3, 1) + timedelta(days=i * 20)
         out = PresupuestosServices().crear_presupuesto(
             PresupuestoCreate(

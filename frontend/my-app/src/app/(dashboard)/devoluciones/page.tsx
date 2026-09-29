@@ -315,12 +315,12 @@ export default function DevolucionesPage() {
         }
       );
 
-      // Si no tiene productos con fecha_bloqueo, usar fecha_evento - 5 días como fecha_bloqueo
+      // Si no tiene productos con fecha_bloqueo, usar fecha_evento - 2 días como fecha_bloqueo
       if (!tieneProductosBloqueados && orden.fecha_evento) {
         const fechaEvento = new Date(orden.fecha_evento + "T00:00:00");
         fechaEvento.setHours(0, 0, 0, 0);
         const fechaBloqueoEstimada = new Date(fechaEvento);
-        fechaBloqueoEstimada.setDate(fechaBloqueoEstimada.getDate() - 5);
+        fechaBloqueoEstimada.setDate(fechaBloqueoEstimada.getDate() - 2);
         fechaBloqueoEstimada.setHours(0, 0, 0, 0);
 
         return fechaBloqueoEstimada <= hoy && hoy <= fechaDevolucion;

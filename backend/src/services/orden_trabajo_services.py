@@ -30,7 +30,10 @@ import logging
 from src.descripcion_producto import format_descripcion_producto
 from src.presupuesto_observaciones import observaciones_presupuesto_para_mostrar
 from src.presupuesto_titular import titular_presupuesto
-from src.services.disponibilidad_services import reconstruir_productos_reservados_para_orden
+from src.services.disponibilidad_services import (
+    DIAS_VENTANA_SEGURIDAD,
+    reconstruir_productos_reservados_para_orden,
+)
 from src.services.auditoria_services import nombre_usuario, registrar_auditoria
 
 logger = logging.getLogger(__name__)
@@ -173,7 +176,9 @@ def _item_presupuesto_a_producto_orden_dict(
         or orden.fecha_evento
     )
     fecha_bloqueo = (
-        fecha_retiro - timedelta(days=5) if fecha_retiro else orden.fecha_evento
+        fecha_retiro - timedelta(days=DIAS_VENTANA_SEGURIDAD)
+        if fecha_retiro
+        else orden.fecha_evento
     )
     base = {
         "producto_reservado_id": None,

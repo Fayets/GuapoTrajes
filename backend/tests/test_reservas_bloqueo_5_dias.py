@@ -1,9 +1,10 @@
 """
-Pruebas funcionales: bloqueo de alquiler en la ventana [fecha_retiro-5, fecha_devolucion]
+Pruebas funcionales: bloqueo de alquiler en la ventana [fecha_retiro-2, fecha_devolucion]
 tras generar orden de trabajo (ProductoReservado).
 
 Regla: no disponible si el intervalo solicitado [fecha_retiro, fecha_devolucion]
-se solapa con [R-5, D] donde R es la fecha de retiro y D la devolución del titular.
+se solapa con [R-2, D] donde R es la fecha de retiro y D la devolución del titular.
+Los 2 días previos al retiro son la ventana de lavandería / modista.
 """
 from __future__ import annotations
 
@@ -71,15 +72,14 @@ def mundo_reserva():
 
 
 # (retiro_offset, devolucion_offset, esperado_disponible, descripcion)
-# Titular: retiro = R, devolución = R+20 → ocupación [R-5, R+20]
+# Titular: retiro = R, devolución = R+20 → ocupación [R-2, R+20]
 CASOS_BLOQUEO = [
-    (-7, -6, True, "completamente_antes_de_R_menos_5"),
-    (-7, -5, False, "solapa_en_R_menos_5"),
-    (-5, -4, False, "empieza_en_borde_R_menos_5"),
-    (-4, -2, False, "dentro_de_ventana"),
-    (-3, 0, False, "hasta_R"),
+    (-5, -3, True, "completamente_antes_de_R_menos_2"),
+    (-4, -2, False, "solapa_en_R_menos_2"),
+    (-2, -1, False, "empieza_en_borde_R_menos_2"),
+    (-1, 0, False, "dentro_de_ventana"),
     (1, 3, False, "despues_del_retiro_dentro_del_alquiler"),
-    (-6, 1, False, "solapa_por_devolucion_mas_alla_de_R"),
+    (-4, 1, False, "solapa_por_devolucion_mas_alla_de_R"),
     (-8, -7, True, "muy_antes_sin_solapar"),
     (21, 25, True, "completamente_despues_de_devolucion"),
 ]
@@ -87,7 +87,7 @@ CASOS_BLOQUEO = [
 
 @pytest.mark.parametrize("prod_attr", ["producto_a", "producto_b"])
 @pytest.mark.parametrize("off_ret,off_dev,esperado,desc", CASOS_BLOQUEO)
-def test_disponibilidad_ventana_cinco_dias(
+def test_disponibilidad_ventana_dos_dias(
     mundo_reserva, prod_attr, off_ret, off_dev, esperado, desc
 ):
     w = mundo_reserva
@@ -118,7 +118,7 @@ def test_metricas_resumen_bloqueo_mundo(mundo_reserva):
                 print(f"FALLA {prod_attr} {desc} {fr} {fd}")
     pct = (100.0 * ok / total) if total else 0.0
     print(
-        f"\n[metricas_bloqueo_5_dias] aprobados={ok}/{total} "
+        f"\n[metricas_bloqueo_2_dias] aprobados={ok}/{total} "
         f"({pct:.1f}%)\n"
     )
     assert ok == total
@@ -159,10 +159,10 @@ def mundo_solo_presupuesto_sin_sena():
 
 
 CASOS_PRESUPUESTO_SIN_SENA = [
-    (-10, -6, True, "completamente_antes_de_R_menos_5"),
-    (-7, -5, False, "solapa_en_R_menos_5"),
-    (-3, -1, False, "dentro_de_ventana_pre_retiro"),
-    (-1, 1, False, "solapa_en_retiro"),
+    (-10, -3, True, "completamente_antes_de_R_menos_2"),
+    (-4, -2, False, "solapa_en_R_menos_2"),
+    (-1, 1, False, "dentro_de_ventana_pre_retiro"),
+    (0, 1, False, "solapa_en_retiro"),
     (0, 5, False, "desde_retiro"),
     (10, 15, False, "dentro_del_alquiler"),
     (21, 25, True, "completamente_despues"),

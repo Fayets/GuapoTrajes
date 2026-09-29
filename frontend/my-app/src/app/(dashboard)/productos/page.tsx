@@ -63,7 +63,7 @@ interface Producto {
   destino_notas?: string | null;
   destino_cliente_nombre?: string | null;
   destino_cliente_celular?: string | null;
-  /** true = en ventana de reserva (orden con seña, regla R−5…R según hoy) */
+  /** true = en ventana de reserva (orden con seña, regla R−2…R según hoy) */
   en_ventana_reserva_hoy?: boolean | null;
 }
 
