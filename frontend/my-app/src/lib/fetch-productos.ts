@@ -62,17 +62,20 @@ export async function fetchProductosPage(
 /** Carga todas las páginas (para selects en ventas, presupuestos, etc.). */
 export async function fetchAllProductos(
   token: string,
-  extraParams: FetchProductosParams = {}
+  extraParams: FetchProductosParams = {},
+  init?: { signal?: AbortSignal }
 ): Promise<unknown[]> {
   const all: unknown[] = [];
   let page = 1;
 
   while (true) {
+    if (init?.signal?.aborted) break;
     const { items, total } = await fetchProductosPage(
       token,
       page,
       API_PAGE_SIZE,
-      extraParams
+      extraParams,
+      init
     );
     if (items.length === 0) break;
     all.push(...items);

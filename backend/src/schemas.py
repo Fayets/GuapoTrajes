@@ -179,6 +179,17 @@ class TokenVerificationRequest(BaseModel):
     token: str
 
 # Catálogos de atributos de producto (config)
+class VentanaSeguridadUpdate(BaseModel):
+    dias: int = Field(..., ge=0, le=30)
+
+
+class VentanaSeguridadResponse(BaseModel):
+    dias: int
+    inicio: str
+    fin: str
+    reservado_hoy: str
+
+
 class ProductoLineaCreate(BaseModel):
     nombre: str
     codigo: str
@@ -526,6 +537,14 @@ class ItemPresupuestoResponse(BaseModel):
     cantidad: int
     precio_unitario: float
     subtotal: float
+    # Precios de catálogo del producto. El precio del ítem puede estar ya descontado.
+    precio_alquiler_lista: Optional[float] = None
+    precio_alquiler_efectivo: Optional[float] = None
+    precio_venta_nuevo_lista: Optional[float] = None
+    precio_venta_nuevo_efectivo: Optional[float] = None
+    precio_de_venta_medio_uso: Optional[float] = None
+    precio_venta: Optional[float] = None
+    precio_liquidacion: Optional[float] = None
 
 class PresupuestoResponse(BaseModel):
     id: int

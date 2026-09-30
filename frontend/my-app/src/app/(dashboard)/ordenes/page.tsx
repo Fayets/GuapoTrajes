@@ -111,6 +111,7 @@ type OrdenTrabajo = {
   total_presupuesto?: number;
   contrato_generado_at?: string | null;
   etiquetas_armado_impresas_at?: string | null;
+  conjunto_separado?: boolean;
   precliente_id?: number | null;
   cliente_id?: number | null;
   creado_por_nombre?: string | null;
@@ -762,12 +763,39 @@ function OrdenesTrabajoContent() {
       const payload = construirEtiquetaResumenDesdeOrden(ordenCompleta);
       const resultado = await imprimirEtiquetaResumenConjunto(payload);
       if (resultado.resultado === "ok") {
+        let marcado = Boolean(ordenCompleta.conjunto_separado);
+        if (!marcado) {
+          const marca = await fetch(
+            `${getApiBaseUrl()}/ordenes/${ordenCompleta.id}/marcar-conjunto-separado`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+              },
+            }
+          );
+          if (marca.ok) {
+            marcado = true;
+            setOrdenes((prev) =>
+              prev.map((o) =>
+                o.id === ordenCompleta.id ? { ...o, conjunto_separado: true } : o
+              )
+            );
+            setOrdenSeleccionada((prev) =>
+              prev && prev.id === ordenCompleta.id
+                ? { ...prev, conjunto_separado: true }
+                : prev
+            );
+          }
+        }
         const msg =
           resultado.metodo === "qz" && resultado.impresora
             ? `Etiqueta grande enviada a ${resultado.impresora}.`
             : resultado.mensajeAyuda ||
               `Etiqueta de la orden #${ordenCompleta.id} enviada a impresión.`;
-        toast.success(msg);
+        toast.success(
+          marcado ? `${msg} Conjunto marcado como separado.` : msg
+        );
       } else {
         toast.error("No se pudo abrir la impresión de la etiqueta grande.");
       }

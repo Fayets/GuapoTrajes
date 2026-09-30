@@ -212,6 +212,20 @@ def obtener_recibos_orden(orden_id: int, current_user=Depends(get_current_user))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inesperado al obtener recibos: {str(e)}")
 
+@router.post("/{orden_id}/marcar-conjunto-separado")
+def marcar_conjunto_separado(orden_id: int, current_user=Depends(get_current_user)):
+    """Marca el conjunto como ya separado en perchero (al imprimir la etiqueta grande)."""
+    try:
+        return servicio.marcar_conjunto_separado(orden_id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inesperado al marcar el conjunto como separado: {str(e)}",
+        )
+
+
 @router.post("/{orden_id}/registrar-etiquetas-armado")
 def registrar_etiquetas_armado_impresas(
     orden_id: int, current_user=Depends(get_current_user)

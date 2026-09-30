@@ -172,6 +172,11 @@ class VentasServices:
                     producto.stock -= item.cantidad
                     if producto.stock <= 0:
                         producto.stock = 0
+                        from src.services.orden_trabajo_services import (
+                            cerrar_visitas_taller_abiertas,
+                        )
+
+                        cerrar_visitas_taller_abiertas(producto)
                         producto.estado = EstadoProducto.VENDIDO
 
                     total_venta += subtotal

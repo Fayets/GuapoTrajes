@@ -158,6 +158,12 @@ export function Sidebar({ collapsed, toggleSidebar, mobileOpen = false, onMobile
           allow: ["ADMIN", "SUPER_ADMIN"],
         },
         {
+          title: "Ventana de bloqueo",
+          icon: "bi-calendar-range",
+          href: "/configuraciones/ventana-seguridad",
+          allow: ["ADMIN", "SUPER_ADMIN"],
+        },
+        {
           title: "Usuarios",
           icon: "bi-people-fill",
           href: "/usuarios",

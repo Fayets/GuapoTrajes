@@ -1016,9 +1016,13 @@ export default function PresupuestoModal({
                         ) : resultadosBusqueda.length === 0 ? (
                           <p className="text-muted small mb-0">No hay coincidencias.</p>
                         ) : (
+                          <>
+                          <p className="text-muted small mb-1">
+                            {resultadosBusqueda.length} coincidencias
+                          </p>
                           <div
                             className="list-group"
-                            style={{ maxHeight: 220, overflowY: "auto" }}
+                            style={{ maxHeight: 420, overflowY: "auto" }}
                           >
                             {resultadosBusqueda.map((p) => {
                               const reservado =
@@ -1074,6 +1078,7 @@ export default function PresupuestoModal({
                               );
                             })}
                           </div>
+                          </>
                         )}
                         {avisoAgregarProducto ? (
                           <div

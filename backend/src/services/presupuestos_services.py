@@ -41,6 +41,39 @@ def _siguiente_numero_presupuesto() -> str:
     return f"PRES-{siguiente:03d}"
 
 
+_CAMPOS_PRECIO_CATALOGO = (
+    "precio_alquiler_lista",
+    "precio_alquiler_efectivo",
+    "precio_venta_nuevo_lista",
+    "precio_venta_nuevo_efectivo",
+    "precio_de_venta_medio_uso",
+    "precio_venta",
+    "precio_liquidacion",
+)
+
+
+def _item_presupuesto_response(item) -> ItemPresupuestoResponse:
+    """Arma el ítem con el precio guardado y, aparte, los precios de catálogo."""
+    producto = item.producto
+    precios = {
+        campo: float(getattr(producto, campo) or 0)
+        for campo in _CAMPOS_PRECIO_CATALOGO
+    }
+    return ItemPresupuestoResponse(
+        id=item.id,
+        producto_id=producto.id,
+        producto_descripcion=format_descripcion_producto(
+            producto.descripcion,
+            producto.descripcion_extra,
+        ),
+        codigo_barra=producto.codigo_barra or None,
+        cantidad=item.cantidad,
+        precio_unitario=item.precio_unitario,
+        subtotal=item.subtotal,
+        **precios,
+    )
+
+
 def _presupuesto_cliente_info(p):
     """Devuelve cliente_id, precliente_id, cliente_nombre, es_precliente, cliente_dni, cliente_direccion, cliente_celular para un presupuesto."""
     if p.precliente:
@@ -326,21 +359,7 @@ class PresupuestosServices:
                         total=p.total,
                         estado=p.estado,
                         fecha_creacion=isoformat_ar(p.fecha_creacion) if p.fecha_creacion else None,
-                        items=[
-                            ItemPresupuestoResponse(
-                                id=item.id,
-                                producto_id=item.producto.id,
-                                producto_descripcion=format_descripcion_producto(
-                                    item.producto.descripcion,
-                                    item.producto.descripcion_extra,
-                                ),
-                                codigo_barra=item.producto.codigo_barra or None,
-                                cantidad=item.cantidad,
-                                precio_unitario=item.precio_unitario,
-                                subtotal=item.subtotal
-                            )
-                            for item in p.items
-                        ],
+                        items=[_item_presupuesto_response(item) for item in p.items],
                         seña_pagada=getattr(p.orden_trabajo, 'seña_pagada', None) if p.orden_trabajo else None,
                         metodo_pago=getattr(p.orden_trabajo, 'metodo_pago', None) if p.orden_trabajo else None,
                         # Campos de descuento extra
@@ -712,21 +731,7 @@ class PresupuestosServices:
                     total=presupuesto.total,
                     estado=presupuesto.estado,
                     fecha_creacion=isoformat_ar(presupuesto.fecha_creacion) if presupuesto.fecha_creacion else None,
-                    items=[
-                        ItemPresupuestoResponse(
-                            id=item.id,
-                            producto_id=item.producto.id,
-                            producto_descripcion=format_descripcion_producto(
-                                item.producto.descripcion,
-                                item.producto.descripcion_extra,
-                            ),
-                            codigo_barra=item.producto.codigo_barra or None,
-                            cantidad=item.cantidad,
-                            precio_unitario=item.precio_unitario,
-                            subtotal=item.subtotal
-                        )
-                        for item in presupuesto.items
-                    ],
+                    items=[_item_presupuesto_response(item) for item in presupuesto.items],
                     seña_pagada=getattr(presupuesto.orden_trabajo, 'seña_pagada', None) if presupuesto.orden_trabajo else None,
                     metodo_pago=getattr(presupuesto.orden_trabajo, 'metodo_pago', None) if presupuesto.orden_trabajo else None,
                     # Campos de descuento extra

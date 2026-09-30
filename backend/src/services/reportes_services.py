@@ -1378,8 +1378,6 @@ class ReportesServices:
             productos_modista = [
                 pm for pm in list(ProductoModista.select()) if pm.fecha_salida is None
             ]
-            productos_en_lavanderia = {pl.producto.id for pl in productos_lavanderia}
-            productos_en_modista = {pm.producto.id for pm in productos_modista}
             info_lavanderia = {
                 pl.producto.id: (pl.lavanderia.nombre if pl.lavanderia else "N/A")
                 for pl in productos_lavanderia
@@ -1473,30 +1471,25 @@ class ReportesServices:
                         motivo_critico_armado = ""
                         ubicacion_critica = ""
 
-                        if estado_producto != "SALON":
-                            es_critico_armado = True
-                            if estado_producto == "LAVANDERIA":
-                                motivo_critico_armado = "En lavandería"
-                                ubicacion_critica = info_lavanderia.get(producto.id, "N/A")
-                            elif estado_producto == "MODISTA":
-                                motivo_critico_armado = "En modista"
-                                ubicacion_critica = info_modista.get(producto.id, "N/A")
-                            elif estado_producto == "CLIENTE":
-                                motivo_critico_armado = "En poder del cliente"
-                                ubicacion_critica = "Cliente"
-                            else:
-                                motivo_critico_armado = f"Estado: {estado_producto}"
-                                ubicacion_critica = estado_producto
-
-                        if producto.id in productos_en_lavanderia:
+                        # La ubicación actual es el estado del producto.
+                        # Un ingreso viejo sin fecha de salida no pisa ese estado:
+                        # la prenda pudo volver de modista y volver a alquilarse.
+                        if estado_producto == "LAVANDERIA":
                             es_critico_armado = True
                             motivo_critico_armado = "En lavandería"
                             ubicacion_critica = info_lavanderia.get(producto.id, "N/A")
-
-                        if producto.id in productos_en_modista:
+                        elif estado_producto == "MODISTA":
                             es_critico_armado = True
                             motivo_critico_armado = "En modista"
                             ubicacion_critica = info_modista.get(producto.id, "N/A")
+                        elif estado_producto == "CLIENTE":
+                            es_critico_armado = True
+                            motivo_critico_armado = "En poder del cliente"
+                            ubicacion_critica = "Cliente"
+                        elif estado_producto != "SALON":
+                            es_critico_armado = True
+                            motivo_critico_armado = f"Estado: {estado_producto}"
+                            ubicacion_critica = estado_producto
 
                         pr_item = pr_por_producto.get(producto.id)
                         requiere_modista_orden = bool(
@@ -1893,9 +1886,6 @@ class ReportesServices:
             productos_modista = list(ProductoModista.select(lambda pm: pm.fecha_salida is None))
             
             # Crear sets para búsqueda rápida
-            productos_en_lavanderia = {pl.producto.id for pl in productos_lavanderia}
-            productos_en_modista = {pm.producto.id for pm in productos_modista}
-            
             # Diccionario para almacenar información de lavandería y modista por producto
             info_lavanderia = {}
             for pl in productos_lavanderia:
@@ -1952,31 +1942,22 @@ class ReportesServices:
                             # Verificar estado del producto
                             estado_producto = producto.estado.value if hasattr(producto.estado, 'value') else str(producto.estado)
                             
-                            if estado_producto != "SALON":
-                                es_critico = True
-                                if estado_producto == "LAVANDERIA":
-                                    motivo_critico = "En lavandería"
-                                    ubicacion_actual = info_lavanderia.get(producto.id, {}).get("lavanderia_nombre", "N/A")
-                                elif estado_producto == "MODISTA":
-                                    motivo_critico = "En modista"
-                                    ubicacion_actual = info_modista.get(producto.id, {}).get("modista_nombre", "N/A")
-                                elif estado_producto == "CLIENTE":
-                                    motivo_critico = "En poder del cliente"
-                                    ubicacion_actual = "Cliente"
-                                else:
-                                    motivo_critico = f"Estado: {estado_producto}"
-                                    ubicacion_actual = estado_producto
-                            
-                            # También verificar si está en lavandería o modista aunque el estado no lo refleje
-                            if producto.id in productos_en_lavanderia:
+                            if estado_producto == "LAVANDERIA":
                                 es_critico = True
                                 motivo_critico = "En lavandería"
                                 ubicacion_actual = info_lavanderia.get(producto.id, {}).get("lavanderia_nombre", "N/A")
-                            
-                            if producto.id in productos_en_modista:
+                            elif estado_producto == "MODISTA":
                                 es_critico = True
                                 motivo_critico = "En modista"
                                 ubicacion_actual = info_modista.get(producto.id, {}).get("modista_nombre", "N/A")
+                            elif estado_producto == "CLIENTE":
+                                es_critico = True
+                                motivo_critico = "En poder del cliente"
+                                ubicacion_actual = "Cliente"
+                            elif estado_producto != "SALON":
+                                es_critico = True
+                                motivo_critico = f"Estado: {estado_producto}"
+                                ubicacion_actual = estado_producto
 
                             # Solo agregar si es crítico
                             if es_critico:

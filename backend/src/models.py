@@ -572,6 +572,13 @@ class MetodoPagoConfigurable(db.Entity):
     fecha_creacion = Required(datetime, default=ahora_ar)
     _table_ = "MetodosPagoConfigurables"
 
+class ConfiguracionSistema(db.Entity):
+    """Ajustes globales del local. Hay una sola fila."""
+    id = PrimaryKey(int, auto=True)
+    dias_ventana_seguridad = Required(int, default=2)
+    _table_ = "ConfiguracionSistema"
+
+
 class SubmetodoPago(db.Entity):
     id = PrimaryKey(int, auto=True)
     metodo_pago = Required(MetodoPagoConfigurable)  # UN SUBMÉTODO PERTENECE A UN MÉTODO DE PAGO

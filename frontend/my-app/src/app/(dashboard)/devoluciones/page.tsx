@@ -182,6 +182,7 @@ export default function DevolucionesPage() {
   >({});
 
   const { token, me } = useAuth();
+  const [diasVentana, setDiasVentana] = useState(2);
 
   useEffect(() => {
     fetchOrdenes();
@@ -217,12 +218,23 @@ export default function DevolucionesPage() {
     if (token) {
       fetchLavanderias();
       fetchModistas();
+      fetch(`${getApiBaseUrl()}/config/ventana-seguridad`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          const dias = Number(data?.dias);
+          if (Number.isInteger(dias) && dias >= 0 && dias <= 30) {
+            setDiasVentana(dias);
+          }
+        })
+        .catch(() => {});
     }
   }, [token]);
 
   useEffect(() => {
     filtrarOrdenesAbiertas();
-  }, [ordenes]);
+  }, [ordenes, diasVentana]);
 
   const fetchOrdenes = async () => {
     setCargando(true);
@@ -315,12 +327,12 @@ export default function DevolucionesPage() {
         }
       );
 
-      // Si no tiene productos con fecha_bloqueo, usar fecha_evento - 2 días como fecha_bloqueo
+      // Si no tiene productos con fecha_bloqueo, estimar con la ventana global (retiro no está: se usa la fecha del evento).
       if (!tieneProductosBloqueados && orden.fecha_evento) {
         const fechaEvento = new Date(orden.fecha_evento + "T00:00:00");
         fechaEvento.setHours(0, 0, 0, 0);
         const fechaBloqueoEstimada = new Date(fechaEvento);
-        fechaBloqueoEstimada.setDate(fechaBloqueoEstimada.getDate() - 2);
+        fechaBloqueoEstimada.setDate(fechaBloqueoEstimada.getDate() - diasVentana);
         fechaBloqueoEstimada.setHours(0, 0, 0, 0);
 
         return fechaBloqueoEstimada <= hoy && hoy <= fechaDevolucion;

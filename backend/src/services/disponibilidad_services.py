@@ -8,13 +8,96 @@ from fastapi import HTTPException
 
 from src.descripcion_producto import format_descripcion_producto
 from src.fechas_ar import hoy_ar
-from src.models import ItemPresupuesto, ProductoReservado, Producto, EstadoProducto
+from src.models import (
+    ConfiguracionSistema,
+    ItemPresupuesto,
+    ProductoReservado,
+    Producto,
+    EstadoProducto,
+)
 from src.presupuesto_titular import titular_presupuesto
 
 _ORDEN_CERRADA = ("cancelada", "cancelado", "completada", "completado")
 
-# Días previos al retiro en los que la prenda sigue bloqueada (lavandería / modista).
-DIAS_VENTANA_SEGURIDAD = 2
+# Si todavía no hay fila en ConfiguracionSistema, se usa este valor.
+DIAS_VENTANA_SEGURIDAD_DEFAULT = 2
+DIAS_VENTANA_SEGURIDAD_MIN = 0
+DIAS_VENTANA_SEGURIDAD_MAX = 30
+
+
+def dias_ventana_seguridad() -> int:
+    """
+    Días de margen antes del retiro. Sale del ajuste global (rol admin).
+    Si no hay fila guardada, devuelve el valor por defecto.
+    Se puede llamar dentro de un db_session ya abierto.
+    """
+
+    @db_session
+    def _leer() -> int:
+        fila = ConfiguracionSistema.select().first()
+        if fila is None:
+            return DIAS_VENTANA_SEGURIDAD_DEFAULT
+        valor = int(fila.dias_ventana_seguridad)
+        if valor < DIAS_VENTANA_SEGURIDAD_MIN or valor > DIAS_VENTANA_SEGURIDAD_MAX:
+            return DIAS_VENTANA_SEGURIDAD_DEFAULT
+        return valor
+
+    return _leer()
+
+
+def texto_dias(dias: int) -> str:
+    if dias == 1:
+        return "1 día"
+    return f"{dias} días"
+
+
+def explicacion_ventana_seguridad(dias: int | None = None) -> dict:
+    """Textos que dicen de qué fecha del presupuesto sale cada tramo."""
+    n = dias_ventana_seguridad() if dias is None else int(dias)
+    if n == 0:
+        anticipo = "el mismo día de la fecha de retiro"
+    else:
+        anticipo = f"{texto_dias(n)} antes de la fecha de retiro"
+    return {
+        "dias": n,
+        "inicio": (
+            f"Empieza {anticipo}. "
+            "Sale de la fecha de retiro del presupuesto. "
+            "Si el presupuesto no tiene fecha de retiro, se usa la fecha del evento."
+        ),
+        "fin": (
+            "Termina el día de la fecha de devolución. "
+            "Sale de la fecha de devolución del presupuesto. "
+            "Si no hay fecha de devolución, se usa la fecha del evento."
+        ),
+        "reservado_hoy": (
+            f"En el listado de productos, la marca de reservado cubre desde {anticipo} "
+            "hasta el día del retiro. Solo aparece si la prenda ya tiene seña."
+        ),
+    }
+
+
+@db_session
+def guardar_dias_ventana_seguridad(dias: int) -> dict:
+    if isinstance(dias, bool) or not isinstance(dias, int):
+        raise HTTPException(
+            status_code=400,
+            detail="La ventana tiene que ser un número entero de días.",
+        )
+    if dias < DIAS_VENTANA_SEGURIDAD_MIN or dias > DIAS_VENTANA_SEGURIDAD_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"La ventana tiene que estar entre {DIAS_VENTANA_SEGURIDAD_MIN} "
+                f"y {DIAS_VENTANA_SEGURIDAD_MAX} días."
+            ),
+        )
+    fila = ConfiguracionSistema.select().first()
+    if fila is None:
+        ConfiguracionSistema(dias_ventana_seguridad=dias)
+    else:
+        fila.dias_ventana_seguridad = dias
+    return explicacion_ventana_seguridad(dias)
 
 
 def _as_date(d: date | datetime) -> date:
@@ -47,12 +130,12 @@ def _presupuesto_tiene_orden_activa(presupuesto) -> bool:
 def _rango_bloqueo_presupuesto(presupuesto) -> tuple[date, date]:
     """
     Ventana de bloqueo de un presupuesto activo:
-    desde DIAS_VENTANA_SEGURIDAD antes del retiro hasta la devolución
+    desde el ajuste global de días antes del retiro hasta la devolución
     (o evento si faltan fechas). Misma ocupación que una orden con seña.
     """
     retiro = _as_date(presupuesto.fecha_retiro or presupuesto.fecha_evento)
     fin = _as_date(presupuesto.fecha_devolucion or presupuesto.fecha_evento)
-    inicio = retiro - timedelta(days=DIAS_VENTANA_SEGURIDAD)
+    inicio = retiro - timedelta(days=dias_ventana_seguridad())
     if fin < inicio:
         fin = inicio
     return inicio, fin
@@ -60,7 +143,7 @@ def _rango_bloqueo_presupuesto(presupuesto) -> tuple[date, date]:
 
 def _rango_bloqueo_producto_reservado(producto_reservado) -> tuple[date, date]:
     """
-    Ocupación de una orden con seña: [retiro−DIAS_VENTANA_SEGURIDAD, devolución].
+    Ocupación de una orden con seña: [retiro−días de ventana, devolución].
     El inicio se calcula con la fecha de retiro vigente, no con el
     fecha_bloqueo guardado (ese valor puede ser de la ventana anterior).
     """
@@ -69,7 +152,7 @@ def _rango_bloqueo_producto_reservado(producto_reservado) -> tuple[date, date]:
     if presupuesto is not None:
         return _rango_bloqueo_presupuesto(presupuesto)
     inicio = _as_date(producto_reservado.fecha_bloqueo)
-    return inicio, inicio + timedelta(days=DIAS_VENTANA_SEGURIDAD)
+    return inicio, inicio + timedelta(days=dias_ventana_seguridad())
 
 
 def _estado_producto_codigo(estado) -> str:
@@ -84,7 +167,7 @@ def _estado_producto_codigo(estado) -> str:
 def producto_ids_en_ventana_reserva_el_dia(ref: Optional[date] = None) -> set[int]:
     """
     IDs de productos que hoy (o `ref`) caen en ventana de bloqueo **solo tras seña**:
-    orden de trabajo con ProductoReservado y ref ∈ [retiro−DIAS_VENTANA_SEGURIDAD, retiro]
+    orden de trabajo con ProductoReservado y ref ∈ [retiro−días de ventana, retiro]
     (orden no cancelada).
 
     Un presupuesto pendiente **no** bloquea: la prenda se compromete al cobrar la seña
@@ -93,6 +176,7 @@ def producto_ids_en_ventana_reserva_el_dia(ref: Optional[date] = None) -> set[in
     Debe ejecutarse dentro de un db_session activo (p. ej. desde ProductoServices).
     """
     dia = _as_date(ref) if ref is not None else hoy_ar()
+    margen = dias_ventana_seguridad()
     out: set[int] = set()
 
     for pr in ProductoReservado.select():
@@ -105,11 +189,11 @@ def producto_ids_en_ventana_reserva_el_dia(ref: Optional[date] = None) -> set[in
         presupuesto = getattr(orden, "presupuesto", None)
         if presupuesto is not None:
             retiro = _as_date(presupuesto.fecha_retiro or presupuesto.fecha_evento)
-            bi = retiro - timedelta(days=DIAS_VENTANA_SEGURIDAD)
+            bi = retiro - timedelta(days=margen)
             bf = retiro
         else:
             bi = _as_date(pr.fecha_bloqueo)
-            bf = bi + timedelta(days=DIAS_VENTANA_SEGURIDAD)
+            bf = bi + timedelta(days=margen)
         if bi <= dia <= bf:
             out.add(pr.producto.id)
 
@@ -308,10 +392,10 @@ def verificar_disponibilidad(
 
     Bloquea por:
     1. **Presupuestos activos sin orden** (pendiente/aprobado): solapamiento con
-       [fecha_retiro−DIAS_VENTANA_SEGURIDAD, fecha_devolución] del presupuesto
+       [fecha_retiro−días de ventana, fecha_devolución] del presupuesto
        existente vs el solicitado.
     2. **Órdenes con seña** (ProductoReservado): la misma ocupación
-       [retiro−DIAS_VENTANA_SEGURIDAD, devolución].
+       [retiro−días de ventana, devolución].
 
     No usa el estado físico actual (CLIENTE / MODISTA / LAVANDERÍA). Eso indica
     dónde está la prenda hoy, no si se puede comprometer para otra fecha.
@@ -396,7 +480,7 @@ def validar_producto_para_item_presupuesto(
 def reconstruir_productos_reservados_para_orden(orden, presupuesto) -> None:
     """
     Elimina ProductoReservado de la orden y los recrea según ítems del presupuesto
-    (fecha_bloqueo = fecha_retiro_reserva - DIAS_VENTANA_SEGURIDAD), alineado con crear_orden_trabajo.
+    (fecha_bloqueo = fecha_retiro_reserva − días de ventana), alineado con crear_orden_trabajo.
     Ejecutar dentro del mismo db_session que la edición del presupuesto.
     """
     fecha_retiro_reserva = presupuesto.fecha_retiro or presupuesto.fecha_evento
@@ -404,7 +488,7 @@ def reconstruir_productos_reservados_para_orden(orden, presupuesto) -> None:
         pr.delete()
     for item in presupuesto.items:
         producto = item.producto
-        fecha_bloqueo = fecha_retiro_reserva - timedelta(days=DIAS_VENTANA_SEGURIDAD)
+        fecha_bloqueo = fecha_retiro_reserva - timedelta(days=dias_ventana_seguridad())
         if _estado_producto_codigo(producto.estado) in (
             EstadoProducto.LAVANDERIA.value,
             EstadoProducto.MODISTA.value,

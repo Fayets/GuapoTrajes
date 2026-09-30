@@ -31,12 +31,30 @@ from src.descripcion_producto import format_descripcion_producto
 from src.presupuesto_observaciones import observaciones_presupuesto_para_mostrar
 from src.presupuesto_titular import titular_presupuesto
 from src.services.disponibilidad_services import (
-    DIAS_VENTANA_SEGURIDAD,
+    dias_ventana_seguridad,
     reconstruir_productos_reservados_para_orden,
 )
 from src.services.auditoria_services import nombre_usuario, registrar_auditoria
 
 logger = logging.getLogger(__name__)
+
+
+def cerrar_visitas_taller_abiertas(producto, hoy=None) -> None:
+    """Cierra ingresos de lavandería y modista que quedaron abiertos.
+
+    El estado del producto es la ubicación actual. Un ingreso sin fecha de
+    salida no puede seguir diciendo que la prenda está en el taller después
+    de que volvió al salón, se alquiló o se vendió.
+    """
+    if producto is None:
+        return
+    dia = hoy or hoy_ar()
+    for visita in list(getattr(producto, "productos_lavanderias", []) or []):
+        if visita.fecha_salida is None:
+            visita.fecha_salida = dia
+    for visita in list(getattr(producto, "productos_modistas", []) or []):
+        if visita.fecha_salida is None:
+            visita.fecha_salida = dia
 
 CONTRATO_NUMERO_INICIAL = 500
 
@@ -176,7 +194,7 @@ def _item_presupuesto_a_producto_orden_dict(
         or orden.fecha_evento
     )
     fecha_bloqueo = (
-        fecha_retiro - timedelta(days=DIAS_VENTANA_SEGURIDAD)
+        fecha_retiro - timedelta(days=dias_ventana_seguridad())
         if fecha_retiro
         else orden.fecha_evento
     )
@@ -1291,6 +1309,38 @@ class OrdenTrabajoServices:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Error al listar recibos: {str(e)}")
 
+    def marcar_conjunto_separado(self, orden_id: int) -> dict:
+        """Marca que el conjunto ya quedó separado en perchero."""
+        with db_session:
+            try:
+                orden = OrdenTrabajo.get(id=orden_id)
+                if not orden:
+                    raise HTTPException(
+                        status_code=404, detail="Orden de trabajo no encontrada"
+                    )
+                if orden.estado and orden.estado.lower() == "cancelada":
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No se puede marcar como separado una orden cancelada",
+                    )
+                orden.conjunto_separado = True
+                flush()
+                return {
+                    "message": "Conjunto marcado como separado",
+                    "success": True,
+                    "data": {
+                        "orden_id": orden.id,
+                        "conjunto_separado": True,
+                    },
+                }
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error al marcar el conjunto como separado: {str(e)}",
+                )
+
     def registrar_etiquetas_armado_impresas(self, orden_id: int) -> dict:
         """Marca que las etiquetas 100x50 de armado ya se imprimieron al crear la orden."""
         with db_session:
@@ -1570,6 +1620,7 @@ class OrdenTrabajoServices:
                 for pr in list(orden.productos_reservados):
                     prod = getattr(pr, "producto", None)
                     if prod:
+                        cerrar_visitas_taller_abiertas(prod)
                         prod.estado = EstadoProducto.CLIENTE
                 flush()
                 detalle_auditoria = {
@@ -1942,6 +1993,8 @@ class OrdenTrabajoServices:
                 continue
             prod.estado = estado_enum
             prod.inmovilizado = False
+            if destino == "SALON":
+                cerrar_visitas_taller_abiertas(prod, hoy)
             if destino == "LAVANDERIA" and lavanderia:
                 # Cerrar ingresos abiertos previos para no duplicar filas en bolsa.
                 for pl in list(prod.productos_lavanderias):
@@ -2012,6 +2065,7 @@ class OrdenTrabajoServices:
             for pr in list(orden.productos_reservados):
                 prod = pr.producto
                 if prod and prod.estado == EstadoProducto.CLIENTE:
+                    cerrar_visitas_taller_abiertas(prod)
                     prod.estado = EstadoProducto.SALON
                 pr.delete()
                 liberados += 1

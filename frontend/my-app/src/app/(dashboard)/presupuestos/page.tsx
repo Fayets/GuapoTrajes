@@ -12,12 +12,20 @@ import {
   type ClienteExistenteInfo,
 } from "@/lib/cliente-existente";
 import { getApiBaseUrl } from "@/lib/api-config";
-import { fetchProductosPage } from "@/lib/fetch-productos";
+import { fetchAllProductos } from "@/lib/fetch-productos";
 import { formatDescripcionProducto } from "@/lib/descripcion-producto";
 import {
+  aplicarTipoPrecioAItems,
+  extraerPrecios,
+  fusionarPrecios,
+  fusionarProductoEnCache,
   inferirTipoPrecioProducto,
   normalizarTipoPrecioProducto,
+  preciosCatalogoDesdeApi,
   precioProductoPorTipo,
+  prepararItemsParaEdicion,
+  tienePreciosCatalogo,
+  type ProductoPrecios,
   type TipoPrecioProducto,
 } from "@/lib/tipos-precio-producto";
 import { fechaNegocioYmd, formatDdMmYyyyDesdeIso } from "@/lib/fecha-calendario";
@@ -114,6 +122,7 @@ type ItemPresupuesto = {
   tipoPrecio: TipoPrecioProducto;
   precioUnitario: number;
   subtotal: number;
+  preciosCatalogo?: ProductoPrecios;
 };
 
 type Presupuesto = {
@@ -148,6 +157,9 @@ type Presupuesto = {
   creado_por_nombre?: string | null;
   actualizado_por_id?: number | null;
   actualizado_por_nombre?: string | null;
+  extra_discount_percentage?: number | null;
+  extra_discount_amount?: number | null;
+  extra_discount_reason?: string | null;
 };
 
 type PresupuestoResponse = {
@@ -372,16 +384,7 @@ export default function PresupuestosPage() {
         0;
       const cantidad = item.cantidad ?? 0;
       const subtotal = item.subtotal ?? cantidad * precioUnitario;
-      const productoPrecios = {
-        precio_alquiler_lista:
-          item.producto?.precio_alquiler_lista ?? precioUnitario,
-        precio_alquiler_efectivo: item.producto?.precio_alquiler_efectivo,
-        precio_venta_nuevo_lista: item.producto?.precio_venta_nuevo_lista,
-        precio_venta_nuevo_efectivo: item.producto?.precio_venta_nuevo_efectivo,
-        precio_de_venta_medio_uso: item.producto?.precio_de_venta_medio_uso,
-        precio_venta: item.producto?.precio_venta,
-        precio_liquidacion: item.producto?.precio_liquidacion,
-      };
+      const productoPrecios = preciosCatalogoDesdeApi(item);
       const tipoPrecio: TipoPrecioProducto = item.tipoPrecio
         ? normalizarTipoPrecioProducto(item.tipoPrecio)
         : inferirTipoPrecioProducto(productoPrecios, precioUnitario);
@@ -404,6 +407,9 @@ export default function PresupuestosPage() {
         tipoPrecio,
         precioUnitario,
         subtotal,
+        preciosCatalogo: tienePreciosCatalogo(productoPrecios)
+          ? productoPrecios
+          : undefined,
       };
     });
     return {
@@ -491,8 +497,7 @@ export default function PresupuestosPage() {
     setProductos((prev) => {
       const byId = new Map(prev.map((p) => [p.id, p]));
       for (const p of incoming) {
-        const prevP = byId.get(p.id);
-        byId.set(p.id, prevP ? { ...prevP, ...p } : p);
+        byId.set(p.id, fusionarProductoEnCache(byId.get(p.id), p));
       }
       return Array.from(byId.values());
     });
@@ -538,7 +543,7 @@ export default function PresupuestosPage() {
         if (presupuestoSeleccionado?.id != null) {
           extra.presupuesto_excluir_id = presupuestoSeleccionado.id;
         }
-        const { items } = await fetchProductosPage(token, 1, 30, extra, {
+        const items = await fetchAllProductos(token, extra, {
           signal: ac.signal,
         });
         if (ac.signal.aborted) return;
@@ -847,6 +852,7 @@ export default function PresupuestosPage() {
       tipoPrecio,
       precioUnitario,
       subtotal: precioUnitario,
+      preciosCatalogo: extraerPrecios(producto),
     };
     setItems((prev) => [...prev, newItem]);
     setNuevoItem({ productoId: "", porcentaje: "" });
@@ -1016,6 +1022,7 @@ export default function PresupuestosPage() {
           tipoPrecio,
           precioUnitario,
           subtotal: precioUnitario,
+          preciosCatalogo: extraerPrecios(producto),
         });
         agregados += 1;
       }
@@ -1058,22 +1065,22 @@ export default function PresupuestosPage() {
   const cambiarTipoPrecioPresupuesto = (tipo: TipoPrecioProducto) => {
     const tipoNorm = normalizarTipoPrecioProducto(tipo);
     setTipoPrecioPresupuesto(tipoNorm);
-    setItems((prev) =>
-      prev.map((item) => {
-        const producto = productos.find((p) => p.id === item.productoId);
-        const precioUnitario = producto
-          ? precioProductoPorTipo(producto, tipoNorm)
-          : item.precioUnitario;
-        return {
-          ...item,
-          tipoPrecio: tipoNorm,
-          precioUnitario,
-          subtotal: precioUnitario * item.cantidad,
-        };
-      })
+    const conCatalogo = items.map((item) => ({
+      ...item,
+      preciosCatalogo: fusionarPrecios(
+        item.preciosCatalogo,
+        productos.find((p) => p.id === item.productoId)
+      ),
+    }));
+    const aplicado = aplicarTipoPrecioAItems(
+      conCatalogo,
+      tipoNorm,
+      porcentajeDescuento
     );
-    setTotalConDescuento(null);
-    setPorcentajeDescuento(null);
+    setItems(aplicado.items);
+    if (porcentajeDescuento != null && porcentajeDescuento > 0) {
+      setTotalConDescuento(aplicado.totalConDescuento);
+    }
   };
 
   const calcularTotal = () => {
@@ -1483,24 +1490,36 @@ export default function PresupuestosPage() {
       observaciones: observacionesParaGuardar(pr.observaciones),
     });
 
-    setItems(pr.items);
+    const preparado = prepararItemsParaEdicion(
+      pr.items,
+      presupuesto.extra_discount_percentage ?? null
+    );
+    setItems(preparado.items);
     setTipoPrecioPresupuesto(
-      pr.items.length > 0
-        ? normalizarTipoPrecioProducto(pr.items[0].tipoPrecio)
+      preparado.items.length > 0
+        ? normalizarTipoPrecioProducto(preparado.items[0].tipoPrecio)
         : "precio_alquiler_lista"
     );
-    setTotalConDescuento(null);
-    setPorcentajeDescuento(null);
+    setPorcentajeDescuento(preparado.porcentajeDescuento);
+    setTotalConDescuento(preparado.totalConDescuento);
+    setMotivoDescuentoExtra(
+      preparado.porcentajeDescuento != null
+        ? (presupuesto.extra_discount_reason ?? "")
+        : ""
+    );
     setProductoFiltro("");
     setResultadosBusqueda([]);
     mergeProductosEnCache(
-      pr.items.map((item) => ({
-        id: item.productoId,
-        descripcion: item.productoNombre,
-        codigo_barra: item.codigoBarra || "",
-        precio_alquiler_lista: item.precioUnitario,
-        inmovilizado: false,
-      }))
+      preparado.items.map((item) => {
+        const precios = extraerPrecios(item.preciosCatalogo);
+        return {
+          id: item.productoId,
+          descripcion: item.productoNombre,
+          codigo_barra: item.codigoBarra || "",
+          inmovilizado: false,
+          ...(tienePreciosCatalogo(precios) ? precios : {}),
+        } as Producto;
+      })
     );
     setVerModoLectura(verLectura);
     setShowModal(true);

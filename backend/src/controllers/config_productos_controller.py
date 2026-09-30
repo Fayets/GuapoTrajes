@@ -14,6 +14,31 @@ _dep_auth = [Depends(get_current_user)]
 _dep_admin = [Depends(get_current_user), Depends(require_role("ADMIN", "SUPER_ADMIN"))]
 
 
+@router.get(
+    "/ventana-seguridad",
+    response_model=schemas.VentanaSeguridadResponse,
+    dependencies=_dep_auth,
+)
+def get_ventana_seguridad(current_user=Depends(get_current_user)):
+    from src.services.disponibilidad_services import explicacion_ventana_seguridad
+
+    return explicacion_ventana_seguridad()
+
+
+@router.put(
+    "/ventana-seguridad",
+    response_model=schemas.VentanaSeguridadResponse,
+    dependencies=_dep_admin,
+)
+def put_ventana_seguridad(
+    data: schemas.VentanaSeguridadUpdate,
+    current_user=Depends(get_current_user),
+):
+    from src.services.disponibilidad_services import guardar_dias_ventana_seguridad
+
+    return guardar_dias_ventana_seguridad(data.dias)
+
+
 # ----- Líneas -----
 @router.get("/productos/lineas", response_model=List[schemas.ProductoLineaResponse], dependencies=_dep_auth)
 def get_lineas(current_user=Depends(get_current_user)):

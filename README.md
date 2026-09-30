@@ -364,7 +364,7 @@ Si un producto no está disponible para las fechas elegidas, el backend devuelve
     - Si el método de pago no es válido, se rechaza.
 - **Reserva de productos**:
   - Por cada ítem del presupuesto se crea un `ProductoReservado`:
-    - `fecha_bloqueo = fecha_retiro - 2 días` (ventana de lavandería / modista).
+    - `fecha_bloqueo = fecha_retiro − N días`. N es la ventana de lavandería / modista (2 por defecto; un admin la cambia en Ajustes → Ventana de bloqueo).
     - Si el producto está en estado `lavanderia` o `alquilado`, se marca como `no disponible`.
     - En caso contrario se marca como `reservado`.
   - El presupuesto pasa a estado `Aprobado`.
