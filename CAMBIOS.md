@@ -17,3 +17,5 @@ Notas de lo que fuimos haciendo. Lo ya publicado está en `master`. El resto est
 - **Editar un presupuesto y cambiar el tipo de precio.** Al abrir la edición, cada prenda vuelve a tomar los precios del producto (alquiler lista, efectivo, medio uso, liquidación, etc.), no el importe ya guardado. Si había descuento, se muestra de nuevo sobre esos precios y no se aplica dos veces. Si un tipo no tiene precio cargado, se deja el que estaba en vez de poner 0. Un 0 que sí está en el producto se respeta.
 
 - **Buscar prendas en un presupuesto muestra todas las coincidencias.** Antes la lista cortaba en 30 (por ejemplo, no entraban todos los corbatines). Ahora trae todas las páginas.
+
+- **Prendas a armar imprime la etiqueta resumen de cada reserva.** El botón de arriba ya no saca una etiqueta por prenda. Sale una por orden marcada, con cliente, fechas y el conjunto.

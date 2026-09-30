@@ -21,10 +21,10 @@ import {
   downloadExcelFromAoA,
   downloadExcelFromSheets,
 } from "@/lib/export-excel";
-import { imprimirEtiquetas100x50Lote } from "@/lib/imprimir-etiqueta-100x50";
 import {
   construirEtiquetaResumenConjunto,
   imprimirEtiquetaResumenConjunto,
+  imprimirEtiquetasResumenConjuntoLote,
 } from "@/lib/imprimir-etiqueta-conjunto-completo";
 import { IconoPercha } from "@/components/icono-percha";
 import { ConfigImpresionEtiquetas } from "@/components/config-impresion-etiquetas";
@@ -1793,26 +1793,15 @@ export default function ReportesPage() {
     setSeleccionPrendasAArmar(next);
   };
 
-  const prendasSeleccionadas = useMemo(() => {
-    const seleccionadas: Array<{
-      ordenId: number;
-      clienteNombre: string;
-      producto: PrendaAArmarProducto;
-    }> = [];
-    prendasAArmar.forEach((orden) => {
-      if (prendaBloqueadaPorImpresionEnOrden(orden)) return;
-      orden.productos.forEach((producto) => {
-        const key = buildPrendaSelectionKey(orden.orden_id, producto.producto_id);
-        if (seleccionPrendasAArmar[key]) {
-          seleccionadas.push({
-            ordenId: orden.orden_id,
-            clienteNombre: orden.cliente_nombre,
-            producto,
-          });
-        }
-      });
+  const ordenesResumenSeleccionadas = useMemo(() => {
+    return prendasAArmar.filter((orden) => {
+      if (prendaBloqueadaPorImpresionEnOrden(orden)) return false;
+      return orden.productos.some((producto) =>
+        seleccionPrendasAArmar[
+          buildPrendaSelectionKey(orden.orden_id, producto.producto_id)
+        ]
+      );
     });
-    return seleccionadas;
   }, [prendasAArmar, seleccionPrendasAArmar]);
 
   const mensajeToastImpresion = (
@@ -1831,34 +1820,54 @@ export default function ReportesPage() {
     return exito;
   };
 
-  const handleImprimirEtiquetasPrendasSeleccionadas = async () => {
-    if (prendasSeleccionadas.length === 0) {
-      toast.error("Marcá al menos una prenda para imprimir");
+  const formatearFechaEtiqueta = (iso: string) => {
+    if (!iso) return "—";
+    try {
+      return format(new Date(iso), "dd/MM/yyyy", { locale: es });
+    } catch {
+      return "—";
+    }
+  };
+
+  const handleImprimirEtiquetasResumenSeleccionadas = async () => {
+    if (ordenesResumenSeleccionadas.length === 0) {
+      toast.error("Marcá al menos una reserva para imprimir el resumen");
       return;
     }
 
-    const colaInicial: ItemColaEtiquetaVisual[] = prendasSeleccionadas.map(
-      (sel, idx) => ({
-        key: `etq-prendas-${sel.ordenId}-${sel.producto.producto_id}-${idx}`,
-        productoId: sel.producto.producto_id,
-        codigoBarra: sel.producto.codigo_barra || "",
-        descripcion: sel.producto.descripcion || "",
-        clienteNombre: sel.clienteNombre || "",
-        estado: "pendiente",
+    const colaInicial: ItemColaEtiquetaVisual[] = ordenesResumenSeleccionadas.map(
+      (orden) => ({
+        key: `etq-resumen-${orden.orden_id}`,
+        productoId: orden.orden_id,
+        codigoBarra: orden.presupuesto_numero || "",
+        descripcion: `Resumen orden #${orden.orden_id}`,
+        clienteNombre: orden.cliente_nombre || "",
+        estado: "imprimiendo",
       })
     );
-    setColaVisualEtiquetasPrendas(
-      colaInicial.map((item) => ({ ...item, estado: "imprimiendo" }))
-    );
+    setColaVisualEtiquetasPrendas(colaInicial);
     setImprimiendoEtiquetasPrendas(true);
 
     try {
-      const payload = prendasSeleccionadas.map((sel) => ({
-        codigoBarra: sel.producto.codigo_barra || "0",
-        clienteNombre: sel.clienteNombre || "Cliente",
-        prendaDescripcion: sel.producto.descripcion || "Prenda para armar",
-      }));
-      const impresion = await imprimirEtiquetas100x50Lote(payload);
+      const payload = ordenesResumenSeleccionadas.map((orden) =>
+        construirEtiquetaResumenConjunto({
+          ordenId: orden.orden_id,
+          clienteNombre: orden.cliente_nombre,
+          fechaRetiro: formatearFechaEtiqueta(orden.fecha_retiro),
+          fechaEvento: formatearFechaEtiqueta(orden.fecha_evento),
+          categoriaEvento: orden.categoria_evento || "",
+          lugarEvento: orden.lugar_evento || "",
+          productos: orden.productos.map((p) => ({
+            linea: p.linea,
+            talle: p.talle,
+            color: p.color,
+            descripcion: p.descripcion,
+            cantidad: p.cantidad,
+          })),
+          observacionesArreglos: orden.observaciones || "",
+        })
+      );
+      const impresion = await imprimirEtiquetasResumenConjuntoLote(payload);
       const { porIndice } = impresion;
       const ok = porIndice.filter((s) => s === "ok").length;
       const err = porIndice.filter((s) => s === "error").length;
@@ -1868,29 +1877,20 @@ export default function ReportesPage() {
           estado: porIndice[idx] === "ok" ? "ok" : "error",
         }))
       );
-      if (err === 0 && impresion.porIndice.some((s) => s === "ok")) {
+      if (err === 0 && ok > 0) {
         toast.success(
           mensajeToastImpresion(
-            `${ok} etiqueta(s) por prenda enviadas a impresión.`,
+            `${ok} etiqueta(s) resumen enviadas a impresión.`,
             impresion
           )
         );
       } else if (ok === 0) {
-        toast.error("No se pudo generar ninguna etiqueta. Revisá códigos de barras.");
+        toast.error("No se pudo imprimir ninguna etiqueta resumen.");
       } else {
         toast.warning(`Listo parcial: ${ok} impresas, ${err} con error`);
       }
     } finally {
       setImprimiendoEtiquetasPrendas(false);
-    }
-  };
-
-  const formatearFechaEtiqueta = (iso: string) => {
-    if (!iso) return "—";
-    try {
-      return format(new Date(iso), "dd/MM/yyyy", { locale: es });
-    } catch {
-      return "—";
     }
   };
 
@@ -4829,16 +4829,16 @@ export default function ReportesPage() {
                       type="button"
                       className="btn btn-outline-ink"
                       disabled={
-                        prendasSeleccionadas.length === 0 ||
+                        ordenesResumenSeleccionadas.length === 0 ||
                         imprimiendoEtiquetasPrendas
                       }
-                      onClick={() => void handleImprimirEtiquetasPrendasSeleccionadas()}
-                      title="Impresora anterior: una etiqueta con código de barras por cada prenda marcada"
+                      onClick={() => void handleImprimirEtiquetasResumenSeleccionadas()}
+                      title="Una etiqueta resumen por cada reserva marcada, en la impresora del conjunto"
                     >
                       <i className="bi bi-printer me-2"></i>
                       {imprimiendoEtiquetasPrendas
                         ? "Imprimiendo..."
-                        : `Etiquetas por prenda (${prendasSeleccionadas.length})`}
+                        : `Etiquetas resumen (${ordenesResumenSeleccionadas.length})`}
                     </button>
                   </>
                 )}
@@ -4887,7 +4887,7 @@ export default function ReportesPage() {
                 {colaVisualEtiquetasPrendas.length > 0 && (
                   <div className="border rounded mb-3 overflow-hidden bg-body">
                     <div className="border-bottom px-3 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
-                      <h2 className="h6 mb-0">Cola: etiquetas por prenda</h2>
+                      <h2 className="h6 mb-0">Cola: etiquetas resumen</h2>
                       {imprimiendoEtiquetasPrendas ? (
                         <span className="badge bg-oxblood">En curso</span>
                       ) : (

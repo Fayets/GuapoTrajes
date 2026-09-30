@@ -69,6 +69,13 @@ export type ImpresionResumenConjuntoResultado = {
   mensajeAyuda?: string;
 };
 
+export type ImpresionResumenConjuntoLoteResultado = {
+  porIndice: Array<"ok" | "error">;
+  metodo?: "qz" | "navegador";
+  impresora?: string;
+  mensajeAyuda?: string;
+};
+
 const ETIQUETA_RESUMEN_STYLES = `<style>
   * { box-sizing: border-box; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   html, body {
@@ -238,7 +245,38 @@ function esc(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function generarHtmlEtiquetaResumenConjunto(
+const ETIQUETA_RESUMEN_LOTE_STYLES = `<style>
+  @media screen {
+    html, body { width: auto !important; height: auto !important; overflow: visible !important; }
+    .sheet {
+      width: ${ETIQUETA_ANCHO_MM}mm !important;
+      height: ${ETIQUETA_ALTO_MM}mm !important;
+      overflow: hidden !important;
+      page-break-after: always;
+      break-after: page;
+    }
+  }
+  @media print {
+    html, body {
+      width: auto !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    .sheet {
+      position: relative !important;
+      top: auto !important;
+      left: auto !important;
+      width: ${ETIQUETA_ANCHO_MM}mm !important;
+      height: ${ETIQUETA_ALTO_MM}mm !important;
+      page-break-after: always;
+      break-after: page;
+      overflow: hidden !important;
+    }
+    .sheet:last-of-type { page-break-after: auto; break-after: auto; }
+  }
+</style>`;
+
+function htmlSheetEtiquetaResumen(
   item: ItemEtiquetaResumenConjunto,
   logoSrc?: string | null
 ): string {
@@ -265,8 +303,7 @@ export function generarHtmlEtiquetaResumenConjunto(
       ? `<div class="logo-wrap"><img src="${logoSrc}" alt="Guapo Trajes" /></div>`
       : "";
 
-  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=${ETIQUETA_ANCHO_MM}mm, initial-scale=1"/><title>ResumenConjunto${item.ordenId}</title>${ETIQUETA_RESUMEN_STYLES}</head><body>
-      <div class="sheet"><div class="wrap">
+  return `<div class="sheet"><div class="wrap">
         ${logoHtml}
         <div class="fila-orden">
           <span class="orden-id">ORDEN #${esc(String(item.ordenId))}</span>
@@ -278,8 +315,24 @@ export function generarHtmlEtiquetaResumenConjunto(
         <div class="sep"></div>
         <div class="prendas">${prendasHtml}</div>
         ${arreglosHtml}
-      </div></div>
+      </div></div>`;
+}
+
+export function generarHtmlEtiquetaResumenConjunto(
+  item: ItemEtiquetaResumenConjunto,
+  logoSrc?: string | null
+): string {
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=${ETIQUETA_ANCHO_MM}mm, initial-scale=1"/><title>ResumenConjunto${item.ordenId}</title>${ETIQUETA_RESUMEN_STYLES}</head><body>
+      ${htmlSheetEtiquetaResumen(item, logoSrc)}
     </body></html>`;
+}
+
+export function generarHtmlEtiquetasResumenConjunto(
+  items: ItemEtiquetaResumenConjunto[],
+  logoSrc?: string | null
+): string {
+  const sheets = items.map((item) => htmlSheetEtiquetaResumen(item, logoSrc)).join("");
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><title>ResumenesConjunto</title>${ETIQUETA_RESUMEN_STYLES}${ETIQUETA_RESUMEN_LOTE_STYLES}</head><body>${sheets}</body></html>`;
 }
 
 export async function imprimirEtiquetaResumenConjunto(
@@ -296,6 +349,29 @@ export async function imprimirEtiquetaResumenConjunto(
 
   return {
     resultado: impresion.resultado,
+    metodo: impresion.metodo,
+    impresora: impresion.impresora,
+    mensajeAyuda: impresion.mensajeAyuda,
+  };
+}
+
+/** Una etiqueta resumen por reserva, en un solo trabajo de impresión. */
+export async function imprimirEtiquetasResumenConjuntoLote(
+  items: ItemEtiquetaResumenConjunto[]
+): Promise<ImpresionResumenConjuntoLoteResultado> {
+  if (items.length === 0) return { porIndice: [] };
+
+  const logoSrc = await obtenerLogoGuapoDataUrl();
+  const html = generarHtmlEtiquetasResumenConjunto(items, logoSrc);
+  const impresion = await imprimirEtiquetaConRouting(
+    "resumen_conjunto",
+    html,
+    { anchoMm: ETIQUETA_ANCHO_MM, altoMm: ETIQUETA_ALTO_MM },
+    "portrait"
+  );
+  const estado = impresion.resultado === "ok" ? "ok" : "error";
+  return {
+    porIndice: items.map(() => estado),
     metodo: impresion.metodo,
     impresora: impresion.impresora,
     mensajeAyuda: impresion.mensajeAyuda,
