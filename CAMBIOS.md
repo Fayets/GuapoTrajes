@@ -19,3 +19,5 @@ Notas de lo que fuimos haciendo. Lo ya publicado está en `master`. El resto est
 - **Buscar prendas en un presupuesto muestra todas las coincidencias.** Antes la lista cortaba en 30 (por ejemplo, no entraban todos los corbatines). Ahora trae todas las páginas.
 
 - **Prendas a armar imprime la etiqueta resumen de cada reserva.** El botón de arriba ya no saca una etiqueta por prenda. Sale una por orden marcada, con cliente, fechas y el conjunto.
+
+- **Devoluciones muestra el número de contrato y se puede buscar por él.** La grilla y los modales de devolución lo muestran junto a la orden. El buscador lo encuentra sin ir a Contratos.

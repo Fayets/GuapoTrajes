@@ -46,7 +46,11 @@ function ordenCoincideBusquedaDevoluciones(
   orden: OrdenTrabajo,
   terminoRaw: string
 ): boolean {
-  const termino = normalizarParaBusqueda(terminoRaw.replace(/\s+/g, " "));
+  const termino = normalizarParaBusqueda(terminoRaw.replace(/\s+/g, " "))
+    .replace(/n[°º]\s*/g, " ")
+    .replace(/\b(contrato|nro|numero)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!termino) return true;
 
   const dniSinEspacios = normalizarParaBusqueda(
@@ -68,6 +72,7 @@ function ordenCoincideBusquedaDevoluciones(
     orden.firmante_dni,
     firmanteDniSinEspacios,
     orden.presupuesto_numero,
+    orden.numero_contrato != null ? String(orden.numero_contrato) : "",
     String(orden.id ?? ""),
     String(orden.presupuesto_id ?? ""),
   ];
@@ -150,6 +155,7 @@ type OrdenTrabajo = {
   devolucion_recibida_at?: string | null;
   revisiones_abiertas?: RevisionAbierta[];
   tiene_revisiones_abiertas?: boolean;
+  numero_contrato?: number | null;
   firmante_nombre?: string | null;
   firmante_dni?: string | null;
   firmante_direccion?: string | null;
@@ -800,7 +806,7 @@ export default function DevolucionesPage() {
                 <input
                   type="search"
                   className="form-control"
-                  placeholder="Buscar cliente, firmante, orden o prenda..."
+                  placeholder="Buscar contrato, cliente, firmante, orden o prenda..."
                   value={filtroBusqueda}
                   onChange={(e) => setFiltroBusqueda(e.target.value)}
                   onKeyDown={(e) => {
@@ -811,8 +817,8 @@ export default function DevolucionesPage() {
                 />
               </div>
               <p className="text-muted small mb-0 mt-2">
-                Podés buscar por cliente, por quien retiró (firmante), DNI, código de
-                barra o descripción de la prenda.
+                Podés buscar por número de contrato, cliente, quien retiró (firmante),
+                DNI, código de barra o descripción de la prenda.
               </p>
             </div>
             <div className="table-responsive">
@@ -820,6 +826,7 @@ export default function DevolucionesPage() {
                 <thead>
                   <tr>
                     <th>Orden ID</th>
+                    <th>Contrato</th>
                     <th>Presupuesto</th>
                     <th>Cliente</th>
                     <th>Firmante</th>
@@ -831,7 +838,7 @@ export default function DevolucionesPage() {
                 <tbody>
                   {ordenesAbiertasFiltradas.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center text-muted py-4">
+                      <td colSpan={8} className="text-center text-muted py-4">
                         <i className="bi bi-search me-2"></i>
                         No se encontraron órdenes que coincidan con la búsqueda
                       </td>
@@ -862,6 +869,9 @@ export default function DevolucionesPage() {
                     return (
                       <tr key={orden.id}>
                         <td className="fw-semibold">{orden.id}</td>
+                        <td className="fw-semibold">
+                          {orden.numero_contrato != null ? orden.numero_contrato : "—"}
+                        </td>
                         <td className="text-uppercase">
                           {orden.presupuesto_numero}
                           {(orden.tiene_revisiones_abiertas ||
@@ -1011,7 +1021,11 @@ export default function DevolucionesPage() {
                 <div className="mb-3 small">
                   <p className="mb-1">
                     <strong>Orden:</strong> #{ordenSeleccionada.id} ·{" "}
-                    <strong>Presupuesto:</strong> {ordenSeleccionada.presupuesto_numero}
+                    <strong>Contrato:</strong>{" "}
+                    {ordenSeleccionada.numero_contrato != null
+                      ? ordenSeleccionada.numero_contrato
+                      : "—"}{" "}
+                    · <strong>Presupuesto:</strong> {ordenSeleccionada.presupuesto_numero}
                   </p>
                   <p className="mb-0">
                     <strong>Cliente:</strong> {ordenSeleccionada.cliente_nombre}
@@ -1261,8 +1275,12 @@ export default function DevolucionesPage() {
             {ordenSeleccionada && (
               <div className="mb-4">
                 <p>
-                  <strong>Orden:</strong> #{ordenSeleccionada.id} -{" "}
-                  {ordenSeleccionada.presupuesto_numero}
+                  <strong>Orden:</strong> #{ordenSeleccionada.id} ·{" "}
+                  <strong>Contrato:</strong>{" "}
+                  {ordenSeleccionada.numero_contrato != null
+                    ? ordenSeleccionada.numero_contrato
+                    : "—"}{" "}
+                  · {ordenSeleccionada.presupuesto_numero}
                 </p>
                 <p>
                   <strong>Cliente:</strong> {ordenSeleccionada.cliente_nombre}
