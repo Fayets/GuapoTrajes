@@ -10,7 +10,6 @@ from src.descripcion_producto import format_descripcion_producto
 from src.fechas_ar import hoy_ar
 from src.models import (
     ConfiguracionSistema,
-    ItemPresupuesto,
     ProductoReservado,
     Producto,
     EstadoProducto,
@@ -27,7 +26,7 @@ DIAS_VENTANA_SEGURIDAD_MAX = 30
 
 def dias_ventana_seguridad() -> int:
     """
-    Días de margen antes del retiro. Sale del ajuste global (rol admin).
+    Días de limpieza después de la devolución. Sale del ajuste global (rol admin).
     Si no hay fila guardada, devuelve el valor por defecto.
     Se puede llamar dentro de un db_session ya abierto.
     """
@@ -55,23 +54,32 @@ def explicacion_ventana_seguridad(dias: int | None = None) -> dict:
     """Textos que dicen de qué fecha del presupuesto sale cada tramo."""
     n = dias_ventana_seguridad() if dias is None else int(dias)
     if n == 0:
-        anticipo = "el mismo día de la fecha de retiro"
+        cierre = (
+            "Termina el día de la devolución. "
+            "Al día siguiente ya se puede retirar."
+        )
+        marca = "el mismo día de la fecha de retiro"
     else:
-        anticipo = f"{texto_dias(n)} antes de la fecha de retiro"
+        cierre = (
+            f"Después de la devolución suma {texto_dias(n)} de limpieza. "
+            "Esos días la prenda no puede salir. "
+            "El próximo retiro puede ser el día siguiente a ese plazo."
+        )
+        marca = f"{texto_dias(n)} antes de la fecha de retiro"
     return {
         "dias": n,
         "inicio": (
-            f"Empieza {anticipo}. "
+            "Empieza el día de la fecha de retiro. "
             "Sale de la fecha de retiro del presupuesto. "
             "Si el presupuesto no tiene fecha de retiro, se usa la fecha del evento."
         ),
         "fin": (
-            "Termina el día de la fecha de devolución. "
-            "Sale de la fecha de devolución del presupuesto. "
+            f"{cierre} "
+            "El conteo sale de la fecha de devolución del presupuesto. "
             "Si no hay fecha de devolución, se usa la fecha del evento."
         ),
         "reservado_hoy": (
-            f"En el listado de productos, la marca de reservado cubre desde {anticipo} "
+            f"En el listado de productos, la marca de reservado cubre desde {marca} "
             "hasta el día del retiro. Solo aparece si la prenda ya tiene seña."
         ),
     }
@@ -112,40 +120,39 @@ def _intervalos_solapan(a_ini: date, a_fin: date, b_ini: date, b_fin: date) -> b
     return a_ini <= b_fin and a_fin >= b_ini
 
 
-def _presupuesto_estado_bloquea(estado: str | None) -> bool:
-    e = (estado or "").strip().lower()
-    if e in ("cancelada", "cancelado", "rechazado", "rechazada", "vencido", "vencida"):
-        return False
-    return e in ("pendiente", "aprobado", "convertido_orden")
-
-
-def _presupuesto_tiene_orden_activa(presupuesto) -> bool:
-    orden = presupuesto.orden_trabajo
-    if not orden:
-        return False
-    oest = (orden.estado or "").strip().lower()
-    return oest not in ("cancelada", "cancelado")
-
-
-def _rango_bloqueo_presupuesto(presupuesto) -> tuple[date, date]:
-    """
-    Ventana de bloqueo de un presupuesto activo:
-    desde el ajuste global de días antes del retiro hasta la devolución
-    (o evento si faltan fechas). Misma ocupación que una orden con seña.
-    """
+def _fechas_alquiler_presupuesto(presupuesto) -> tuple[date, date]:
     retiro = _as_date(presupuesto.fecha_retiro or presupuesto.fecha_evento)
-    fin = _as_date(presupuesto.fecha_devolucion or presupuesto.fecha_evento)
-    inicio = retiro - timedelta(days=dias_ventana_seguridad())
+    devolucion = _as_date(presupuesto.fecha_devolucion or presupuesto.fecha_evento)
+    return retiro, devolucion
+
+
+def _rango_ocupacion(fecha_retiro: date, fecha_devolucion: date) -> tuple[date, date]:
+    """
+    La prenda está tomada desde el retiro hasta N días después de la devolución.
+
+    Esos N días son la limpieza. Si devuelven el 12 y N es 2, no sale el 13
+    ni el 14: el próximo retiro puede ser el 15. Entre la devolución y el
+    nuevo retiro tienen que quedar esos N días.
+    """
+    inicio = _as_date(fecha_retiro)
+    devolucion = _as_date(fecha_devolucion)
+    fin = devolucion + timedelta(days=dias_ventana_seguridad())
     if fin < inicio:
         fin = inicio
     return inicio, fin
 
 
+def _rango_bloqueo_presupuesto(presupuesto) -> tuple[date, date]:
+    """Ocupación de un presupuesto activo, incluida la limpieza posterior."""
+    retiro, devolucion = _fechas_alquiler_presupuesto(presupuesto)
+    return _rango_ocupacion(retiro, devolucion)
+
+
 def _rango_bloqueo_producto_reservado(producto_reservado) -> tuple[date, date]:
     """
-    Ocupación de una orden con seña: [retiro−días de ventana, devolución].
-    El inicio se calcula con la fecha de retiro vigente, no con el
-    fecha_bloqueo guardado (ese valor puede ser de la ventana anterior).
+    Ocupación de una orden con seña: [retiro, devolución + días de limpieza].
+    Las fechas salen del presupuesto vigente, no del fecha_bloqueo guardado
+    (ese valor puede ser de la ventana anterior).
     """
     orden = producto_reservado.orden_trabajo
     presupuesto = getattr(orden, "presupuesto", None) if orden else None
@@ -285,28 +292,88 @@ def reservas_activas_para_venta_por_producto() -> dict[int, dict]:
     return out
 
 
-def _conflicto_presupuesto(presupuesto, ini: date, fin: date) -> dict:
-    tit = titular_presupuesto(presupuesto)
-    return {
-        "tipo": "presupuesto",
-        "id": presupuesto.id,
-        "numero": presupuesto.numero,
-        "cliente": tit.get("cliente_nombre"),
-        "fecha_retiro": ini.isoformat(),
-        "fecha_devolucion": fin.isoformat(),
+def _fmt_fecha(valor: str | date | None) -> str:
+    if valor is None or valor == "":
+        return ""
+    if isinstance(valor, date):
+        return valor.strftime("%d/%m/%Y")
+    try:
+        return date.fromisoformat(str(valor)[:10]).strftime("%d/%m/%Y")
+    except ValueError:
+        return str(valor)
+
+
+def _texto_limpieza(conflicto: dict) -> str:
+    """Días en que la prenda no puede salir después de la devolución."""
+    n = conflicto.get("dias_bloqueo")
+    devolucion = conflicto.get("fecha_devolucion")
+    if not isinstance(n, int) or n <= 0 or not devolucion:
+        return ""
+    try:
+        dia_devolucion = date.fromisoformat(str(devolucion)[:10])
+    except ValueError:
+        return ""
+    primero = dia_devolucion + timedelta(days=1)
+    ultimo = dia_devolucion + timedelta(days=n)
+    disponible = ultimo + timedelta(days=1)
+    if n == 1:
+        no_sale = f"la prenda no puede salir el {_fmt_fecha(primero)}"
+    elif n == 2:
+        no_sale = (
+            f"la prenda no puede salir el {_fmt_fecha(primero)} "
+            f"ni el {_fmt_fecha(ultimo)}"
+        )
+    else:
+        no_sale = (
+            f"la prenda no puede salir desde el {_fmt_fecha(primero)} "
+            f"hasta el {_fmt_fecha(ultimo)}"
+        )
+    return (
+        f" Lo devuelven el {_fmt_fecha(dia_devolucion)} y {no_sale}. "
+        f"El próximo retiro puede ser desde el {_fmt_fecha(disponible)}."
+    )
+
+
+def _armar_conflicto(
+    *,
+    tipo: str,
+    id_ref,
+    numero,
+    cliente,
+    fecha_retiro: date,
+    fecha_devolucion: date,
+) -> dict:
+    n = dias_ventana_seguridad()
+    bloqueo_hasta = fecha_devolucion + timedelta(days=n)
+    conflicto = {
+        "tipo": tipo,
+        "id": id_ref,
+        "numero": numero,
+        "cliente": cliente,
+        "fecha_retiro": fecha_retiro.isoformat(),
+        "fecha_devolucion": fecha_devolucion.isoformat(),
+        "dias_bloqueo": n,
+        "bloqueo_hasta": bloqueo_hasta.isoformat(),
+        "disponible_desde": (bloqueo_hasta + timedelta(days=1)).isoformat(),
     }
+    conflicto["mensaje"] = texto_conflicto_disponibilidad(conflicto)
+    return conflicto
 
 
 def _conflicto_orden(orden, presupuesto, ini: date, fin: date) -> dict:
     tit = titular_presupuesto(presupuesto) if presupuesto else {}
-    return {
-        "tipo": "orden",
-        "id": orden.id if orden else None,
-        "numero": presupuesto.numero if presupuesto else None,
-        "cliente": tit.get("cliente_nombre"),
-        "fecha_retiro": ini.isoformat(),
-        "fecha_devolucion": fin.isoformat(),
-    }
+    if presupuesto is not None:
+        retiro, devolucion = _fechas_alquiler_presupuesto(presupuesto)
+    else:
+        retiro, devolucion = ini, fin
+    return _armar_conflicto(
+        tipo="orden",
+        id_ref=orden.id if orden else None,
+        numero=presupuesto.numero if presupuesto else None,
+        cliente=tit.get("cliente_nombre"),
+        fecha_retiro=retiro,
+        fecha_devolucion=devolucion,
+    )
 
 
 def texto_conflicto_disponibilidad(conflicto: Optional[dict]) -> str:
@@ -314,22 +381,18 @@ def texto_conflicto_disponibilidad(conflicto: Optional[dict]) -> str:
         return "Conflicto con otro presupuesto u orden de trabajo."
     numero = conflicto.get("numero") or ""
     cliente = conflicto.get("cliente") or ""
-    fr = conflicto.get("fecha_retiro") or ""
-    fd = conflicto.get("fecha_devolucion") or ""
-    try:
-        fr_txt = date.fromisoformat(fr).strftime("%d/%m/%Y") if fr else ""
-        fd_txt = date.fromisoformat(fd).strftime("%d/%m/%Y") if fd else ""
-    except ValueError:
-        fr_txt, fd_txt = fr, fd
+    fr_txt = _fmt_fecha(conflicto.get("fecha_retiro"))
+    fd_txt = _fmt_fecha(conflicto.get("fecha_devolucion"))
     fechas = f" del {fr_txt} al {fd_txt}" if fr_txt or fd_txt else ""
     quien = f" ({cliente})" if cliente else ""
+    limpieza = _texto_limpieza(conflicto)
     if conflicto.get("tipo") == "orden":
         etiqueta = f"orden #{conflicto.get('id')}"
         if numero:
             etiqueta = f"{etiqueta} / {numero}"
-        return f"ocupado por {etiqueta}{quien}{fechas}"
+        return f"ocupado por {etiqueta}{quien}{fechas}.{limpieza}".replace("..", ".")
     etiqueta = numero or f"presupuesto #{conflicto.get('id')}"
-    return f"ocupado por {etiqueta}{quien}{fechas}"
+    return f"ocupado por {etiqueta}{quien}{fechas}.{limpieza}".replace("..", ".")
 
 
 @db_session
@@ -343,21 +406,7 @@ def explicar_conflicto_disponibilidad(
     """Primer conflicto de calendario, o None si está libre."""
     fecha_retiro = _as_date(fecha_retiro)
     fecha_devolucion = _as_date(fecha_devolucion)
-
-    for item in ItemPresupuesto.select():
-        if item.producto.id != producto_id:
-            continue
-        presupuesto = item.presupuesto
-        if presupuesto_excluir_id is not None and presupuesto.id == presupuesto_excluir_id:
-            continue
-        if not _presupuesto_estado_bloquea(presupuesto.estado):
-            continue
-        if _presupuesto_tiene_orden_activa(presupuesto):
-            continue
-
-        p_ini, p_fin = _rango_bloqueo_presupuesto(presupuesto)
-        if _intervalos_solapan(p_ini, p_fin, fecha_retiro, fecha_devolucion):
-            return _conflicto_presupuesto(presupuesto, p_ini, p_fin)
+    sol_ini, sol_fin = _rango_ocupacion(fecha_retiro, fecha_devolucion)
 
     for producto_reservado in ProductoReservado.select():
         if producto_reservado.producto.id != producto_id:
@@ -370,10 +419,16 @@ def explicar_conflicto_disponibilidad(
         oest = (orden.estado or "").strip().lower()
         if oest in ("cancelada", "cancelado"):
             continue
+        pres = getattr(orden, "presupuesto", None)
+        if (
+            presupuesto_excluir_id is not None
+            and pres is not None
+            and pres.id == presupuesto_excluir_id
+        ):
+            continue
 
         r_ini, r_fin = _rango_bloqueo_producto_reservado(producto_reservado)
-        if _intervalos_solapan(r_ini, r_fin, fecha_retiro, fecha_devolucion):
-            pres = getattr(orden, "presupuesto", None)
+        if _intervalos_solapan(r_ini, r_fin, sol_ini, sol_fin):
             return _conflicto_orden(orden, pres, r_ini, r_fin)
 
     return None
@@ -390,12 +445,9 @@ def verificar_disponibilidad(
     """
     Verifica si un producto está disponible en las fechas indicadas.
 
-    Bloquea por:
-    1. **Presupuestos activos sin orden** (pendiente/aprobado): solapamiento con
-       [fecha_retiro−días de ventana, fecha_devolución] del presupuesto
-       existente vs el solicitado.
-    2. **Órdenes con seña** (ProductoReservado): la misma ocupación
-       [retiro−días de ventana, devolución].
+    Bloquea por órdenes con seña (ProductoReservado), no por un presupuesto
+    pendiente. La ocupación es [retiro, devolución + días de limpieza].
+    Esos días extra son para procesar la ropa.
 
     No usa el estado físico actual (CLIENTE / MODISTA / LAVANDERÍA). Eso indica
     dónde está la prenda hoy, no si se puede comprometer para otra fecha.
@@ -460,7 +512,7 @@ def validar_producto_para_item_presupuesto(
                 status_code=400,
                 detail=(
                     f'El producto "{desc}" no está disponible para la nueva fecha. '
-                    f"Conflicto: {texto_conflicto_disponibilidad(conflicto)}."
+                    f"Conflicto: {texto_conflicto_disponibilidad(conflicto).rstrip('.')}."
                 ),
             )
     if es_reuso_del_mismo_presupuesto:

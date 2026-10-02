@@ -90,6 +90,7 @@ def test_la_explicacion_dice_de_donde_sale_cada_fecha():
     assert "fecha de retiro" in texto["inicio"]
     assert "fecha del evento" in texto["inicio"]
     assert "fecha de devolución" in texto["fin"]
+    assert "limpieza" in texto["fin"]
     assert "fecha del evento" in texto["fin"]
     assert "seña" in texto["reservado_hoy"]
 

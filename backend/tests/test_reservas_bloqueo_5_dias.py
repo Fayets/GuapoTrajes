@@ -1,10 +1,11 @@
 """
-Pruebas funcionales: bloqueo de alquiler en la ventana [fecha_retiro-2, fecha_devolucion]
+Pruebas funcionales: bloqueo de alquiler en [fecha_retiro, fecha_devolucion + 2]
 tras generar orden de trabajo (ProductoReservado).
 
-Regla: no disponible si el intervalo solicitado [fecha_retiro, fecha_devolucion]
-se solapa con [R-2, D] donde R es la fecha de retiro y D la devolución del titular.
-Los 2 días previos al retiro son la ventana de lavandería / modista.
+Regla: no disponible si el intervalo solicitado, también extendido 2 días después
+de su devolución, se solapa con [R, D+2]. Esos 2 días son la limpieza: si
+devuelven el día D, no se puede retirar el D+1 ni el D+2. El próximo retiro
+puede ser el D+3.
 """
 from __future__ import annotations
 
@@ -72,16 +73,18 @@ def mundo_reserva():
 
 
 # (retiro_offset, devolucion_offset, esperado_disponible, descripcion)
-# Titular: retiro = R, devolución = R+20 → ocupación [R-2, R+20]
+# Titular: retiro = R, devolución = R+20 → ocupación [R, R+22]
+# Entre una devolución y el próximo retiro tienen que quedar 2 días.
 CASOS_BLOQUEO = [
-    (-5, -3, True, "completamente_antes_de_R_menos_2"),
-    (-4, -2, False, "solapa_en_R_menos_2"),
-    (-2, -1, False, "empieza_en_borde_R_menos_2"),
+    (-5, -3, True, "dos_dias_entre_devolucion_y_retiro"),
+    (-4, -2, False, "un_solo_dia_entre_devolucion_y_retiro"),
+    (-2, -1, False, "devolucion_pegada_al_retiro"),
     (-1, 0, False, "dentro_de_ventana"),
     (1, 3, False, "despues_del_retiro_dentro_del_alquiler"),
     (-4, 1, False, "solapa_por_devolucion_mas_alla_de_R"),
     (-8, -7, True, "muy_antes_sin_solapar"),
-    (21, 25, True, "completamente_despues_de_devolucion"),
+    (21, 25, False, "dentro_de_los_dos_dias_de_limpieza"),
+    (23, 28, True, "retiro_al_dia_siguiente_de_la_limpieza"),
 ]
 
 
@@ -126,7 +129,7 @@ def test_metricas_resumen_bloqueo_mundo(mundo_reserva):
 
 @pytest.fixture(scope="module")
 def mundo_solo_presupuesto_sin_sena():
-    """Presupuesto pendiente sin orden: bloquea por solapamiento de fechas de alquiler."""
+    """Presupuesto pendiente sin seña: la prenda sigue libre."""
     w = seed_base_world()
     pres = PresupuestosServices()
     cu = fake_current_user(w.usuario.id)
@@ -159,19 +162,20 @@ def mundo_solo_presupuesto_sin_sena():
 
 
 CASOS_PRESUPUESTO_SIN_SENA = [
-    (-10, -3, True, "completamente_antes_de_R_menos_2"),
-    (-4, -2, False, "solapa_en_R_menos_2"),
-    (-1, 1, False, "dentro_de_ventana_pre_retiro"),
-    (0, 1, False, "solapa_en_retiro"),
-    (0, 5, False, "desde_retiro"),
-    (10, 15, False, "dentro_del_alquiler"),
-    (21, 25, True, "completamente_despues"),
+    (-10, -3, True, "dos_dias_libres_antes_del_retiro"),
+    (-4, -2, True, "un_solo_dia_entre_devolucion_y_retiro"),
+    (-1, 1, True, "devolucion_pegada_al_retiro"),
+    (0, 1, True, "solapa_en_retiro"),
+    (0, 5, True, "desde_retiro"),
+    (10, 15, True, "dentro_del_alquiler"),
+    (21, 25, True, "dentro_de_los_dos_dias_de_limpieza"),
+    (23, 28, True, "retiro_al_dia_siguiente_de_la_limpieza"),
 ]
 
 
 @pytest.mark.parametrize("prod_attr", ["producto_a", "producto_b"])
 @pytest.mark.parametrize("off_ret,off_dev,esperado,desc", CASOS_PRESUPUESTO_SIN_SENA)
-def test_presupuesto_sin_sena_bloquea_fechas_solapadas(
+def test_presupuesto_sin_sena_no_ocupa_la_prenda(
     mundo_solo_presupuesto_sin_sena,
     prod_attr,
     off_ret,
@@ -179,7 +183,7 @@ def test_presupuesto_sin_sena_bloquea_fechas_solapadas(
     esperado,
     desc,
 ):
-    """Presupuesto pendiente sin seña bloquea si el período de alquiler se solapa."""
+    """Un presupuesto sin seña no bloquea, aunque las fechas se solapen."""
     w = mundo_solo_presupuesto_sin_sena
     pid = getattr(w, prod_attr).id
     fr = _d(off_ret)
@@ -201,8 +205,8 @@ def test_presupuesto_sin_sena_no_bloquea_fechas_sin_solapar(mundo_solo_presupues
     assert verificar_disponibilidad(pid, fr, fd) is True
 
 
-def test_segundo_presupuesto_rechazado_si_solapa(mundo_solo_presupuesto_sin_sena):
-    """Crear un segundo presupuesto con las mismas fechas y producto debe fallar."""
+def test_segundo_presupuesto_se_puede_armar_si_el_primero_no_pago_sena(mundo_solo_presupuesto_sin_sena):
+    """Dos presupuestos pueden llevar la misma prenda hasta que uno pague seña."""
     w = mundo_solo_presupuesto_sin_sena
     pres = PresupuestosServices()
     cu = fake_current_user(w.usuario.id)
@@ -224,23 +228,21 @@ def test_segundo_presupuesto_rechazado_si_solapa(mundo_solo_presupuesto_sin_sena
             ),
         ],
     )
-    with pytest.raises(HTTPException) as exc:
-        pres.crear_presupuesto(payload, cu)
-    assert exc.value.status_code == 400
-    assert "PRES-" in str(exc.value.detail)
+    creado = pres.crear_presupuesto(payload, cu)
+    assert creado["success"] is True
 
 
 def test_escenario_usuario_evento_agosto_vs_julio():
     """
-    Reporte usuario: presupuesto evento 01/08/26 bloquea producto para otro del 28/07/26.
-    Datos aislados con seed_base_world (sin seña).
+    Un presupuesto sin seña no bloquea. Al cobrar la seña, la orden sí ocupa
+    la prenda para el otro evento.
     """
     w = seed_base_world()
     pres = PresupuestosServices()
     cu = fake_current_user(w.usuario.id)
     pid = w.producto_a.id
 
-    pres.crear_presupuesto(
+    creado = pres.crear_presupuesto(
         PresupuestoCreate(
             cliente_id=w.cliente.id,
             fecha_evento=date(2026, 8, 1),
@@ -262,19 +264,98 @@ def test_escenario_usuario_evento_agosto_vs_julio():
         cu,
     )
 
+    assert verificar_disponibilidad(pid, date(2026, 7, 28), date(2026, 7, 30)) is True
+    otro = pres.crear_presupuesto(
+        PresupuestoCreate(
+            cliente_id=w.cliente.id,
+            fecha_evento=date(2026, 7, 28),
+            fecha_retiro=date(2026, 7, 28),
+            fecha_devolucion=date(2026, 7, 30),
+            categoria_evento="Casamiento",
+            nombre_agasajado="Evento B",
+            lugar_evento="Salón",
+            observaciones="test escenario usuario B",
+            items=[
+                ItemPresupuestoIn(
+                    producto_id=pid,
+                    cantidad=1,
+                    precio_unitario=100.0,
+                    subtotal=100.0,
+                ),
+            ],
+        ),
+        cu,
+    )
+    assert otro["success"] is True
+
+    OrdenTrabajoServices().crear_orden_trabajo(
+        presupuesto_id=creado["data"]["id"],
+        seña_pagada=50.0,
+        payment_method="EFECTIVO",
+        usuario_id=w.usuario.id,
+        cuenta_destino_id=w.cuenta_destino.id,
+    )
     assert verificar_disponibilidad(pid, date(2026, 7, 28), date(2026, 7, 30)) is False
+    assert verificar_disponibilidad(pid, date(2026, 8, 10), date(2026, 8, 12)) is True
+
+
+def test_cuadro_del_cliente_devolucion_12_proximo_retiro_15():
+    """
+    Cuadro del local, con seña ya cobrada: el cliente llevó la prenda el
+    sábado 10 y la devuelve el lunes 12. 12 + 2 = 14, así que el 13 y el 14
+    no sale. El próximo alquiler se retira el 15 en adelante.
+    Sin seña, esas fechas siguen libres.
+    """
+    w = seed_base_world()
+    pres = PresupuestosServices()
+    cu = fake_current_user(w.usuario.id)
+    pid = w.producto_a.id
+    creado = pres.crear_presupuesto(
+        PresupuestoCreate(
+            cliente_id=w.cliente.id,
+            fecha_evento=date(2026, 10, 10),
+            fecha_retiro=date(2026, 10, 10),
+            fecha_devolucion=date(2026, 10, 12),
+            categoria_evento="Casamiento",
+            nombre_agasajado="Cuadro bloqueo",
+            lugar_evento="Salón",
+            observaciones="",
+            items=[
+                ItemPresupuestoIn(
+                    producto_id=pid,
+                    cantidad=1,
+                    precio_unitario=100.0,
+                    subtotal=100.0,
+                ),
+            ],
+        ),
+        cu,
+    )
+    assert verificar_disponibilidad(pid, date(2026, 10, 14), date(2026, 10, 16)) is True
+
+    OrdenTrabajoServices().crear_orden_trabajo(
+        presupuesto_id=creado["data"]["id"],
+        seña_pagada=50.0,
+        payment_method="EFECTIVO",
+        usuario_id=w.usuario.id,
+        cuenta_destino_id=w.cuenta_destino.id,
+    )
+
+    assert verificar_disponibilidad(pid, date(2026, 10, 13), date(2026, 10, 16)) is False
+    assert verificar_disponibilidad(pid, date(2026, 10, 14), date(2026, 10, 16)) is False
+    assert verificar_disponibilidad(pid, date(2026, 10, 15), date(2026, 10, 18)) is True
 
     with pytest.raises(HTTPException) as exc:
         pres.crear_presupuesto(
             PresupuestoCreate(
                 cliente_id=w.cliente.id,
-                fecha_evento=date(2026, 7, 28),
-                fecha_retiro=date(2026, 7, 28),
-                fecha_devolucion=date(2026, 7, 30),
+                fecha_evento=date(2026, 10, 16),
+                fecha_retiro=date(2026, 10, 14),
+                fecha_devolucion=date(2026, 10, 16),
                 categoria_evento="Casamiento",
-                nombre_agasajado="Evento B",
+                nombre_agasajado="Retiro en el bloqueo",
                 lugar_evento="Salón",
-                observaciones="test escenario usuario B",
+                observaciones="",
                 items=[
                     ItemPresupuestoIn(
                         producto_id=pid,
@@ -287,6 +368,28 @@ def test_escenario_usuario_evento_agosto_vs_julio():
             cu,
         )
     assert exc.value.status_code == 400
-    assert "no está disponible" in str(exc.value.detail).lower()
+    assert "14/10/2026" in str(exc.value.detail)
+    assert "15/10/2026" in str(exc.value.detail)
 
-    assert verificar_disponibilidad(pid, date(2026, 8, 10), date(2026, 8, 12)) is True
+    creado = pres.crear_presupuesto(
+        PresupuestoCreate(
+            cliente_id=w.cliente.id,
+            fecha_evento=date(2026, 10, 17),
+            fecha_retiro=date(2026, 10, 15),
+            fecha_devolucion=date(2026, 10, 18),
+            categoria_evento="Casamiento",
+            nombre_agasajado="Retiro despues de la limpieza",
+            lugar_evento="Salón",
+            observaciones="",
+            items=[
+                ItemPresupuestoIn(
+                    producto_id=pid,
+                    cantidad=1,
+                    precio_unitario=100.0,
+                    subtotal=100.0,
+                ),
+            ],
+        ),
+        cu,
+    )
+    assert creado["success"] is True

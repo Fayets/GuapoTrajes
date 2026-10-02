@@ -110,6 +110,7 @@ type Producto = {
     cliente?: string | null;
     fecha_retiro?: string | null;
     fecha_devolucion?: string | null;
+    mensaje?: string | null;
   } | null;
 };
 
@@ -191,6 +192,7 @@ function textoConflictoDisponibilidad(
   mensajeApi?: string | null
 ): string {
   if (mensajeApi) return mensajeApi;
+  if (conflicto?.mensaje) return conflicto.mensaje;
   if (!conflicto) return "reservado en otro presupuesto u orden";
   const numero = conflicto.numero || (conflicto.id != null ? `#${conflicto.id}` : "");
   const cliente = conflicto.cliente ? ` (${conflicto.cliente})` : "";

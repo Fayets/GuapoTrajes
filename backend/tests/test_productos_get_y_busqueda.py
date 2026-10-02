@@ -10,6 +10,7 @@ os.environ.setdefault("BOOTSTRAP_ADMIN", "false")
 os.environ.setdefault("ENV", "test")
 
 from src.schemas import ItemPresupuestoIn, PresupuestoCreate
+from src.services.orden_trabajo_services import OrdenTrabajoServices
 from src.services.presupuestos_services import PresupuestosServices
 from tests.factories import fake_current_user, seed_base_world
 
@@ -116,7 +117,7 @@ def test_productos_all_q_marca_disponible_en_fechas_false_si_hay_reserva():
     retiro = date(2031, 3, 10)
     devolucion = date(2031, 3, 20)
     pres = PresupuestosServices()
-    pres.crear_presupuesto(
+    creado = pres.crear_presupuesto(
         PresupuestoCreate(
             cliente_id=world.cliente.id,
             fecha_evento=retiro + timedelta(days=5),
@@ -136,6 +137,13 @@ def test_productos_all_q_marca_disponible_en_fechas_false_si_hay_reserva():
             ],
         ),
         fake_current_user(world.usuario.id),
+    )
+    OrdenTrabajoServices().crear_orden_trabajo(
+        presupuesto_id=creado["data"]["id"],
+        seña_pagada=50.0,
+        payment_method="EFECTIVO",
+        usuario_id=world.usuario.id,
+        cuenta_destino_id=world.cuenta_destino.id,
     )
 
     client = _client()

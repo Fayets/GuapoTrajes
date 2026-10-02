@@ -15,8 +15,8 @@ type Explicacion = {
   reservado_hoy: string;
 };
 
-const RETIRO_EJEMPLO = "2026-06-15";
-const DEVOLUCION_EJEMPLO = "2026-07-05";
+const RETIRO_EJEMPLO = "2026-10-10";
+const DEVOLUCION_EJEMPLO = "2026-10-12";
 
 function fechaLocal(iso: string): Date {
   return new Date(`${iso}T00:00:00`);
@@ -78,9 +78,10 @@ export default function VentanaSeguridadPage() {
     const n = diasValidos ? diasNumero : diasGuardados;
     return {
       n,
-      desde: masDias(RETIRO_EJEMPLO, -n),
-      hasta: formato(fechaLocal(DEVOLUCION_EJEMPLO)),
       retiro: formato(fechaLocal(RETIRO_EJEMPLO)),
+      devolucion: formato(fechaLocal(DEVOLUCION_EJEMPLO)),
+      bloqueadoHasta: masDias(DEVOLUCION_EJEMPLO, n),
+      disponibleDesde: masDias(DEVOLUCION_EJEMPLO, n + 1),
     };
   }, [diasNumero, diasValidos, diasGuardados]);
 
@@ -124,8 +125,9 @@ export default function VentanaSeguridadPage() {
         <div className="mb-4">
           <h1 className="page-title mb-1">Ventana de bloqueo</h1>
           <p className="text-muted mb-0">
-            Margen global para lavandería o modista. Vale para todas las
-            sucursales y para las reservas que ya existen.
+            Días de limpieza después de la devolución. Entre que un cliente
+            devuelve y el próximo retira, la prenda no puede salir. Vale para
+            todas las sucursales y para las reservas que ya existen.
           </p>
         </div>
 
@@ -133,7 +135,7 @@ export default function VentanaSeguridadPage() {
           <div className="col-12 col-lg-5">
             <div className="card h-100">
               <div className="card-body">
-                <h2 className="h5 mb-3">Días antes del retiro</h2>
+                <h2 className="h5 mb-3">Días después de la devolución</h2>
                 <label className="form-label" htmlFor="dias-ventana">
                   Cantidad de días
                 </label>
@@ -147,8 +149,11 @@ export default function VentanaSeguridadPage() {
                   onChange={(e) => setDias(e.target.value)}
                 />
                 <p className="text-muted small mt-2 mb-3">
-                  0 deja la prenda libre hasta el día del retiro. El máximo es
-                  30. Hoy el local usa {cargando ? "…" : diasGuardados}{" "}
+                  Se cuentan desde el día de devolución, sin incluirlo. Con 2,
+                  si devuelven el 12 no sale el 13 ni el 14, y el próximo
+                  retiro puede ser el 15. 0 deja la prenda libre al día
+                  siguiente de la devolución. El máximo es 30. Hoy el local
+                  usa {cargando ? "…" : diasGuardados}{" "}
                   {diasGuardados === 1 ? "día" : "días"}.
                 </p>
                 <Button onClick={() => void guardar()} disabled={cargando || guardando}>
@@ -189,14 +194,24 @@ export default function VentanaSeguridadPage() {
               <div className="card-body">
                 <h2 className="h5 mb-2">Ejemplo con {ejemplo.n} {ejemplo.n === 1 ? "día" : "días"}</h2>
                 <p className="mb-2">
-                  Presupuesto con retiro el <strong>{ejemplo.retiro}</strong> y
-                  devolución el <strong>{ejemplo.hasta}</strong>.
+                  El cliente retira el <strong>{ejemplo.retiro}</strong> y
+                  devuelve el <strong>{ejemplo.devolucion}</strong>.
                 </p>
                 <p className="mb-0">
-                  La prenda queda tomada desde el <strong>{ejemplo.desde}</strong>{" "}
-                  hasta el <strong>{ejemplo.hasta}</strong>. El inicio resta los
-                  días a la fecha de retiro. El fin es la fecha de devolución,
-                  sin sumar días extra.
+                  {ejemplo.n === 0 ? (
+                    <>
+                      Sin días de limpieza, el próximo retiro puede ser el{" "}
+                      <strong>{ejemplo.disponibleDesde}</strong>.
+                    </>
+                  ) : (
+                    <>
+                      A la devolución se le suman {ejemplo.n}{" "}
+                      {ejemplo.n === 1 ? "día" : "días"}: la prenda queda
+                      bloqueada hasta el <strong>{ejemplo.bloqueadoHasta}</strong>{" "}
+                      inclusive. El próximo alquiler se puede retirar desde el{" "}
+                      <strong>{ejemplo.disponibleDesde}</strong>.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
