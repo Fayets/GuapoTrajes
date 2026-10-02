@@ -121,6 +121,9 @@ export default function ProductosPage() {
   const [bulkValor, setBulkValor] = useState<number | "">("");
   const [bulkCampos, setBulkCampos] = useState<string[]>(["precio_alquiler_lista"]);
   const [bulkLineaIds, setBulkLineaIds] = useState<number[]>([]);
+  const [bulkTalleId, setBulkTalleId] = useState<number | "">("");
+  const [bulkTelaId, setBulkTelaId] = useState<number | "">("");
+  const [bulkColorId, setBulkColorId] = useState<number | "">("");
   const [bulkEjecutando, setBulkEjecutando] = useState(false);
 
   /** Envío a lavandería desde el selector de estado (misma idea que devoluciones completas). */
@@ -534,6 +537,9 @@ export default function ProductosPage() {
         valor: Number(bulkValor),
         campos: bulkCampos,
         linea_ids: bulkLineaIds.length > 0 ? bulkLineaIds : undefined,
+        talle_ids: bulkTalleId ? [bulkTalleId] : undefined,
+        tela_ids: bulkTelaId ? [bulkTelaId] : undefined,
+        color_ids: bulkColorId ? [bulkColorId] : undefined,
       };
       const res = await fetch(`${API_URL}/precios/masivo`, {
         method: "PATCH",
@@ -596,7 +602,13 @@ export default function ProductosPage() {
             <button
               type="button"
               className="btn btn-outline-ink d-flex align-items-center gap-2"
-              onClick={() => setIsBulkPreciosOpen(true)}
+              onClick={() => {
+                setBulkLineaIds(filtroLineaId ? [filtroLineaId] : []);
+                setBulkTalleId(filtroTalleId);
+                setBulkTelaId(filtroTelaId);
+                setBulkColorId(filtroColorId);
+                setIsBulkPreciosOpen(true);
+              }}
             >
               <i className="bi bi-currency-dollar"></i>
               Ajuste masivo de precios
@@ -1256,6 +1268,77 @@ export default function ProductosPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label fw-bold mb-2">Filtros por atributos</label>
+              <div className="row g-2">
+                <div className="col-12 col-md-4">
+                  <label className="form-label small" htmlFor="bulk-talle">
+                    Talle
+                  </label>
+                  <select
+                    id="bulk-talle"
+                    className="form-select"
+                    value={bulkTalleId}
+                    onChange={(e) =>
+                      setBulkTalleId(e.target.value ? Number(e.target.value) : "")
+                    }
+                  >
+                    <option value="">Todos</option>
+                    {talles.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-12 col-md-4">
+                  <label className="form-label small" htmlFor="bulk-tela">
+                    Tela
+                  </label>
+                  <select
+                    id="bulk-tela"
+                    className="form-select"
+                    value={bulkTelaId}
+                    onChange={(e) =>
+                      setBulkTelaId(e.target.value ? Number(e.target.value) : "")
+                    }
+                  >
+                    <option value="">Todas</option>
+                    {telas.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-12 col-md-4">
+                  <label className="form-label small" htmlFor="bulk-color">
+                    Color
+                  </label>
+                  <select
+                    id="bulk-color"
+                    className="form-select"
+                    value={bulkColorId}
+                    onChange={(e) =>
+                      setBulkColorId(e.target.value ? Number(e.target.value) : "")
+                    }
+                  >
+                    <option value="">Todos</option>
+                    {colores.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <p className="small text-muted mt-2 mb-0">
+                Se combinan con las líneas. Si abrís el ajuste con filtros puestos
+                en el listado, arranca con esos mismos valores. Lo que quede en
+                Todos no limita.
+              </p>
             </div>
 
             <div className="mb-1">
