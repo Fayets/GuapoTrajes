@@ -102,6 +102,7 @@ def convertir_presupuesto_orden(data: OrdenTrabajoCreateSchema, current_user=Dep
             submetodo_pago_id_arg,
             credito,
             bool(data.conjunto_separado),
+            bool(data.ignorar_conflictos_reserva),
         )
         return resultado
     except HTTPException as e:

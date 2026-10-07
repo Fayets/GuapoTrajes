@@ -33,6 +33,7 @@ from src.presupuesto_titular import titular_presupuesto
 from src.services.disponibilidad_services import (
     dias_ventana_seguridad,
     reconstruir_productos_reservados_para_orden,
+    validar_producto_para_item_presupuesto,
 )
 from src.services.auditoria_services import nombre_usuario, registrar_auditoria
 
@@ -289,6 +290,42 @@ def _campos_firmante_orden(orden) -> dict:
     }
 
 
+def _rechazar_sena_si_prendas_ya_no_estan_libres(presupuesto, *, ignorar_conflictos: bool) -> None:
+    """Revalida el calendario al cobrar, no el del día en que se armó el presupuesto.
+
+    Un presupuesto pendiente no reserva. Entre el armado y la seña otra orden
+    puede haber ocupado la misma prenda. Si eso pasó, no se cobra ni se crea la orden.
+    """
+    fecha_retiro = presupuesto.fecha_retiro or presupuesto.fecha_evento
+    fecha_devolucion = presupuesto.fecha_devolucion or presupuesto.fecha_evento
+    problemas: list[str] = []
+    for item in list(presupuesto.items):
+        try:
+            validar_producto_para_item_presupuesto(
+                item.producto,
+                fecha_retiro=fecha_retiro,
+                fecha_devolucion=fecha_devolucion,
+                presupuesto_excluir_id=presupuesto.id,
+                orden_excluir_id=None,
+                es_reuso_del_mismo_presupuesto=False,
+                ignorar_conflicto_reserva=ignorar_conflictos,
+            )
+        except HTTPException as exc:
+            if exc.status_code != 400 or not exc.detail:
+                raise
+            problemas.append(str(exc.detail))
+    if not problemas:
+        return
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "No se puede tomar la seña. Estas prendas estaban libres cuando se armó el presupuesto, "
+            "pero ahora ya no lo están. No se generó la orden ni se registró el cobro. "
+            + " ".join(problemas)
+        ),
+    )
+
+
 def _aplicar_firmante_orden(orden, firmante) -> None:
     """Persiste o limpia el snapshot del firmante anexado (no crea Cliente).
 
@@ -330,6 +367,7 @@ class OrdenTrabajoServices:
         submetodo_pago_id: Optional[int] = None,
         credito_aplicado: float = 0,
         conjunto_separado: bool = False,
+        ignorar_conflictos_reserva: bool = False,
     ) -> dict:
         with db_session:
             try:
@@ -347,6 +385,17 @@ class OrdenTrabajoServices:
 
                 if presupuesto.orden_trabajo:
                     raise HTTPException(status_code=400, detail="El presupuesto ya tiene una orden de trabajo")
+
+                if ignorar_conflictos_reserva and usuario.rol not in (Roles.ADMIN, Roles.SUPER_ADMIN):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Solo un administrador puede omitir el bloqueo entre reservas.",
+                    )
+
+                _rechazar_sena_si_prendas_ya_no_estan_libres(
+                    presupuesto,
+                    ignorar_conflictos=bool(ignorar_conflictos_reserva),
+                )
 
                 credito_aplicado = round_pesos(credito_aplicado or 0)
                 seña_total = round_pesos(seña_pagada)

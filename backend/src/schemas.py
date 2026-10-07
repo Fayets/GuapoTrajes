@@ -644,6 +644,10 @@ class OrdenTrabajoCreateSchema(BaseModel):
         default=False,
         description="Indica que el conjunto ya quedó separado en perchero al confirmar la seña",
     )
+    ignorar_conflictos_reserva: bool = Field(
+        default=False,
+        description="Solo ADMIN/SUPER_ADMIN: cobrar aunque una prenda ya esté reservada en esas fechas",
+    )
 
     @field_validator('payment_method', 'metodo_pago', mode='before')
     @classmethod

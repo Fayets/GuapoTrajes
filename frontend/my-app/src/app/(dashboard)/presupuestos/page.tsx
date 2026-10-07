@@ -1647,7 +1647,10 @@ export default function PresupuestosPage() {
     setModalEtiquetaResumenOrdenAbierto(true);
   };
 
-  const confirmarSenia = async (opts?: { omitirDeteccionCliente?: boolean }) => {
+  const confirmarSenia = async (opts?: {
+    omitirDeteccionCliente?: boolean;
+    ignorarConflictosReserva?: boolean;
+  }) => {
     if (!presupuestoAConvertir) return;
 
     const monto = parseMontoInput(senia);
@@ -1738,6 +1741,8 @@ export default function PresupuestosPage() {
           payment_method: null,
           cuenta_destino_id: montoCaja > 1e-9 ? cuentaDestinoId : null,
           conjunto_separado: conjuntoSeparadoSenia,
+          ignorar_conflictos_reserva:
+            esAdmin && Boolean(opts?.ignorarConflictosReserva),
         }),
       });
 
@@ -1776,7 +1781,30 @@ export default function PresupuestosPage() {
         await abrirModalResumenTrasCrearOrden(orderId, snapshotResumen);
       } else {
         const error = await res.json();
-        toast.error(`Error al generar orden: ${error.detail}`);
+        const detail =
+          typeof error.detail === "string"
+            ? error.detail
+            : "No se pudo generar la orden.";
+        const esBloqueoReserva =
+          detail.includes("No se puede tomar la seña") &&
+          detail.toLowerCase().includes("conflicto");
+        if (esAdmin && esBloqueoReserva && !opts?.ignorarConflictosReserva) {
+          const seguir = window.confirm(
+            `${detail}\n\nComo administrador podés omitir este bloqueo y cobrar igual. ¿Confirmar la seña de todos modos?`
+          );
+          if (seguir) {
+            await confirmarSenia({
+              omitirDeteccionCliente: true,
+              ignorarConflictosReserva: true,
+            });
+          }
+          return;
+        }
+        if (detail.includes("No se puede tomar la seña")) {
+          alert(detail);
+          return;
+        }
+        toast.error(`Error al generar orden: ${detail}`);
       }
     } catch (err) {
       console.error("Error al generar orden:", err);
