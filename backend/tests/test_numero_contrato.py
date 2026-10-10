@@ -50,6 +50,19 @@ def _crear_orden_pagada(w, *, producto_id: int, retiro: date, total: float = 100
         return o.id
 
 
+def _proximo_numero_esperado() -> int:
+    """La suite comparte un SQLite: el siguiente número sigue al máximo ya guardado."""
+    with db_session:
+        numeros = [
+            o.numero_contrato
+            for o in OrdenTrabajo.select()
+            if o.numero_contrato is not None
+        ]
+    if not numeros:
+        return CONTRATO_NUMERO_INICIAL
+    return max(numeros) + 1
+
+
 def test_primer_contrato_usa_500_y_el_siguiente_501():
     w = seed_base_world()
     admin = fake_current_user(w.usuario.id)
@@ -57,16 +70,17 @@ def test_primer_contrato_usa_500_y_el_siguiente_501():
 
     oid1 = _crear_orden_pagada(w, producto_id=w.producto_a.id, retiro=date(2034, 3, 10))
     oid2 = _crear_orden_pagada(w, producto_id=w.producto_b.id, retiro=date(2034, 4, 10))
+    primero = _proximo_numero_esperado()
 
     r1 = svc.registrar_contrato_generado(oid1, usuario=admin)
     r2 = svc.registrar_contrato_generado(oid2, usuario=admin)
 
-    assert r1["data"]["numero_contrato"] == CONTRATO_NUMERO_INICIAL
-    assert r2["data"]["numero_contrato"] == CONTRATO_NUMERO_INICIAL + 1
+    assert r1["data"]["numero_contrato"] == primero
+    assert r2["data"]["numero_contrato"] == primero + 1
 
     with db_session:
-        assert OrdenTrabajo[oid1].numero_contrato == CONTRATO_NUMERO_INICIAL
-        assert OrdenTrabajo[oid2].numero_contrato == CONTRATO_NUMERO_INICIAL + 1
+        assert OrdenTrabajo[oid1].numero_contrato == primero
+        assert OrdenTrabajo[oid2].numero_contrato == primero + 1
         OrdenTrabajo[oid1].numero_contrato = None
         OrdenTrabajo[oid2].numero_contrato = None
         OrdenTrabajo[oid1].contrato_generado_at = None
