@@ -2,7 +2,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.db import db
 from pony.orm import *
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from src.controllers.auth_controller import router as auth_router
 from src.controllers.sucursal_controller import router as sucursal_router
 from src.controllers.productos_controller import router as productos_router
@@ -25,6 +25,7 @@ from src.controllers.logs_controller import router as logs_router
 from src.controllers.auditoria_controller import router as auditoria_router
 from src.controllers.usuario_controller import router as usuario_router
 from src.controllers.health_controller import router as health_router
+from src.controllers.dashboard_controller import router as dashboard_router
 from src.controllers.config_productos_controller import router as config_productos_router
 from src.migrations import apply_schema_migrations, ensure_contrato_generado_at_column, ensure_firmante_contrato_columns, ensure_numero_contrato_column, ensure_etiquetas_armado_impresas_at_column, ensure_etiqueta_inventario_impresa_at_column, ensure_conjunto_separado_column, ensure_producto_reservado_modista_columns, ensure_notas_productos_lavanderias, ensure_cliente_columnas_lavanderia_modista, ensure_descripcion_extra_productos, ensure_caja_movimientos_fecha_hora_ar, ensure_timestamps_negocio_hora_ar, ensure_contratos_generado_at_hora_ar, ensure_trazabilidad_usuario_columns, reparar_presupuestos_huerfanos_al_inicio
 from src import schemas, models
@@ -33,6 +34,7 @@ from pony.orm import db_session
 from decouple import config
 import logging
 import os
+import time
 
 
 # Configuración de logging global hacia archivo
@@ -180,6 +182,24 @@ app.add_middleware(
     expose_headers=["X-Total-Count", "X-Page", "X-Size"],
 )
 
+
+@app.middleware("http")
+async def registrar_pedido_lento(request: Request, call_next):
+    """Deja en el log cuánto tardó cada pedido lento, para la próxima noche."""
+    inicio = time.perf_counter()
+    response = await call_next(request)
+    duracion_ms = (time.perf_counter() - inicio) * 1000
+    path = request.url.path
+    if duracion_ms >= 500 and not path.startswith("/health"):
+        logger.info(
+            "lento %s %s status=%s duracion_ms=%.0f",
+            request.method,
+            path,
+            response.status_code,
+            duracion_ms,
+        )
+    return response
+
 # Lista de Rutas
 # Auth
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
@@ -247,6 +267,9 @@ app.include_router(usuario_router, prefix="/usuarios", tags=["Usuarios"])
 
 # Health
 app.include_router(health_router, prefix="/health", tags=["Health"])
+
+# Dashboard
+app.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
 
 # Personalizar el esquema de seguridad en OpenAPI para usar Bearer tokens
 def custom_openapi():

@@ -20,6 +20,7 @@ from src.models import (
     AccionAuditoria,
     RevisionDevolucion,
     EstadoRevisionDevolucion,
+    ItemPresupuesto,
 )
 from datetime import datetime, timedelta
 from src.fechas_ar import ahora_ar, hoy_ar, isoformat_ar
@@ -601,8 +602,32 @@ class OrdenTrabajoServices:
     def listar_ordenes_trabajo(self) -> list:
         with db_session:
             try:
-                # Evitar bug de Pony ORM en Python 3.14 con order_by(desc(...)).
-                ordenes = list(OrdenTrabajo.select())
+                # Sin order_by(desc): en Python 3.14 el descompilador de Pony falla.
+                # prefetch arma cliente, ítems y reservas en pocas consultas.
+                ordenes = list(
+                    OrdenTrabajo.select().prefetch(
+                        OrdenTrabajo.presupuesto,
+                        OrdenTrabajo.productos_reservados,
+                        OrdenTrabajo.metodo_pago_configurable,
+                        OrdenTrabajo.submetodo_pago,
+                        OrdenTrabajo.extra_discount_applied_by,
+                        OrdenTrabajo.creado_por,
+                        OrdenTrabajo.contrato_generado_por,
+                        OrdenTrabajo.devolucion_recibida_por,
+                        OrdenTrabajo.revisiones_devolucion,
+                        Presupuesto.cliente,
+                        Presupuesto.precliente,
+                        Presupuesto.items,
+                        Presupuesto.extra_discount_applied_by,
+                        ProductoReservado.producto,
+                        ItemPresupuesto.producto,
+                        RevisionDevolucion.producto,
+                        Producto.linea,
+                        Producto.talle,
+                        Producto.tela,
+                        Producto.color,
+                    )
+                )
                 ordenes.sort(key=lambda o: o.id, reverse=True)
                 
                 if not ordenes:

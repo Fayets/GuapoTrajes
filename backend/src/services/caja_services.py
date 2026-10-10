@@ -1,6 +1,6 @@
 from decimal import Decimal, InvalidOperation
 from pony.orm import db_session, select, sum, count, flush
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from src.fechas_ar import ahora_ar, formatear_fecha_ar, formatear_hora_ar, instante_a_fecha_ar, hoy_ar
 from src.money import round_pesos
 from src.models import CajaMovimiento, Venta, Usuario, Sucursal, TipoMovimiento, MetodoPago, CuentaDestino, Presupuesto, CierreCaja, Cliente
@@ -9,11 +9,47 @@ from typing import List, Dict, Optional
 from src.services.caja_chica_services import CajaChicaService
 from src.services.caja_concentradora_services import CajaConcentradoraServices
 
+def movimientos_caja_en_rango(
+    fecha_desde: date,
+    fecha_hasta: date,
+    sucursal_id: Optional[int] = None,
+) -> List[CajaMovimiento]:
+    """
+    Movimientos con fecha_hora en [desde 00:00, hasta+1 00:00).
+    Debe llamarse dentro de un db_session. No usa select(lambda): en Python 3.14
+    el descompilador de Pony falla.
+    """
+    flush()
+    inicio = datetime.combine(fecha_desde, datetime.min.time())
+    fin = datetime.combine(fecha_hasta, datetime.min.time()) + timedelta(days=1)
+    if sucursal_id is None:
+        sql = """
+            SELECT * FROM "CajaMovimientos"
+            WHERE fecha_hora >= $inicio AND fecha_hora < $fin
+        """
+    else:
+        sql = """
+            SELECT * FROM "CajaMovimientos"
+            WHERE sucursal_id = $sucursal_id
+              AND fecha_hora >= $inicio AND fecha_hora < $fin
+        """
+    return list(CajaMovimiento.select_by_sql(sql))
+
+
 class CajaServices:
     
     def __init__(self):
         self._caja_chica_service = CajaChicaService()
         self._caja_concentradora_service = CajaConcentradoraServices()
+
+    def _movimientos_entre(
+        self,
+        fecha_desde: date,
+        fecha_hasta: date,
+        sucursal_id: Optional[int] = None,
+    ) -> List[CajaMovimiento]:
+        """Movimientos cuya fecha_hora cae en el rango, inclusive. Dentro de db_session."""
+        return movimientos_caja_en_rango(fecha_desde, fecha_hasta, sucursal_id)
 
     @db_session
     def create_movimiento(self, movimiento_data: dict, usuario_id: int) -> CajaMovimiento:
@@ -332,11 +368,14 @@ class CajaServices:
             return "OTROS_EGRESOS" if tipo in ["EGRESO", "AJUSTE_NEGATIVO"] else "OTROS_INGRESOS"
 
     @db_session
-    def get_movimientos_diarios(self, fecha: date, sucursal_id: int, payment_method: Optional[str] = None, cuenta_destino_id: Optional[int] = None) -> List[Dict]:
+    def get_movimientos_diarios(self, fecha: date, sucursal_id: int, payment_method: Optional[str] = None, cuenta_destino_id: Optional[int] = None, _precargados: Optional[List[CajaMovimiento]] = None) -> List[Dict]:
         """Obtener movimientos de caja del día"""
         try:
-            # Obtener todos los movimientos y filtrar en Python para evitar problemas de compatibilidad
-            all_movimientos = list(CajaMovimiento.select())
+            all_movimientos = (
+                _precargados
+                if _precargados is not None
+                else self._movimientos_entre(fecha, fecha, sucursal_id)
+            )
 
             # Helper interno para mapear métodos configurables / strings al enum antiguo
             def _mapear_metodo_a_enum(metodo: Optional[str]) -> Optional[str]:
@@ -493,7 +532,7 @@ class CajaServices:
                 return metodo
 
             movimientos_filtrados = []
-            for cm in CajaMovimiento.select():
+            for cm in self._movimientos_entre(fecha_desde, fecha_hasta, sucursal_id):
                 fecha_mov = instante_a_fecha_ar(cm.fecha_hora)
                 if fecha_mov < fecha_desde or fecha_mov > fecha_hasta:
                     continue
@@ -609,11 +648,14 @@ class CajaServices:
             )
     
     @db_session
-    def get_totales_diarios(self, fecha: date, sucursal_id: int) -> Dict:
+    def get_totales_diarios(self, fecha: date, sucursal_id: int, _precargados: Optional[List[CajaMovimiento]] = None) -> Dict:
         """Obtener totales del día por método de pago"""
         try:
-            # Obtener todos los movimientos y filtrar en Python para evitar problemas de compatibilidad
-            all_movimientos = list(CajaMovimiento.select())
+            all_movimientos = (
+                _precargados
+                if _precargados is not None
+                else self._movimientos_entre(fecha, fecha, sucursal_id)
+            )
             
             # Filtrar por fecha y sucursal
             movimientos_filtrados = []
@@ -674,10 +716,14 @@ class CajaServices:
         return "efectivo" in nombre
 
     @db_session
-    def get_saldo_efectivo_dia(self, fecha: date, sucursal_id: int) -> float:
+    def get_saldo_efectivo_dia(self, fecha: date, sucursal_id: int, _precargados: Optional[List[CajaMovimiento]] = None) -> float:
         """Saldo de efectivo del día: ingresos efectivo - egresos efectivo."""
         try:
-            all_movimientos = list(CajaMovimiento.select())
+            all_movimientos = (
+                _precargados
+                if _precargados is not None
+                else self._movimientos_entre(fecha, fecha, sucursal_id)
+            )
             saldo = 0.0
             for cm in all_movimientos:
                 if instante_a_fecha_ar(cm.fecha_hora) != fecha or cm.sucursal.id != sucursal_id:
@@ -692,6 +738,32 @@ class CajaServices:
         except Exception as e:
             print(f"❌ Error al obtener saldo efectivo: {e}")
             return 0.0
+
+    @db_session
+    def resumen_caja_diaria(
+        self,
+        fecha: date,
+        sucursal_id: int,
+        payment_method: Optional[str] = None,
+        cuenta_destino_id: Optional[int] = None,
+    ) -> Dict:
+        """Tabla, totales y saldo del día a partir de una sola lectura."""
+        cargados = self._movimientos_entre(fecha, fecha, sucursal_id)
+        return {
+            "movimientos": self.get_movimientos_diarios(
+                fecha,
+                sucursal_id,
+                payment_method,
+                cuenta_destino_id,
+                _precargados=cargados,
+            ),
+            "totales": self.get_totales_diarios(
+                fecha, sucursal_id, _precargados=cargados
+            ),
+            "saldo_efectivo": self.get_saldo_efectivo_dia(
+                fecha, sucursal_id, _precargados=cargados
+            ),
+        }
 
     @db_session
     def existe_cierre(self, fecha: date, sucursal_id: int) -> bool:

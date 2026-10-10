@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pony.orm import db_session
+from pony.orm import db_session, flush
 from datetime import date, datetime, timedelta
 from fastapi import HTTPException
 
+from src.db import db
 from src.descripcion_producto import format_descripcion_producto
 from src.fechas_ar import hoy_ar
 from src.models import (
@@ -33,7 +34,8 @@ def dias_ventana_seguridad() -> int:
 
     @db_session
     def _leer() -> int:
-        fila = ConfiguracionSistema.select().first()
+        filas = list(ConfiguracionSistema.select())
+        fila = filas[0] if filas else None
         if fila is None:
             return DIAS_VENTANA_SEGURIDAD_DEFAULT
         valor = int(fila.dias_ventana_seguridad)
@@ -184,27 +186,51 @@ def producto_ids_en_ventana_reserva_el_dia(ref: Optional[date] = None) -> set[in
     """
     dia = _as_date(ref) if ref is not None else hoy_ar()
     margen = dias_ventana_seguridad()
-    out: set[int] = set()
-
-    for pr in ProductoReservado.select():
-        orden = pr.orden_trabajo
-        if not orden:
-            continue
-        oest = (orden.estado or "").strip().lower()
-        if oest in ("cancelada", "cancelado"):
-            continue
-        presupuesto = getattr(orden, "presupuesto", None)
-        if presupuesto is not None:
-            retiro = _as_date(presupuesto.fecha_retiro or presupuesto.fecha_evento)
-            bi = retiro - timedelta(days=margen)
-            bf = retiro
-        else:
-            bi = _as_date(pr.fecha_bloqueo)
-            bf = bi + timedelta(days=margen)
-        if bi <= dia <= bf:
-            out.add(pr.producto.id)
-
-    return out
+    flush()
+    # Misma regla que el recorrido anterior: con presupuesto, [retiro−margen, retiro];
+    # sin presupuesto, [fecha_bloqueo, fecha_bloqueo+margen].
+    if "sqlite" in type(db.provider).__name__.lower():
+        sql = """
+            SELECT pr."producto"
+            FROM "ProductosReservados" pr
+            JOIN "OrdenesTrabajo" o ON o.id = pr."orden_trabajo"
+            LEFT JOIN "Presupuesto" p ON p.id = o."presupuesto"
+            WHERE lower(COALESCE(o.estado, '')) NOT IN ('cancelada', 'cancelado')
+              AND (
+                (
+                  p.id IS NOT NULL
+                  AND $dia >= date(COALESCE(p.fecha_retiro, p.fecha_evento), '-' || $margen || ' days')
+                  AND $dia <= date(COALESCE(p.fecha_retiro, p.fecha_evento))
+                )
+                OR (
+                  p.id IS NULL
+                  AND $dia >= date(pr.fecha_bloqueo)
+                  AND $dia <= date(pr.fecha_bloqueo, '+' || $margen || ' days')
+                )
+              )
+        """
+    else:
+        sql = """
+            SELECT pr."producto"
+            FROM "ProductosReservados" pr
+            JOIN "OrdenesTrabajo" o ON o.id = pr."orden_trabajo"
+            LEFT JOIN "Presupuesto" p ON p.id = o."presupuesto"
+            WHERE lower(COALESCE(o.estado, '')) NOT IN ('cancelada', 'cancelado')
+              AND (
+                (
+                  p.id IS NOT NULL
+                  AND $dia >= (COALESCE(p.fecha_retiro, p.fecha_evento) - $margen)
+                  AND $dia <= COALESCE(p.fecha_retiro, p.fecha_evento)
+                )
+                OR (
+                  p.id IS NULL
+                  AND $dia >= pr.fecha_bloqueo
+                  AND $dia <= (pr.fecha_bloqueo + $margen)
+                )
+              )
+        """
+    rows = db.execute(sql)
+    return {int(row[0]) for row in rows if row[0] is not None}
 
 
 def _orden_esta_cerrada(orden) -> bool:

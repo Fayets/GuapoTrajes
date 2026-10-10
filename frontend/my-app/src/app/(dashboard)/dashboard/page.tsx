@@ -77,52 +77,30 @@ export default function Dashboard() {
 
     const load = async () => {
       setKpisLoading(true);
-      const [ventas, caja, ordenes, stock] = await Promise.allSettled([
-        getJson(
-          `${api}/reportes/ingresos-por-tipo?fecha_desde=${hoy}&fecha_hasta=${hoy}&categoria=VENTAS`
-        ),
-        sucursalId !== null
-          ? getJson(`${api}/caja/diaria?fecha=${hoy}&sucursal_id=${sucursalId}`)
-          : Promise.resolve(null),
-        getJson(`${api}/ordenes/`),
-        getJson(`${api}/productos/stats/estado`),
-      ]);
-
-      if (cancelled) return;
-
-      const val = (r: PromiseSettledResult<any>) =>
-        r.status === "fulfilled" ? r.value : null;
-
-      const ventasData = val(ventas)?.data;
-      const cajaData = val(caja);
-      const ordenesData = val(ordenes);
-      const stockData = val(stock);
-
-      const estadosCerrados = new Set(["completada", "cancelada", "entregada"]);
-
-      setKpis({
-        ventasTotal:
-          typeof ventasData?.total_general === "number"
-            ? ventasData.total_general
-            : null,
-        ventasCantidad:
-          typeof ventasData?.cantidad_total === "number"
-            ? ventasData.cantidad_total
-            : null,
-        saldoEfectivo:
-          typeof cajaData?.saldo_efectivo === "number"
-            ? cajaData.saldo_efectivo
-            : null,
-        ordenesActivas: Array.isArray(ordenesData)
-          ? ordenesData.filter(
-              (o: any) =>
-                !estadosCerrados.has(String(o?.estado ?? "").toLowerCase())
-            ).length
-          : null,
-        prendasSalon:
-          typeof stockData?.SALON === "number" ? stockData.SALON : null,
-      });
-      setKpisLoading(false);
+      try {
+        const params = new URLSearchParams({ fecha: hoy });
+        if (sucursalId !== null) params.set("sucursal_id", String(sucursalId));
+        const data = await getJson(`${api}/dashboard/kpis?${params}`);
+        if (cancelled) return;
+        setKpis({
+          ventasTotal:
+            typeof data?.ventas_total === "number" ? data.ventas_total : null,
+          ventasCantidad:
+            typeof data?.ventas_cantidad === "number"
+              ? data.ventas_cantidad
+              : null,
+          saldoEfectivo:
+            typeof data?.saldo_efectivo === "number" ? data.saldo_efectivo : null,
+          ordenesActivas:
+            typeof data?.ordenes_activas === "number"
+              ? data.ordenes_activas
+              : null,
+          prendasSalon:
+            typeof data?.prendas_salon === "number" ? data.prendas_salon : null,
+        });
+      } finally {
+        if (!cancelled) setKpisLoading(false);
+      }
     };
 
     void load();

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import date
+from src.fechas_ar import hoy_ar
 from src.services.caja_services import CajaServices
 from src.controllers.auth_controller import get_current_user
 from src.deps import require_role
@@ -18,7 +19,7 @@ class CajaDiariaResponse(BaseModel):
 
 @router.get("/diaria", response_model=CajaDiariaResponse)
 def get_caja_diaria(
-    fecha: date = Query(default_factory=date.today, description="Fecha para consultar caja diaria"),
+    fecha: date = Query(default_factory=hoy_ar, description="Fecha para consultar caja diaria"),
     sucursal_id: int = Query(..., description="ID de la sucursal"),
     payment_method: Optional[str] = Query(None, description="Filtrar por método de pago"),
     cuenta_destino_id: Optional[int] = Query(None, description="Filtrar por cuenta destino"),
@@ -26,9 +27,12 @@ def get_caja_diaria(
 ):
     """Obtener caja diaria con movimientos y totales"""
     try:
-        movimientos = service.get_movimientos_diarios(fecha, sucursal_id, payment_method, cuenta_destino_id)
-        totales = service.get_totales_diarios(fecha, sucursal_id)
-        saldo_efectivo = service.get_saldo_efectivo_dia(fecha, sucursal_id)
+        resumen = service.resumen_caja_diaria(
+            fecha, sucursal_id, payment_method, cuenta_destino_id
+        )
+        movimientos = resumen["movimientos"]
+        totales = resumen["totales"]
+        saldo_efectivo = resumen["saldo_efectivo"]
         cierre_registrado = service.existe_cierre(fecha, sucursal_id)
         return CajaDiariaResponse(
             movimientos=movimientos,
@@ -467,7 +471,7 @@ def exportar_caja_pdf(
 
 @router.get("/presupuestos")
 def get_movimientos_presupuestos(
-    fecha: date = Query(default_factory=date.today, description="Fecha para consultar movimientos de presupuestos"),
+    fecha: date = Query(default_factory=hoy_ar, description="Fecha para consultar movimientos de presupuestos"),
     sucursal_id: int = Query(..., description="ID de la sucursal"),
     payment_method: Optional[str] = Query(None, description="Filtrar por método de pago"),
     current_user=Depends(get_current_user)

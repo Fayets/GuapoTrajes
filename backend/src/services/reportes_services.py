@@ -1,6 +1,7 @@
 from pony.orm import db_session, select
 from fastapi import HTTPException
 from datetime import date, datetime
+from src.services.caja_services import movimientos_caja_en_rango
 from typing import List, Dict, Optional
 import re
 from src.descripcion_producto import format_descripcion_producto
@@ -807,9 +808,10 @@ class ReportesServices:
         try:
             print(f"🔍 DEBUG: Obteniendo ingresos por tipo para sucursal_id={sucursal_id}, fecha_desde={fecha_desde}, fecha_hasta={fecha_hasta}")
 
-            # Obtener todos los movimientos y filtrar en Python
-            todos_movimientos = list(CajaMovimiento.select())
-            print(f"🔍 DEBUG: Total movimientos en BD: {len(todos_movimientos)}")
+            todos_movimientos = movimientos_caja_en_rango(
+                fecha_desde, fecha_hasta, sucursal_id
+            )
+            print(f"🔍 DEBUG: Movimientos del rango: {len(todos_movimientos)}")
 
             # Filtrar movimientos de tipo INGRESO en el rango de fechas
             ingresos = []

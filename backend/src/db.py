@@ -14,6 +14,9 @@ else:
         password=config("DB_PASS"),
         host=config("DB_HOST"),
         database=config("DB_NAME"),
-        options="-c timezone=America/Argentina/Buenos_Aires",
+        options=(
+            "-c timezone=America/Argentina/Buenos_Aires "
+            "-c statement_timeout=15s"
+        ),
     )
 

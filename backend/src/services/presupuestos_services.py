@@ -333,9 +333,20 @@ class PresupuestosServices:
     def listar_presupuestos(self) -> list:
         with db_session:
             try:
-                # Pony ORM falla en Python 3.14 al usar order_by(desc(...)) con deepcopy del traductor.
-                # Evitamos ese camino ordenando en memoria para mantener compatibilidad.
-                presupuestos = list(Presupuesto.select())
+                # Sin order_by(desc): en Python 3.14 el descompilador de Pony falla.
+                # prefetch trae cliente, ítems y orden en pocas consultas.
+                presupuestos = list(
+                    Presupuesto.select().prefetch(
+                        Presupuesto.cliente,
+                        Presupuesto.precliente,
+                        Presupuesto.items,
+                        Presupuesto.orden_trabajo,
+                        Presupuesto.creado_por,
+                        Presupuesto.actualizado_por,
+                        Presupuesto.extra_discount_applied_by,
+                        ItemPresupuesto.producto,
+                    )
+                )
                 presupuestos.sort(
                     key=lambda p: p.fecha_creacion or datetime.min,
                     reverse=True,

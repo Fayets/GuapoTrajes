@@ -812,25 +812,27 @@ class ProductoServices:
                 # Si el usuario es ADMIN, puede ver stats de todos los productos
                 # Si no, filtra por sucursal
                 is_admin = user.rol == Roles.ADMIN
-                
-                # Pony ORM + Python 3.14: select(lambda …) falla al descompilar.
-                # Contar en memoria sobre Producto.select().
-                productos = list(models.Producto.select())
-                if not is_admin:
-                    if not user.sucursal:
-                        return {est.value: 0 for est in EstadoProducto}
-                    sucursal_id = user.sucursal.id
-                    productos = [
-                        p for p in productos
-                        if p.sucursal and p.sucursal.id == sucursal_id
-                    ]
-
                 data = {est.value: 0 for est in EstadoProducto}
-                for p in productos:
-                    estado = p.estado
+                flush()
+                if is_admin:
+                    rows = db.execute(
+                        'SELECT estado, COUNT(*) FROM "Productos" GROUP BY estado'
+                    )
+                else:
+                    if not user.sucursal:
+                        return data
+                    sucursal_id = user.sucursal.id
+                    rows = db.execute(
+                        """
+                        SELECT estado, COUNT(*) FROM "Productos"
+                        WHERE sucursal = $sucursal_id
+                        GROUP BY estado
+                        """
+                    )
+                for estado, cantidad in rows:
                     key = estado.value if hasattr(estado, "value") else str(estado)
                     if key in data:
-                        data[key] += 1
+                        data[key] += int(cantidad)
                 return data
             except HTTPException:
                 raise
