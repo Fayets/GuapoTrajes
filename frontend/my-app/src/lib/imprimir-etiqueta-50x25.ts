@@ -13,7 +13,9 @@ export const JSBARCODE_OPTS_50X25 = {
   height: 18,
   margin: 0,
   displayValue: true,
-  fontSize: 9,
+  // 11px ≈ 8,25 pt: mismo cuerpo que el nombre (8,5 pt). El alto total sigue bajo los 12 mm del slot.
+  fontSize: 11,
+  fontOptions: "bold",
   textMargin: 2,
   textAlign: "center" as const,
 }
