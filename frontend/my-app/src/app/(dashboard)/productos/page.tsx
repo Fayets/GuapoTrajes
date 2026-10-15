@@ -11,8 +11,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import JsBarcode from "jsbarcode";
-import { imprimirEtiqueta50x25DesdeSvg, JSBARCODE_OPTS_50X25 } from "@/lib/imprimir-etiqueta-50x25";
+import { dibujarCodigoBarras50x25, imprimirEtiqueta50x25DesdeSvg } from "@/lib/imprimir-etiqueta-50x25";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/RoleGate";
 import { getApiBaseUrl } from "@/lib/api-config";
@@ -459,10 +458,9 @@ export default function ProductosPage() {
     if (isModalEtiquetaOpen && productoEtiqueta) {
       const timer = setTimeout(() => {
         if (barcodeRef.current) {
-          JsBarcode(
+          dibujarCodigoBarras50x25(
             barcodeRef.current,
-            productoEtiqueta.codigo_barra || "000000000000",
-            JSBARCODE_OPTS_50X25
+            productoEtiqueta.codigo_barra || "000000000000"
           );
         }
       }, 200);

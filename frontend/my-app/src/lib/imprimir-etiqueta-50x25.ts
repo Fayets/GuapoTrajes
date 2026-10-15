@@ -20,6 +20,49 @@ export const JSBARCODE_OPTS_50X25 = {
   textAlign: "center" as const,
 }
 
+/**
+ * Reparte los dígitos hasta el ancho de las barras.
+ * El cuerpo de la fuente no cambia: solo crece el espacio entre números.
+ */
+function estirarNumeroAlAnchoDeBarras(svg: SVGSVGElement): void {
+  const text = svg.querySelector("text")
+  if (!text) return
+  const digitos = (text.textContent || "").replace(/\s+/g, "")
+  if (digitos.length < 2) return
+
+  const barras = svg.querySelectorAll("g rect")
+  let min = Infinity
+  let max = -Infinity
+  barras.forEach((rect) => {
+    const x = Number.parseFloat(rect.getAttribute("x") || "")
+    const w = Number.parseFloat(rect.getAttribute("width") || "")
+    if (!Number.isFinite(x) || !Number.isFinite(w)) return
+    min = Math.min(min, x)
+    max = Math.max(max, x + w)
+  })
+  const ancho = max - min
+  if (!Number.isFinite(ancho) || ancho <= 0) return
+
+  let natural = 0
+  try {
+    natural = text.getComputedTextLength()
+  } catch {
+    natural = 0
+  }
+  if (natural >= ancho) return
+
+  text.setAttribute("text-anchor", "middle")
+  text.setAttribute("x", String(min + ancho / 2))
+  text.setAttribute("textLength", String(ancho))
+  text.setAttribute("lengthAdjust", "spacing")
+}
+
+/** Dibuja el código de barras de la etiqueta 50×25, con el número al ancho de las barras. */
+export function dibujarCodigoBarras50x25(svg: SVGSVGElement, codigo: string): void {
+  JsBarcode(svg, codigo, JSBARCODE_OPTS_50X25)
+  estirarNumeroAlAnchoDeBarras(svg)
+}
+
 const ETIQUETA_50X25_CONTENT_CSS = `
     .wrap {
       width: 50mm;
@@ -107,8 +150,6 @@ const ETIQUETA_HTML_SHELL = `<!DOCTYPE html>
   <div class="wrap"><div class="inner"></div></div>
 </body>
 </html>`
-
-const JSBARCODE_OPTS = JSBARCODE_OPTS_50X25
 
 function crearIframeImpresion(): {
   iframe: HTMLIFrameElement
@@ -216,7 +257,7 @@ export function imprimirEtiqueta50x25DesdeCodigo(
     inner.appendChild(slot)
 
     try {
-      JsBarcode(svg, code, JSBARCODE_OPTS)
+      dibujarCodigoBarras50x25(svg, code)
     } catch (e) {
       iframe.remove()
       reject(e)
@@ -327,7 +368,7 @@ export function imprimirEtiquetas50x25Lote(
       body.appendChild(sheet)
 
       try {
-        JsBarcode(svg, code, JSBARCODE_OPTS)
+        dibujarCodigoBarras50x25(svg, code)
         porIndice[i] = "ok"
       } catch {
         body.removeChild(sheet)
