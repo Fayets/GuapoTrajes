@@ -1,10 +1,9 @@
 """Anticipo/crédito manual debe devolver comprobante e incluirse en recibos por fecha."""
 from __future__ import annotations
 
-from datetime import date
-
 from pony.orm import db_session, flush
 
+from src.fechas_ar import hoy_ar
 from src.models import CajaMovimiento, CuentaCorriente, MetodoPagoConfigurable, Sucursal
 from src.schemas import CreditoManualRequest
 from src.services.pagos_services import PagosServices
@@ -67,7 +66,7 @@ def test_anticipo_devuelve_recibo_y_aparece_en_reporte():
         assert recibo["movimiento_caja_id"] == resultado["movimiento_caja_id"]
         assert str(recibo["presupuesto_numero"]).startswith("ANTICIPO-")
 
-        hoy = date.today()
+        hoy = hoy_ar()
         recibos = ReportesServices().obtener_recibos_por_fecha(
             fecha_desde=hoy,
             fecha_hasta=hoy,
