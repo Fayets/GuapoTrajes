@@ -1582,6 +1582,7 @@ export default function PresupuestosPage() {
         linea: null,
         talle: null,
         color: null,
+        codigo: item.codigoBarra || prod?.codigo_barra || "",
         descripcion:
           item.productoNombre ||
           formatDescripcionProducto(prod?.descripcion, prod?.descripcion_extra) ||
@@ -1614,10 +1615,15 @@ export default function PresupuestosPage() {
         const reservados = orden.productos_reservados || [];
         if (reservados.length > 0) {
           productos = reservados.map(
-            (pr: { producto_descripcion?: string; cantidad?: number }) => ({
+            (pr: {
+              producto_descripcion?: string;
+              codigo_barra?: string;
+              cantidad?: number;
+            }) => ({
               linea: null,
               talle: null,
               color: null,
+              codigo: pr.codigo_barra || "",
               descripcion: pr.producto_descripcion || "Prenda",
               cantidad: pr.cantidad ?? 1,
             })

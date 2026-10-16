@@ -47,6 +47,7 @@ export type PrendaResumenEntrada = {
   linea: string | null;
   talle: string | null;
   color: string | null;
+  codigo?: string | null;
   descripcion: string;
   cantidad: number;
 };
@@ -178,7 +179,9 @@ const ETIQUETA_RESUMEN_STYLES = `<style>
 export function formatearLineaPrendaCompacta(prenda: PrendaResumenEntrada): string {
   const base = (prenda.descripcion || "").trim() || "Prenda";
   const cant = prenda.cantidad > 1 ? ` ×${prenda.cantidad}` : "";
-  return `${base}${cant}`;
+  const codigo = (prenda.codigo || "").trim();
+  const texto = `${base}${cant}`;
+  return codigo ? `${codigo} - ${texto}` : texto;
 }
 
 export function construirEtiquetaResumenDesdeOrden(orden: {
@@ -194,6 +197,7 @@ export function construirEtiquetaResumenDesdeOrden(orden: {
     talle?: string | null;
     color?: string | null;
     producto_descripcion?: string | null;
+    codigo_barra?: string | null;
     cantidad?: number | null;
   }>;
 }): ItemEtiquetaResumenConjunto {
@@ -208,6 +212,7 @@ export function construirEtiquetaResumenDesdeOrden(orden: {
       linea: pr.linea || null,
       talle: pr.talle || null,
       color: pr.color || null,
+      codigo: pr.codigo_barra || null,
       descripcion: pr.producto_descripcion || "Prenda",
       cantidad: pr.cantidad ?? 1,
     })),
