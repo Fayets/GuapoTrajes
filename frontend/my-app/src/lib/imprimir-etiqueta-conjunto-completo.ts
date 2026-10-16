@@ -181,7 +181,7 @@ export function formatearLineaPrendaCompacta(prenda: PrendaResumenEntrada): stri
   const cant = prenda.cantidad > 1 ? ` ×${prenda.cantidad}` : "";
   const codigo = (prenda.codigo || "").trim();
   const texto = `${base}${cant}`;
-  return codigo ? `${codigo} - ${texto}` : texto;
+  return codigo ? `${texto} - ${codigo}` : texto;
 }
 
 export function construirEtiquetaResumenDesdeOrden(orden: {
