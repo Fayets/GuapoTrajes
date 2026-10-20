@@ -717,7 +717,10 @@ export default function PresupuestoModal({
                     htmlFor="presupuesto-fecha-devolucion"
                     title="Fecha de devolución"
                   >
-                    Fecha de devolución
+                    Fecha de devolución{" "}
+                    <span className="text-danger" aria-hidden>
+                      *
+                    </span>
                   </label>
                   {verModoLectura ? (
                     <div className="form-control-plaintext form-control-sm border rounded p-2 bg-light">
@@ -729,6 +732,7 @@ export default function PresupuestoModal({
                       name="fechaDevolucion"
                       type="date"
                       className="form-control form-control-sm"
+                      required
                       value={formData.fechaDevolucion}
                       min={minIsoDevolucion}
                       onChange={(e) =>

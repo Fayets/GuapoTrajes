@@ -387,6 +387,12 @@ class OrdenTrabajoServices:
                 if presupuesto.orden_trabajo:
                     raise HTTPException(status_code=400, detail="El presupuesto ya tiene una orden de trabajo")
 
+                if not presupuesto.fecha_devolucion:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No se puede crear la orden: el presupuesto no tiene fecha de devolución",
+                    )
+
                 if ignorar_conflictos_reserva and usuario.rol not in (Roles.ADMIN, Roles.SUPER_ADMIN):
                     raise HTTPException(
                         status_code=403,

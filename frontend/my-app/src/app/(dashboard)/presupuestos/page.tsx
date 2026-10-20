@@ -509,8 +509,7 @@ export default function PresupuestosPage() {
     const fechaEvento = fechaNegocioYmd(formData.fechaEvento);
     const fechaRetiro =
       fechaNegocioYmd(formData.fechaRetiro) || fechaEvento || "";
-    const fechaDevolucion =
-      fechaNegocioYmd(formData.fechaDevolucion) || fechaEvento || "";
+    const fechaDevolucion = fechaNegocioYmd(formData.fechaDevolucion) || "";
     return { fechaEvento, fechaRetiro, fechaDevolucion };
   }, [formData.fechaEvento, formData.fechaRetiro, formData.fechaDevolucion]);
 
@@ -1169,6 +1168,7 @@ export default function PresupuestosPage() {
     if (!tieneCliente && !tienePrecliente) faltan.push("seleccioná un cliente o cargá/elegí un precliente");
     if (items.length === 0) faltan.push("al menos un ítem");
     if (!formData.fechaEvento) faltan.push("fecha del evento");
+    if (!formData.fechaDevolucion) faltan.push("fecha de devolución");
     if (!formData.categoria) faltan.push("categoría del evento");
     if (faltan.length > 0) {
       toast.error("Completá lo que falta: " + faltan.join(", "));
@@ -1218,9 +1218,8 @@ export default function PresupuestosPage() {
       fecha_retiro: formData.fechaRetiro
         ? fechaNegocioYmd(formData.fechaRetiro) || formData.fechaRetiro
         : null,
-      fecha_devolucion: formData.fechaDevolucion
-        ? fechaNegocioYmd(formData.fechaDevolucion) || formData.fechaDevolucion
-        : null,
+      fecha_devolucion:
+        fechaNegocioYmd(formData.fechaDevolucion) || formData.fechaDevolucion,
       categoria_evento: formData.categoria,
       nombre_agasajado: formData.agasajado,
       lugar_evento: formData.lugar,
@@ -1658,6 +1657,13 @@ export default function PresupuestosPage() {
     ignorarConflictosReserva?: boolean;
   }) => {
     if (!presupuestoAConvertir) return;
+
+    if (!presupuestoAConvertir.fecha_devolucion) {
+      toast.error(
+        "No se puede tomar la seña: el presupuesto no tiene fecha de devolución."
+      );
+      return;
+    }
 
     const monto = parseMontoInput(senia);
     if (isNaN(monto) || monto <= 0) {

@@ -41,6 +41,15 @@ def _siguiente_numero_presupuesto() -> str:
     return f"PRES-{siguiente:03d}"
 
 
+def _fechas_alquiler_obligatorias(data: PresupuestoCreate) -> tuple[date, date]:
+    if data.fecha_devolucion is None:
+        raise HTTPException(
+            status_code=400,
+            detail="La fecha de devolución es obligatoria",
+        )
+    return data.fecha_retiro or data.fecha_evento, data.fecha_devolucion
+
+
 _CAMPOS_PRECIO_CATALOGO = (
     "precio_alquiler_lista",
     "precio_alquiler_efectivo",
@@ -169,8 +178,7 @@ class PresupuestosServices:
                 
 
                 # Verificar que todos los productos existen y están disponibles
-                fecha_retiro = data.fecha_retiro or data.fecha_evento
-                fecha_devolucion = data.fecha_devolucion or data.fecha_evento
+                fecha_retiro, fecha_devolucion = _fechas_alquiler_obligatorias(data)
                 
                 for i, item in enumerate(data.items):
                     producto = Producto.get(id=item.producto_id)
@@ -244,8 +252,8 @@ class PresupuestosServices:
                     "cliente": cliente,
                     "precliente": precliente,
                     "fecha_evento": fecha_evento_presupuesto,
-                    "fecha_retiro": data.fecha_retiro,
-                    "fecha_devolucion": data.fecha_devolucion,
+                    "fecha_retiro": fecha_retiro,
+                    "fecha_devolucion": fecha_devolucion,
                     "categoria_evento": data.categoria_evento,
                     "nombre_agasajado": data.nombre_agasajado,
                     "lugar_evento": data.lugar_evento,
@@ -521,8 +529,7 @@ class PresupuestosServices:
                         raise HTTPException(status_code=404, detail="Precliente no encontrado")
 
                 # Verificar productos y disponibilidad
-                fecha_retiro = data.fecha_retiro or data.fecha_evento
-                fecha_devolucion = data.fecha_devolucion or data.fecha_evento
+                fecha_retiro, fecha_devolucion = _fechas_alquiler_obligatorias(data)
 
                 old_product_ids = {item.producto.id for item in presupuesto.items}
                 orden_excluir_id = orden.id if orden else None
@@ -546,8 +553,8 @@ class PresupuestosServices:
                 presupuesto.cliente = cliente
                 presupuesto.precliente = precliente
                 presupuesto.fecha_evento = data.fecha_evento
-                presupuesto.fecha_retiro = data.fecha_retiro
-                presupuesto.fecha_devolucion = data.fecha_devolucion
+                presupuesto.fecha_retiro = fecha_retiro
+                presupuesto.fecha_devolucion = fecha_devolucion
                 presupuesto.categoria_evento = data.categoria_evento
                 presupuesto.nombre_agasajado = data.nombre_agasajado
                 presupuesto.lugar_evento = data.lugar_evento

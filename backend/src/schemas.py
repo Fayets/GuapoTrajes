@@ -507,8 +507,8 @@ class PresupuestoCreate(BaseModel):
         if v is None:
             return None
         if isinstance(v, str) and not v.strip():
-            if field == "fecha_evento":
-                raise ValueError("fecha_evento no puede estar vacía")
+            if field in ("fecha_evento", "fecha_devolucion"):
+                raise ValueError(f"{field} no puede estar vacía")
             return None
         return parse_fecha_presupuesto_entrada(v)
 
@@ -518,6 +518,8 @@ class PresupuestoCreate(BaseModel):
             raise ValueError("Se debe indicar cliente_id o precliente_id")
         if self.cliente_id is not None and self.precliente_id is not None:
             raise ValueError("Solo se debe indicar cliente_id o precliente_id, no ambos")
+        if self.fecha_devolucion is None:
+            raise ValueError("La fecha de devolución es obligatoria")
         return self
 
 class ItemPresupuestoOut(BaseModel):

@@ -306,9 +306,21 @@ export default function DevolucionesPage() {
         return false;
       }
 
-      // Si no tiene fecha_devolucion, no es una orden abierta para devolución
+      // Sin fecha_devolucion igual hay que mostrarlo: si no, un contrato con
+      // prendas en el cliente desaparece y no se puede recibir (caso 640).
       if (!orden.fecha_devolucion) {
-        return false;
+        const yaSalio = orden.productos_reservados.some((prod) => {
+          if (!prod.fecha_bloqueo) return false;
+          const fechaBloqueo = new Date(prod.fecha_bloqueo + "T00:00:00");
+          fechaBloqueo.setHours(0, 0, 0, 0);
+          return fechaBloqueo <= hoy;
+        });
+        if (yaSalio) return true;
+        const fechaRef = orden.fecha_retiro || orden.fecha_evento;
+        if (!fechaRef) return false;
+        const d = new Date(fechaRef + "T00:00:00");
+        d.setHours(0, 0, 0, 0);
+        return d <= hoy;
       }
 
       const fechaDevolucion = new Date(orden.fecha_devolucion + "T00:00:00");
