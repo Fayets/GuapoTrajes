@@ -329,6 +329,7 @@ export default function PresupuestosPage() {
     items: ItemPresupuesto[];
     fecha_evento: string;
     fecha_retiro: string;
+    fecha_devolucion: string;
     categoria_evento: string;
     lugar_evento: string;
   } | null>(null);
@@ -2172,6 +2173,7 @@ export default function PresupuestosPage() {
                                   items: p.items ?? [],
                                   fecha_evento: p.fecha_evento,
                                   fecha_retiro: p.fecha_retiro || "",
+                                  fecha_devolucion: p.fecha_devolucion || "",
                                   categoria_evento: p.categoria_evento || "",
                                   lugar_evento: p.lugar_evento || "",
                                 });
