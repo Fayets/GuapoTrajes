@@ -28,6 +28,8 @@ function useConfigProductos(token: string | null) {
   const [telas, setTelas] = useState<Item[]>([]);
   const [colores, setColores] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
+  // Secciones cuya carga falló: se muestran con aviso, nunca como lista vacía.
+  const [conError, setConError] = useState<string[]>([]);
 
   const fetchAll = async () => {
     if (!token) return;
@@ -39,19 +41,30 @@ function useConfigProductos(token: string | null) {
         fetch(`${API_BASE}/config/productos/telas`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_BASE}/config/productos/colores`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
-      const safeJson = async (r: Response) => {
-        if (!r.ok) return [];
+      const fallidos: string[] = [];
+      const cargar = async (
+        r: Response,
+        endpoint: string,
+        setter: React.Dispatch<React.SetStateAction<Item[]>>
+      ) => {
         try {
-          return await r.json();
+          if (!r.ok) throw new Error(String(r.status));
+          setter(await r.json());
         } catch {
-          return [];
+          // Se conserva lo que ya estaba en pantalla.
+          fallidos.push(endpoint);
         }
       };
-      setLineas(await safeJson(rL));
-      setTalles(await safeJson(rT));
-      setTelas(await safeJson(rTel));
-      setColores(await safeJson(rC));
+      await cargar(rL, "lineas", setLineas);
+      await cargar(rT, "talles", setTalles);
+      await cargar(rTel, "telas", setTelas);
+      await cargar(rC, "colores", setColores);
+      setConError(fallidos);
+      if (fallidos.length > 0) {
+        toast.error(`No se pudieron cargar: ${fallidos.join(", ")}. Reintentá en unos segundos.`);
+      }
     } catch {
+      setConError(["lineas", "talles", "telas", "colores"]);
       toast.error("Error al cargar datos");
     } finally {
       setLoading(false);
@@ -68,6 +81,7 @@ function useConfigProductos(token: string | null) {
     telas,
     colores,
     loading,
+    conError,
     refetch: fetchAll,
     setLineas,
     setTalles,
@@ -85,6 +99,7 @@ function SectionBlock({
   onOptimisticRemove,
   onRestore,
   refetch,
+  error = false,
 }: {
   title: string;
   items: Item[];
@@ -94,6 +109,7 @@ function SectionBlock({
   onOptimisticRemove: (id: number) => void;
   onRestore: (item: Item) => void;
   refetch: () => void;
+  error?: boolean;
 }) {
   const [nombre, setNombre] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -217,6 +233,13 @@ function SectionBlock({
         </div>
         {loading ? (
           <p className="text-muted small mb-0">Cargando...</p>
+        ) : error && items.length === 0 ? (
+          <div className="d-flex align-items-center gap-2">
+            <p className="text-danger small mb-0">No se pudo cargar la lista. No se borró nada.</p>
+            <button type="button" className="btn btn-outline-ink btn-sm" onClick={refetch}>
+              Reintentar
+            </button>
+          </div>
         ) : items.length === 0 ? (
           <p className="text-muted small mb-0">Ninguno</p>
         ) : (
@@ -307,6 +330,7 @@ export default function ConfigProductosPage() {
     telas,
     colores,
     loading,
+    conError,
     refetch,
     setLineas,
     setTalles,
@@ -341,6 +365,7 @@ export default function ConfigProductosPage() {
               loading={loading}
               token={token}
               endpoint="lineas"
+              error={conError.includes("lineas")}
               onOptimisticRemove={removeEn(setLineas)}
               onRestore={restoreEn(setLineas)}
               refetch={refetch}
@@ -353,6 +378,7 @@ export default function ConfigProductosPage() {
               loading={loading}
               token={token}
               endpoint="talles"
+              error={conError.includes("talles")}
               onOptimisticRemove={removeEn(setTalles)}
               onRestore={restoreEn(setTalles)}
               refetch={refetch}
@@ -365,6 +391,7 @@ export default function ConfigProductosPage() {
               loading={loading}
               token={token}
               endpoint="telas"
+              error={conError.includes("telas")}
               onOptimisticRemove={removeEn(setTelas)}
               onRestore={restoreEn(setTelas)}
               refetch={refetch}
@@ -377,6 +404,7 @@ export default function ConfigProductosPage() {
               loading={loading}
               token={token}
               endpoint="colores"
+              error={conError.includes("colores")}
               onOptimisticRemove={removeEn(setColores)}
               onRestore={restoreEn(setColores)}
               refetch={refetch}

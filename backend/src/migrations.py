@@ -276,6 +276,77 @@ def ensure_descripcion_extra_productos() -> None:
     logger.debug("No se pudo añadir descripcion_extra (probados: Productos, productos)")
 
 
+CATALOGOS_PRODUCTO_LARGO_CODIGO = {
+    "ProductoLineas": 3,
+    "ProductoTalles": 2,
+    "ProductoTelas": 2,
+    "ProductoColores": 2,
+}
+
+
+def codigos_a_reasignar(filas, largo: int) -> list:
+    """
+    Recibe (id, codigo) de un catálogo y devuelve [(id, codigo_nuevo)] para los repetidos.
+    En cada código repetido se queda el de id más bajo (el original); los demás pasan
+    al siguiente código libre después del mayor usado, con el largo del catálogo.
+    """
+    usados = {str(c) for _, c in filas if c is not None}
+    numericos = [int(c) for c in usados if c.isdigit()]
+    tope = 10 ** largo - 1
+    siguiente = max(numericos, default=0) + 1
+
+    def libre() -> str:
+        nonlocal siguiente
+        while siguiente <= tope and str(siguiente).zfill(largo) in usados:
+            siguiente += 1
+        if siguiente > tope:
+            # Sin lugar arriba del mayor: el primer hueco desde 1.
+            for n in range(1, tope + 1):
+                if str(n).zfill(largo) not in usados:
+                    return str(n).zfill(largo)
+            raise ValueError(f"No quedan códigos libres de {largo} dígitos")
+        return str(siguiente).zfill(largo)
+
+    vistos = set()
+    cambios = []
+    for id_, codigo in sorted(filas, key=lambda f: f[0]):
+        if codigo is None:
+            continue
+        codigo = str(codigo)
+        if codigo not in vistos:
+            vistos.add(codigo)
+            continue
+        nuevo = libre()
+        usados.add(nuevo)
+        cambios.append((id_, nuevo))
+    return cambios
+
+
+def ensure_codigos_unicos_catalogos_producto() -> None:
+    """
+    Repara códigos repetidos en líneas/talles/telas/colores y crea el índice único.
+    El índice de apply_schema_migrations nunca llegó a crearse en producción (corre en la
+    misma transacción que sentencias que fallan), y un color con el código de otro
+    rompía la lista de colores entera.
+    """
+    for tabla, largo in CATALOGOS_PRODUCTO_LARGO_CODIGO.items():
+        try:
+            with db_session:
+                filas = db.select(f'SELECT "id", "nombre", "codigo" FROM "{tabla}"')
+                nombres = {f[0]: f[1] for f in filas}
+                for id_, nuevo in codigos_a_reasignar([(f[0], f[2]) for f in filas], largo):
+                    db.execute(f'UPDATE "{tabla}" SET "codigo" = $nuevo WHERE "id" = $id_')
+                    logger.warning(
+                        "%s: «%s» (id %s) tenía un código repetido; pasa al %s",
+                        tabla, nombres.get(id_), id_, nuevo,
+                    )
+                db.execute(
+                    f'CREATE UNIQUE INDEX IF NOT EXISTS "{tabla}_codigo_key" ON "{tabla}"("codigo")'
+                )
+        except Exception as e:
+            logger.warning("No se pudo asegurar código único en %s: %s", tabla, e)
+
+
 def ensure_caja_movimientos_fecha_hora_ar() -> None:
     """
     Corrige movimientos de caja guardados en UTC (backend en Render) a hora Argentina.
